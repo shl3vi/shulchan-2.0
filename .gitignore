@@ -1,5 +1,5 @@
 node_modules/
-dist/
+/dist/
 .expo/
 .DS_Store
 *.log
