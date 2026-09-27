@@ -57223,7 +57223,7 @@ function _v4(options, buf, offset) {
 var v4_default = v4;
 
 // src/game.ts
-var MAX_SEATS = 6;
+var MAX_SEATS = 9;
 var TableGame = class {
   id = v4_default();
   adminSecret = v4_default();

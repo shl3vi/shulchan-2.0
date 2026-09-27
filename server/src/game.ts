@@ -2,7 +2,7 @@ import { Table } from "poker-ts";
 import type { Action, Card } from "poker-ts/dist/facade/poker.js";
 import { v4 as uuid } from "uuid";
 
-const MAX_SEATS = 6;
+const MAX_SEATS = 9;
 
 export type PublicCard = { rank: Card["rank"]; suit: Card["suit"] };
 

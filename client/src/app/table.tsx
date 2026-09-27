@@ -1,18 +1,7 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useGameSession } from "@/game/GameSession";
-
-const suitMark: Record<string, string> = {
-  clubs: "♣",
-  diamonds: "♦",
-  hearts: "♥",
-  spades: "♠",
-};
-
-function cards(list: { rank: string; suit: string }[]) {
-  if (list.length === 0) return "—";
-  return list.map((card) => `${card.rank}${suitMark[card.suit] ?? card.suit}`).join(" ");
-}
+import { ActionDock, PokerTableLayout, type SeatSlot } from "@/game/PokerTableLayout";
 
 export default function TableScreen() {
   const { credentials, state, error, startHand, act } = useGameSession();
@@ -28,63 +17,77 @@ export default function TableScreen() {
     );
   }
 
+  const seats: Array<SeatSlot | undefined> = [];
+  for (const player of state?.players ?? []) {
+    const isYou = player.id === you?.id;
+    seats[player.seat] = {
+      name: player.name,
+      stack: player.stack,
+      bet: player.betSize,
+      holeCards: isYou ? (you?.holeCards ?? []) : [],
+      faceDown: !isYou && player.inHand,
+      toAct: state?.playerToActId === player.id,
+      isYou,
+    };
+  }
+
+  const gameId = credentials.gameId;
+  function shareTable() {
+    Share.share({ message: `Join my Shulchan table: ${gameId}` });
+  }
+
   return (
-    <View style={styles.screen}>
-      <Text style={styles.meta}>Table {credentials.gameId}</Text>
-      <Text>
-        Blinds {state?.smallBlind ?? "—"}/{state?.bigBlind ?? "—"} · Pot {pot}
-        {state?.round ? ` · ${state.round}` : ""}
+    <ScrollView contentContainerStyle={styles.screen}>
+      <View style={styles.idRow}>
+        <Text style={styles.meta} selectable>
+          {gameId}
+        </Text>
+        <Pressable style={styles.share} onPress={shareTable}>
+          <Text style={styles.shareText}>Share</Text>
+        </Pressable>
+      </View>
+      <PokerTableLayout
+        seats={seats}
+        community={state?.communityCards ?? []}
+        pot={pot}
+        round={state?.round ?? null}
+      />
+      <Text style={styles.body}>
+        Blinds {state?.smallBlind ?? "—"}/{state?.bigBlind ?? "—"}
       </Text>
-      <Text style={styles.board}>{cards(state?.communityCards ?? [])}</Text>
-      <Text>Your cards {cards(you?.holeCards ?? [])}</Text>
       {state?.lastWinners.length ? (
-        <Text>
+        <Text style={styles.body}>
           Last pot: {state.lastWinners.map((winner) => `${winner.name} ${winner.amount}`).join(", ")}
         </Text>
       ) : null}
-      <View style={styles.seats}>
-        {state?.players.map((player) => (
-          <Text key={player.id}>
-            {player.name} · {player.stack}
-            {player.betSize ? ` (bet ${player.betSize})` : ""}
-            {state.playerToActId === player.id ? " · to act" : ""}
-          </Text>
-        ))}
-      </View>
       {credentials.adminSecret && state?.round == null ? (
         <Pressable style={styles.button} onPress={startHand}>
           <Text style={styles.buttonText}>Deal</Text>
         </Pressable>
       ) : null}
-      <View style={styles.actions}>
-        {you?.legalActions.map((action) => (
-          <Pressable
-            key={action}
-            style={styles.button}
-            onPress={() => act(action, action === "bet" || action === "raise" ? Number(amount) : undefined)}
-          >
-            <Text style={styles.buttonText}>{action}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {you?.chipRange ? (
-        <TextInput
-          style={styles.input}
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="number-pad"
-          placeholder={`${you.chipRange.min}–${you.chipRange.max}`}
-        />
-      ) : null}
+      <ActionDock
+        amount={amount}
+        onAmount={setAmount}
+        onTalk={() => {}}
+        onAction={(action) => {
+          const legal = you?.legalActions ?? [];
+          if (!legal.includes(action)) return;
+          act(action, action === "bet" || action === "raise" ? Number(amount) : undefined);
+        }}
+      />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 20, gap: 10 },
-  meta: { fontSize: 12, color: "#57534e" },
-  board: { fontSize: 22, fontWeight: "700" },
+  screen: { padding: 16, gap: 10, backgroundColor: "#0c0a09" },
+  idRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  meta: { flex: 1, fontSize: 12, color: "#d6d3d1" },
+  share: { backgroundColor: "#166534", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  shareText: { color: "white", fontWeight: "700" },
+  body: { color: "#e7e5e4" },
+  board: { fontSize: 22, fontWeight: "700", color: "white" },
   seats: { gap: 4, marginTop: 8 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   button: { backgroundColor: "#1c1917", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10 },
