@@ -1,4 +1,4 @@
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://shulchan-table.onrender.com";
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://shulchan-api.onrender.com";
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
