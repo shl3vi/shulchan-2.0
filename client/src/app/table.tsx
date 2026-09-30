@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { useGameSession } from "@/game/GameSession";
-import { ActionDock, PokerTableLayout, type SeatSlot } from "@/game/PokerTableLayout";
+import { ActionDock, PokerTableLayout, TableMenu, type SeatSlot } from "@/game/PokerTableLayout";
 
 export default function TableScreen() {
+  const router = useRouter();
   const { credentials, state, error, startHand, act } = useGameSession();
   const [amount, setAmount] = useState("");
+  const [stats, setStats] = useState(false);
   const you = state?.you;
   const pot = state?.pots.reduce((sum, entry) => sum + entry.size, 0) ?? 0;
 
@@ -37,15 +40,25 @@ export default function TableScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.screen}>
+    <View style={styles.screen}>
       <View style={styles.idRow}>
         <Text style={styles.meta} selectable>
           {gameId}
         </Text>
-        <Pressable style={styles.share} onPress={shareTable}>
-          <Text style={styles.shareText}>Share</Text>
-        </Pressable>
+        <TableMenu
+          items={[
+            { label: "Statistics", onPress: () => setStats((value) => !value) },
+            { label: "Share table", onPress: shareTable },
+            { label: "Leave game", onPress: () => router.back() },
+          ]}
+        />
       </View>
+      {stats ? (
+        <Text style={styles.body}>
+          {(state?.players ?? []).map((player) => `${player.name} ${player.stack}`).join(" · ") || "No players"}
+          {` · Pot ${pot}`}
+        </Text>
+      ) : null}
       <PokerTableLayout
         seats={seats}
         community={state?.communityCards ?? []}
@@ -66,23 +79,21 @@ export default function TableScreen() {
         </Pressable>
       ) : null}
       <ActionDock
+        yourTurn={(you?.legalActions.length ?? 0) > 0}
+        actions={you?.legalActions ?? []}
         amount={amount}
         onAmount={setAmount}
         onTalk={() => {}}
-        onAction={(action) => {
-          const legal = you?.legalActions ?? [];
-          if (!legal.includes(action)) return;
-          act(action, action === "bet" || action === "raise" ? Number(amount) : undefined);
-        }}
+        onAction={(action) => act(action, action === "bet" || action === "raise" ? Number(amount) : undefined)}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { padding: 16, gap: 10, backgroundColor: "#0c0a09" },
-  idRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  screen: { flex: 1, paddingHorizontal: 8, paddingTop: 8, gap: 6, backgroundColor: "#0c0a09" },
+  idRow: { flexDirection: "row", alignItems: "center", gap: 8, zIndex: 2 },
   meta: { flex: 1, fontSize: 12, color: "#d6d3d1" },
   share: { backgroundColor: "#166534", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
   shareText: { color: "white", fontWeight: "700" },
