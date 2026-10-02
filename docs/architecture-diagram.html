@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shulchan 2.0 — Architecture</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #fff;
+      --line: #d5dbe3;
+      --text: #1c2430;
+      --muted: #5c6b7e;
+      --blue: #1d4f91;
+      --blue-bg: #e8f1fb;
+      --green: #1b6b45;
+      --green-bg: #e7f6ee;
+      --purple: #5b3d8a;
+      --purple-bg: #f3ecfb;
+      --amber: #8a5a12;
+      --amber-bg: #fff4e0;
+      --font: "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      padding: 28px 24px 48px;
+    }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    .lead { color: var(--muted); margin: 0 0 20px; max-width: 760px; }
+    h2 { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 32px 0 12px; }
+    .board {
+      display: grid;
+      grid-template-columns: 1fr 200px 1fr;
+      gap: 16px;
+      align-items: start;
+      max-width: 1100px;
+    }
+    .col-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .box {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+    .box strong { display: block; font-size: 15px; margin-bottom: 2px; }
+    .box p { margin: 0; color: var(--muted); font-size: 13px; }
+    .box.blue { background: var(--blue-bg); border-color: #b9d3f0; }
+    .box.blue strong { color: var(--blue); }
+    .box.green { background: var(--green-bg); border-color: #b7e0c8; }
+    .box.green strong { color: var(--green); }
+    .box.purple { background: var(--purple-bg); border-color: #d9c6f0; }
+    .box.purple strong { color: var(--purple); }
+    .box.amber { background: var(--amber-bg); border-color: #f0d7a8; }
+    .box.amber strong { color: var(--amber); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .wire { display: flex; flex-direction: column; gap: 10px; padding-top: 28px; }
+    .wire .link {
+      background: #fff;
+      border: 1px dashed #9aa8ba;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 13px;
+      text-align: center;
+    }
+    .wire .link b { display: block; font-family: var(--mono); font-size: 12px; margin-bottom: 2px; }
+    .wire .link span { color: var(--muted); font-size: 12px; }
+    .note {
+      max-width: 1100px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .note p { margin: 0 0 8px; }
+    .note p:last-child { margin: 0; }
+    .steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; padding: 0; list-style: none; max-width: 1100px; }
+    .steps li {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+    .steps li b { display: block; font-size: 11px; color: var(--muted); font-weight: 600; }
+    .arrow { color: #8a97a8; font-size: 18px; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+    .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+    code { font-family: var(--mono); font-size: 12px; }
+    @media (max-width: 860px) {
+      .board { grid-template-columns: 1fr; }
+      .wire { padding-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Shulchan architecture</h1>
+  <p class="lead">The table is one service. Each game engine is its own service, a separate pod in production. Phones talk only to the table. The table calls the engine pod for that game. Video goes through LiveKit.</p>
+
+  <div class="legend">
+    <span><i class="sw" style="background:#1d4f91"></i>Shared table</span>
+    <span><i class="sw" style="background:#5b3d8a"></i>Game (poker, backgammon)</span>
+    <span><i class="sw" style="background:#1b6b45"></i>Game network</span>
+    <span><i class="sw" style="background:#8a5a12"></i>LiveKit video</span>
+  </div>
+
+  <h2>Who talks to whom</h2>
+  <div class="board">
+    <div>
+      <div class="col-title">Phone app</div>
+      <div class="box">
+        <strong>Screens</strong>
+        <p>Create a table, sit, play. Screens only render.</p>
+      </div>
+      <div class="box green">
+        <strong>Session</strong>
+        <p>Stores player id and secret. Joins over HTTP. Stays on the <code>/table</code> socket for the game.</p>
+      </div>
+      <div class="row2">
+        <div class="box purple">
+          <strong>Poker UI</strong>
+          <p>Cards, bets, fold and raise.</p>
+        </div>
+        <div class="box purple">
+          <strong>Backgammon UI</strong>
+          <p>Board and moves. Same session.</p>
+        </div>
+      </div>
+      <div class="box amber">
+        <strong>LiveKit client</strong>
+        <p>Asks the server for a token, then publishes and subscribes camera tracks in the LiveKit room for this table.</p>
+      </div>
+    </div>
+
+    <div class="wire">
+      <div class="link">
+        <b>HTTP</b>
+        <span>Create table, join a seat, get a LiveKit token</span>
+      </div>
+      <div class="link">
+        <b>/table</b>
+        <span>Live game only: start, act, state</span>
+      </div>
+      <div class="link">
+        <b>LiveKit</b>
+        <span>Video and audio. Not your Node server.</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="col-title">Table pod</div>
+      <div class="box green">
+        <strong>HTTP routes</strong>
+        <p>The door for one-shot calls: create a table, sit down, get a LiveKit token. The phone asks, gets JSON, and the connection ends.</p>
+      </div>
+      <div class="box green">
+        <strong>/table socket</strong>
+        <p>The door that stays open. Phones send bets here and receive a new snapshot whenever the hand changes.</p>
+      </div>
+      <div class="box blue">
+        <strong>Table</strong>
+        <p>The room behind both doors. Seats, secrets, admin, phase. It checks the secret, calls the game pod, then saves Redis and publishes. It does not know the deck or the board.</p>
+      </div>
+      <div class="col-title" style="margin-top:16px">Game pods</div>
+      <div class="row2">
+        <div class="box purple">
+          <strong>Poker pod</strong>
+          <p>Its own service. Holds the deck and the hand in memory. <code>apply</code>, <code>view</code>, <code>save</code>, <code>load</code>.</p>
+        </div>
+        <div class="box purple">
+          <strong>Backgammon pod</strong>
+          <p>Its own service. Holds the board and the dice in memory. Same four calls. The table does not care which pod it is.</p>
+        </div>
+      </div>
+      <div class="box amber">
+        <strong>LiveKit server</strong>
+        <p>A separate service. It accepts the token, then carries every seat's camera. Your game code never sees the video.</p>
+      </div>
+      <div class="col-title" style="margin-top:16px">Shared</div>
+      <div class="box blue">
+        <strong>Redis — saved state</strong>
+        <p>One record per table, written by the table pod: seats and secrets, plus the private blob returned by the game pod.</p>
+      </div>
+      <div class="box green">
+        <strong>Redis — pub/sub</strong>
+        <p>The table pod publishes "table changed" after each save. Other table pods push a snapshot to the phones they still hold. Pub/sub does not store the hand.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Sitting down with video</h2>
+  <ol class="steps">
+    <li><b>1</b>Player joins the table over HTTP</li>
+    <span class="arrow">→</span>
+    <li><b>2</b>Server checks the secret and signs a LiveKit token for room = table id</li>
+    <span class="arrow">→</span>
+    <li><b>3</b>Phone connects to LiveKit with that token and publishes the camera</li>
+    <span class="arrow">→</span>
+    <li><b>4</b>Other phones in the same room receive that video from LiveKit</li>
+  </ol>
+
+  <h2>One poker action</h2>
+  <ol class="steps">
+    <li><b>1</b>Player taps Raise</li>
+    <span class="arrow">→</span>
+    <li><b>2</b><code>/table</code> checks the secret</li>
+    <span class="arrow">→</span>
+    <li><b>3</b>Table pod calls the poker pod, which applies the bet</li>
+    <span class="arrow">→</span>
+    <li><b>4</b>Write the table record to Redis</li>
+    <span class="arrow">→</span>
+    <li><b>5</b>Publish "table changed"</li>
+    <span class="arrow">→</span>
+    <li><b>6</b>Each Node process sends its phones a snapshot</li>
+  </ol>
+  <p class="note" style="margin-top:12px">Video and the hand never share a channel. A camera failure does not block a bet, and a bet does not go through LiveKit.</p>
+
+  <h2>When a Node process dies</h2>
+  <ol class="steps">
+    <li><b>1</b>A table pod or a poker pod dies. Phones reconnect to another table pod.</li>
+    <span class="arrow">→</span>
+    <li><b>2</b>That table pod loads the Redis record and calls <code>load</code> on a new poker pod with the private blob.</li>
+    <span class="arrow">→</span>
+    <li><b>3</b>The hand continues. In-flight pub/sub messages are gone. The saved record is not.</li>
+  </ol>
+  <div class="note" style="margin-top:12px">
+    <p>The poker pod keeps the deck in its own memory. The table pod never reads that blob. It only stores it and hands it back on <code>load</code>. A backgammon pod uses the same <code>load</code> with a board blob instead of a deck blob.</p>
+  </div>
+</body>
+</html>

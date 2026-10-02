@@ -1,9 +1,9 @@
 {
   "private": true,
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "scripts": {
-    "start": "npm start --prefix server"
+    "dev": "node scripts/dev.mjs"
   }
 }

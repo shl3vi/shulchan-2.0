@@ -54,10 +54,6 @@ export default function HomeScreen() {
         <Text style={styles.buttonText}>Create</Text>
       </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <Pressable style={styles.debug} onPress={() => router.push("/table-design")}>
-        <Text style={styles.debugText}>Debug: design table</Text>
-      </Pressable>
     </View>
   );
 }
@@ -69,14 +65,4 @@ const styles = StyleSheet.create({
   button: { backgroundColor: "#1c1917", borderRadius: 8, padding: 12, alignItems: "center" },
   buttonText: { color: "white", fontWeight: "600" },
   error: { color: "#b91c1c", marginTop: 8 },
-  debug: {
-    marginTop: 28,
-    borderWidth: 1,
-    borderColor: "#b45309",
-    borderRadius: 8,
-    padding: 12,
-    alignItems: "center",
-    backgroundColor: "#fff7ed",
-  },
-  debugText: { color: "#9a3412", fontWeight: "700" },
 });

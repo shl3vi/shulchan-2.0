@@ -1,34 +1,13 @@
 # Shulchan 2.0
 
-Poker table split into a Node server and a React Native client.
-
-## Server
-
-Express 5 and Socket.IO. No Vite. Rules stay on the server via `poker-ts`. Tables live in memory.
+Poker table. The table service owns seats and sockets. The poker engine owns the hand. Redis stores both.
 
 ```bash
-cd server
-npm install
 npm run dev
 ```
 
-Listens on `http://127.0.0.1:4000`.
+That starts Redis, the poker engine, the table service, a Cloudflare tunnel, and Expo. Scan the QR with Expo Go on two phones. Create a table on one, join with that table id on the other, and deal.
 
-- `POST /api/games` `{ smallBlind, buyIn }` creates a table and returns `gameId` and `adminSecret`
-- `POST /api/games/:id/join` `{ name }` sits a player and returns `id` and `secret`
-- Socket.IO namespace `/poker`, auth `{ gameId, playerId, playerSecret }`
-- Events: `start-hand` `{ adminSecret }`, `act` `{ action, amount }`, server pushes `state`
+Node 24. From the repo root, `nvm install` then `nvm use` (there is an `.nvmrc` in the root, `client`, `table`, and `poker-engine`).
 
-## Client
-
-Expo SDK 57, expo-router, React Native. Session and socket actions live in `src/game/GameSession.tsx`. Screens only render that session.
-
-```bash
-cd client
-npm install
-npm start
-```
-
-The app calls `https://shulchan-server.onrender.com`. Set `EXPO_PUBLIC_API_URL` to override that, for example `http://127.0.0.1:4000` when the server is running on this machine. The free Render instance sleeps when idle, so the first request after a pause can take half a minute. Tables are kept in memory and disappear when the instance restarts.
-
-This machine's Node is older than the version React Native 0.86 asks for (`>=20.19.4`). Upgrade Node before running the client.
+Docker and `cloudflared` need to be installed. `brew install cloudflared` if the tunnel command is missing.

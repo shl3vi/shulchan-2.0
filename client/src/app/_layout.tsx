@@ -6,8 +6,7 @@ export default function RootLayout() {
     <GameSessionProvider>
       <Stack>
         <Stack.Screen name="index" options={{ title: "Shulchan" }} />
-        <Stack.Screen name="table" options={{ title: "Table" }} />
-        <Stack.Screen name="table-design" options={{ title: "Table design", headerStyle: { backgroundColor: "#0c0a09" }, headerTintColor: "#fafaf9" }} />
+        <Stack.Screen name="table" options={{ title: "Table", headerStyle: { backgroundColor: "#0c0a09" }, headerTintColor: "#fafaf9" }} />
       </Stack>
     </GameSessionProvider>
   );

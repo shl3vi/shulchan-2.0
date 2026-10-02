@@ -23,7 +23,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!credentials) return;
-    const next = io(`${API_URL}/poker`, {
+    const next = io(`${API_URL}/table`, {
       auth: {
         gameId: credentials.gameId,
         playerId: credentials.playerId,

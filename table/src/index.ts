@@ -3,6 +3,9 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { router } from "./routes.js";
 import { attachSockets } from "./sockets.js";
+import { connectRedis } from "./store.js";
+
+await connectRedis();
 
 const app = express();
 app.use(express.json());
@@ -17,5 +20,5 @@ attachSockets(io);
 
 const port = Number(process.env.PORT ?? 4000);
 httpServer.listen(port, "0.0.0.0", () => {
-  console.log(`Shulchan server listening on http://localhost:${port}`);
+  console.log(`Table service listening on http://localhost:${port}`);
 });
