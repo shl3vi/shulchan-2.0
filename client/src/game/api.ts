@@ -14,9 +14,13 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 export function createTable(smallBlind: number, buyIn: number) {
-  return post<{ gameId: string; adminSecret: string }>("/api/games", { smallBlind, buyIn });
+  return post<{ gameId: string; adminSecret: string; password: string }>("/api/games", { smallBlind, buyIn });
 }
 
-export function joinTable(gameId: string, name: string) {
-  return post<{ id: string; secret: string }>(`/api/games/${gameId}/join`, { name });
+export function joinTable(gameId: string, name: string, password: string) {
+  return post<{ id: string; secret: string }>(`/api/games/${gameId}/join`, { name, password });
+}
+
+export function liveKitToken(gameId: string, playerId: string, secret: string) {
+  return post<{ token: string; url: string }>(`/api/games/${gameId}/livekit`, { playerId, secret });
 }

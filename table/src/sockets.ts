@@ -1,6 +1,7 @@
 import type { Server, Socket } from "socket.io";
 import { actPoker, readPoker, startPoker, type ActionName } from "./engine.js";
 import { snapshot } from "./snapshot.js";
+import { dropRemovedPlayers, releaseSeat } from "./players.js";
 import { publishTable, readTable, subscriber } from "./store.js";
 
 const actions = new Set<ActionName>(["fold", "check", "call", "bet", "raise"]);
@@ -15,6 +16,10 @@ async function broadcast(io: Server, tableId: string) {
     const socket = io.of("/table").sockets.get(socketId);
     if (!socket) continue;
     const viewer = String(socket.handshake.auth.playerId ?? "");
+    if (!table.players.some((player) => player.id === viewer)) {
+      socket.emit("kicked");
+      return;
+    }
     socket.emit("state", snapshot(table, view, viewer));
   }
 }
@@ -48,9 +53,32 @@ export function attachSockets(io: Server) {
       }
       try {
         await startPoker(tableId);
+        const current = await readTable(tableId);
+        if (current) await dropRemovedPlayers(current);
         await publishTable(tableId);
       } catch (error) {
         socket.emit("error", { message: error instanceof Error ? error.message : "Cannot start" });
+      }
+    });
+
+    socket.on("leave", async () => {
+      try {
+        await releaseSeat(tableId, player.id);
+      } catch (error) {
+        socket.emit("error", { message: error instanceof Error ? error.message : "Cannot leave" });
+      }
+    });
+
+    socket.on("remove-player", async (body: { adminSecret?: string; playerId?: string }) => {
+      const current = await readTable(tableId);
+      if (!current || String(body?.adminSecret ?? "") !== current.adminSecret) {
+        socket.emit("error", { message: "Not the table admin" });
+        return;
+      }
+      try {
+        await releaseSeat(tableId, String(body?.playerId ?? ""));
+      } catch (error) {
+        socket.emit("error", { message: error instanceof Error ? error.message : "Cannot remove player" });
       }
     });
 
@@ -62,6 +90,8 @@ export function attachSockets(io: Server) {
       }
       try {
         await actPoker(tableId, player.seat, action, body.amount);
+        const current = await readTable(tableId);
+        if (current) await dropRemovedPlayers(current);
         await publishTable(tableId);
       } catch (error) {
         socket.emit("error", { message: error instanceof Error ? error.message : "Action failed" });

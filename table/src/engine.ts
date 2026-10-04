@@ -13,6 +13,7 @@ export type EngineView = {
   legalActions: ActionName[];
   chipRange: { min: number; max: number } | null;
   lastWinners: { seat: number; amount: number }[];
+  shownCards: { seat: number; cards: Card[] }[];
 };
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
@@ -32,6 +33,10 @@ export function createPokerTable(tableId: string, smallBlind: number) {
 
 export function seatPoker(tableId: string, seat: number, stack: number) {
   return post<EngineView>(`/tables/${tableId}/seat`, { seat, stack });
+}
+
+export function unseatPoker(tableId: string, seat: number) {
+  return post<EngineView>(`/tables/${tableId}/unseat`, { seat });
 }
 
 export function startPoker(tableId: string) {

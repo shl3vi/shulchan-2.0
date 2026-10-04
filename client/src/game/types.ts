@@ -27,6 +27,7 @@ export type TableSnapshot = {
     chipRange: { min: number; max: number } | null;
   } | null;
   lastWinners: { name: string; amount: number }[];
+  shownCards: { seat: number; cards: Card[] }[];
 };
 
 export type Credentials = {
@@ -34,4 +35,5 @@ export type Credentials = {
   playerId: string;
   playerSecret: string;
   adminSecret: string | null;
+  password: string;
 };

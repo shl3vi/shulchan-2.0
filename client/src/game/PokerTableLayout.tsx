@@ -1,23 +1,24 @@
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { betAnchor, FELT, RAIL, SEAT_CENTERS, SEAT_H, SEAT_TOP, SEAT_W, STAGE_H, STAGE_W } from "@/game/tableStage";
+import { useKeyboardInset } from "@/game/useKeyboardInset";
 import type { Card } from "@/game/types";
+import { t } from "@/i18n";
 
 export type SeatSlot = {
   name: string;
   stack: number;
   bet: number;
-  holeCards: Card[];
-  faceDown: boolean;
   toAct: boolean;
   isYou: boolean;
+  video?: ReactNode;
 };
 
 export type PokerAction = "fold" | "check" | "call" | "bet" | "raise";
 
-const SEAT_COUNT = 9;
-const SEAT_W = 94;
-const SEAT_H = 112;
+const CHIP = 22;
 
 const suitMark: Record<string, string> = {
   clubs: "♣",
@@ -30,188 +31,420 @@ function isRed(suit: string) {
   return suit === "hearts" || suit === "diamonds";
 }
 
-function PlayingCard({ card, back, large }: { card?: Card; back?: boolean; large?: boolean }) {
-  const box = large ? styles.holeCard : styles.card;
-  const rank = large ? styles.holeRank : styles.cardRank;
-  const suit = large ? styles.holeSuit : styles.cardSuit;
+function PlayingCard({
+  card,
+  back,
+  size,
+  scale,
+}: {
+  card?: Card;
+  back?: boolean;
+  size: "board" | "hole";
+  scale: number;
+}) {
+  const u = (n: number) => n * scale;
+  const board = size === "board";
+  const box = {
+    width: u(board ? 26 : 20),
+    height: u(board ? 38 : 28),
+    borderRadius: u(4),
+    backgroundColor: "white",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.35)",
+  };
   if (back) {
     return (
-      <View style={[box, styles.cardBack]}>
-        <Text style={large ? styles.holeBackMark : styles.cardBackMark}>♠</Text>
+      <View style={[box, { backgroundColor: "#172554", borderWidth: u(1), borderColor: "#93c5fd" }]}>
+        <Text style={{ color: "#bfdbfe", fontSize: u(board ? 14 : 11) }}>♠</Text>
       </View>
     );
   }
-  if (!card) return <View style={[box, styles.cardEmpty]} />;
+  if (!card) {
+    return (
+      <View
+        style={[
+          box,
+          {
+            backgroundColor: "transparent",
+            borderWidth: u(1),
+            borderColor: "rgba(255,255,255,0.22)",
+            boxShadow: "none",
+          },
+        ]}
+      />
+    );
+  }
   const red = isRed(card.suit);
   return (
     <View style={box}>
-      <Text style={[rank, red && styles.red]}>{card.rank}</Text>
-      <Text style={[suit, red && styles.red]}>{suitMark[card.suit] ?? card.suit}</Text>
+      <Text style={{ fontSize: u(board ? 14 : 11), fontWeight: "800", color: red ? "#b91c1c" : "#1c1917" }}>
+        {card.rank}
+      </Text>
+      <Text style={{ fontSize: u(board ? 12 : 10), color: red ? "#b91c1c" : "#1c1917" }}>
+        {suitMark[card.suit] ?? card.suit}
+      </Text>
     </View>
   );
 }
 
-function Chip({ amount }: { amount: number }) {
-  if (amount <= 0) return null;
+function BetChip({ amount, scale }: { amount: number; scale: number }) {
+  const u = (n: number) => n * scale;
   return (
-    <View style={styles.chip}>
-      <Text style={styles.chipText}>{amount}</Text>
+    <View
+      style={{
+        width: u(CHIP),
+        height: u(CHIP),
+        borderRadius: u(CHIP / 2),
+        backgroundColor: "#b45309",
+        borderWidth: Math.max(1, u(2)),
+        borderColor: "#f6e2a8",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        style={{ color: "#fef3c7", fontSize: u(10), fontWeight: "800" }}
+      >
+        {amount}
+      </Text>
     </View>
   );
 }
 
-function MicIcon() {
+function ShownCards({ cards, scale }: { cards: Card[]; scale: number }) {
+  const u = (n: number) => n * scale;
   return (
-    <View style={styles.mic}>
-      <View style={styles.micHead} />
-      <View style={styles.micArc} />
-      <View style={styles.micStem} />
+    <View style={{ flexDirection: "row", gap: u(2) }}>
+      {cards.slice(0, 2).map((card, index) => (
+        <PlayingCard key={index} card={card} size="hole" scale={scale} />
+      ))}
     </View>
   );
 }
 
-function seatSize(width: number, height: number) {
-  const widthCap = Math.min(SEAT_W, width * 0.28);
-  const heightCap = Math.min(SEAT_H, height * 0.2);
-  return {
-    width: Math.max(90, widthCap),
-    height: Math.max(104, heightCap),
-  };
+function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
+  const u = (n: number) => n * scale;
+  const occupied = player != null;
+  const ring = player?.toAct ? "#f6d36b" : player?.isYou ? "#e8c98a" : occupied ? "#44403c" : "#57534e";
+  return (
+    <View style={{ width: u(SEAT_W), height: u(SEAT_H), alignItems: "center" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: u(3) }}>
+        <View
+          style={{
+            width: u(52),
+            height: u(78),
+            borderRadius: u(8),
+            overflow: "hidden",
+            borderWidth: u(2),
+            borderColor: ring,
+            backgroundColor: "#1c1917",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {player?.video ?? (
+            <Text style={{ color: occupied ? "#fafaf9" : "#78716c", fontSize: u(16), fontWeight: "700" }}>
+              {occupied ? player.name.trim().slice(0, 1).toUpperCase() : "+"}
+            </Text>
+          )}
+        </View>
+      </View>
+      <View
+        style={{
+          marginTop: u(2),
+          width: u(SEAT_W),
+          height: u(28),
+          borderRadius: u(8),
+          paddingHorizontal: u(4),
+          backgroundColor: occupied ? "rgba(12,10,9,0.92)" : "rgba(12,10,9,0.45)",
+          borderWidth: u(1),
+          borderColor: player?.isYou || player?.toAct ? "#e8c98a" : "rgba(255,255,255,0.08)",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text
+          numberOfLines={1}
+          style={{ color: occupied ? "#fafaf9" : "#a8a29e", fontSize: u(10), lineHeight: u(12), fontWeight: "700" }}
+        >
+          {player?.name ?? t("openSeat")}
+        </Text>
+        {occupied ? (
+          <Text style={{ color: "#f6d36b", fontSize: u(10), lineHeight: u(12), fontWeight: "800" }}>{player.stack}</Text>
+        ) : null}
+      </View>
+    </View>
+  );
 }
 
-function seatOrigin(index: number, width: number, height: number, seatW: number, seatH: number) {
-  const cx = width / 2;
-  const cy = height / 2;
-  const rx = Math.max(0, (width - seatW) / 2);
-  const ry = Math.max(0, (height - seatH) / 2);
-  const angle = Math.PI / 2 + (index * 2 * Math.PI) / SEAT_COUNT;
-  return {
-    left: cx + rx * Math.cos(angle) - seatW / 2,
-    top: cy + ry * Math.sin(angle) - seatH / 2,
-  };
+function TableFelt({
+  scale,
+  community,
+  pot,
+  round,
+  winners,
+  onDeal,
+}: {
+  scale: number;
+  community: Card[];
+  pot: number;
+  round: string | null;
+  winners: { name: string; amount: number }[];
+  onDeal?: () => void;
+}) {
+  const u = (n: number) => n * scale;
+  const railW = FELT.w + RAIL * 2;
+  const railH = FELT.h + RAIL * 2;
+  const radius = u(railW / 2);
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: u(FELT.x - RAIL),
+        top: u(FELT.y - RAIL),
+        width: u(railW),
+        height: u(railH),
+        borderRadius: radius,
+        backgroundColor: "#071a12",
+        padding: u(RAIL),
+        boxShadow: "0 10px 18px rgba(0,0,0,0.5)",
+      }}
+    >
+      <View
+        style={{
+          flex: 1,
+          borderRadius: u(FELT.w / 2),
+          backgroundColor: "#157a40",
+          borderWidth: u(10),
+          borderColor: "#0c4e2a",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+        }}
+      >
+          <View
+            style={{
+              pointerEvents: "none",
+              position: "absolute",
+              left: "16%",
+              top: "18%",
+              width: "68%",
+              height: "64%",
+              borderRadius: u(FELT.h),
+              backgroundColor: "#1a8a4c",
+              opacity: 0.55,
+            }}
+          />
+          <Text
+            numberOfLines={1}
+            style={{
+              color: winners.length ? "#fef3c7" : "#d1fae5",
+              fontSize: u(11),
+              fontWeight: "700",
+              letterSpacing: 0.6,
+              marginBottom: u(4),
+              paddingHorizontal: u(16),
+            }}
+          >
+            {winners.length
+              ? winners.map((winner) => `${winner.name} +${winner.amount}`).join("  ·  ")
+              : round
+                ? t(round === "preflop" || round === "flop" || round === "turn" || round === "river" ? round : "waiting")
+                : t("waiting")}
+          </Text>
+          <View style={{ flexDirection: "row", gap: u(4), zIndex: 1 }}>
+            {Array.from({ length: 5 }, (_, index) => (
+              <PlayingCard key={index} card={community[index]} size="board" scale={scale} />
+            ))}
+          </View>
+          <View style={{ height: u(20), marginTop: u(6), flexDirection: "row", alignItems: "center", gap: u(6) }}>
+            {pot > 0 ? (
+              <>
+                <View
+                  style={{
+                    width: u(16),
+                    height: u(16),
+                    borderRadius: u(8),
+                    backgroundColor: "#b45309",
+                    borderWidth: Math.max(1, u(2)),
+                    borderColor: "#f6e2a8",
+                  }}
+                />
+                <Text style={{ color: "#ecfccb", fontWeight: "800", fontSize: u(14) }}>{pot}</Text>
+              </>
+            ) : null}
+          </View>
+          {onDeal && round == null ? (
+            <Pressable
+              style={{
+                marginTop: u(4),
+                backgroundColor: "#e8c98a",
+                borderRadius: u(14),
+                paddingHorizontal: u(18),
+                paddingVertical: u(6),
+              }}
+              onPress={onDeal}
+            >
+              <Text style={{ color: "#1c1917", fontWeight: "800", fontSize: u(13) }}>{t("deal")}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+    </View>
+  );
 }
 
 export function PokerTableLayout({
   seats,
+  shown,
   community,
   pot,
   round,
+  winners = [],
+  onDeal,
 }: {
   seats: Array<SeatSlot | undefined>;
+  shown: Card[][];
   community: Card[];
   pot: number;
   round: string | null;
+  winners?: { name: string; amount: number }[];
+  onDeal?: () => void;
 }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const seat = seatSize(size.width, size.height);
+  const scale = size.width > 0 && size.height > 0 ? Math.min(size.width / STAGE_W, size.height / STAGE_H) : 0;
+  const heroSeat = seats.findIndex((seat) => seat?.isYou);
+  const hero = heroSeat >= 0 ? heroSeat : 0;
+  const u = (n: number) => n * scale;
 
   return (
     <View
-      style={styles.feltWrap}
+      collapsable={false}
+      style={styles.room}
       onLayout={(event) => {
         const { width, height } = event.nativeEvent.layout;
         if (width !== size.width || height !== size.height) setSize({ width, height });
       }}
     >
-      <View
-        style={[
-          styles.rail,
-          {
-            top: size.height * 0.2,
-            bottom: size.height * 0.2,
-            left: size.width * 0.2,
-            right: size.width * 0.2,
-          },
-        ]}
-      >
-        <View style={styles.felt}>
-          <Text style={styles.round}>{round ?? "waiting"}</Text>
-          <View style={styles.board}>
-            {Array.from({ length: 5 }, (_, index) => (
-              <PlayingCard key={index} card={community[index]} />
-            ))}
-          </View>
-          <View style={styles.moneyLine}>
-            <Text style={styles.potLabel}>{pot}</Text>
-            <Chip amount={pot} />
-          </View>
+      <View style={styles.wash} />
+      {scale > 0 ? (
+        <View
+          style={{
+            position: "absolute",
+            width: u(STAGE_W),
+            height: u(STAGE_H),
+            left: (size.width - u(STAGE_W)) / 2,
+            top: (size.height - u(STAGE_H)) / 2,
+          }}
+        >
+          <TableFelt scale={scale} community={community} pot={pot} round={round} winners={winners} onDeal={onDeal} />
+          {SEAT_CENTERS.map((center, visual) => {
+            const seatIndex = (hero + visual) % SEAT_CENTERS.length;
+            const player = seats[seatIndex];
+            const revealed = shown[seatIndex] ?? [];
+            if (revealed.length > 0) {
+              const anchor = betAnchor(visual);
+              return (
+                <View key={`shown-${visual}`} style={{ position: "absolute", left: u(anchor.x - 22), top: u(anchor.y - 16), zIndex: 2 }}>
+                  <ShownCards cards={revealed} scale={scale} />
+                </View>
+              );
+            }
+            if (!player || player.bet <= 0) return null;
+            const anchor = betAnchor(visual);
+            return (
+              <View
+                key={`bet-${visual}`}
+                style={{
+                  position: "absolute",
+                  left: u(anchor.x - CHIP / 2),
+                  top: u(anchor.y - CHIP / 2),
+                  zIndex: 2,
+                }}
+              >
+                <BetChip amount={player.bet} scale={scale} />
+              </View>
+            );
+          })}
+          {SEAT_CENTERS.map((center, visual) => {
+            const player = seats[(hero + visual) % SEAT_CENTERS.length];
+            return (
+              <View
+                key={`seat-${visual}`}
+                style={{
+                  position: "absolute",
+                  left: u(center.x - SEAT_W / 2),
+                  top: u(center.y - SEAT_TOP),
+                  zIndex: 3,
+                }}
+              >
+                <SeatView player={player} scale={scale} />
+              </View>
+            );
+          })}
         </View>
-      </View>
-      {size.width > 0 &&
-        Array.from({ length: SEAT_COUNT }, (_, index) => {
-          const player = seats[index];
-          const spot = seatOrigin(index, size.width, size.height, seat.width, seat.height);
-          return (
-            <View
-              key={index}
-              style={[
-                styles.seat,
-                spot,
-                { width: seat.width, height: seat.height },
-                player?.toAct && styles.seatTurn,
-                player?.isYou && styles.seatYou,
-              ]}
-            >
-              <View style={styles.seatTop}>
-                <View style={styles.cardsCol}>
-                  {player?.faceDown ? (
-                    <>
-                      <PlayingCard back large />
-                      <PlayingCard back large />
-                    </>
-                  ) : (
-                    <>
-                      <PlayingCard card={player?.holeCards?.[0]} large />
-                      <PlayingCard card={player?.holeCards?.[1]} large />
-                    </>
-                  )}
-                </View>
-                <View style={styles.video} />
-                <View style={styles.betBadge}>
-                  <Text style={styles.betBadgeText}>{player?.bet ?? 0}</Text>
-                </View>
-              </View>
-              <View style={styles.moneyLine}>
-                <Text style={styles.seatStack}>{player ? player.stack : "—"}</Text>
-                <Text style={styles.seatName} numberOfLines={1}>
-                  {player?.name ?? "Empty"}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
+      ) : null}
     </View>
   );
+}
+
+function MicIcon({ muted }: { muted: boolean }) {
+  return (
+    <View style={styles.mic}>
+      <View style={[styles.micHead, muted && styles.micMuted]} />
+      <View style={[styles.micArc, muted && styles.micMutedBorder]} />
+      <View style={[styles.micStem, muted && styles.micMuted]} />
+      {muted ? <View style={styles.micSlash} /> : null}
+    </View>
+  );
+}
+
+function actionStyle(action: PokerAction) {
+  if (action === "fold") return dock.fold;
+  if (action === "bet" || action === "raise") return dock.raise;
+  return dock.call;
 }
 
 export function ActionDock({
   actions,
   yourTurn,
   amount,
+  cards,
   onAmount,
   onAction,
   onTalk,
+  micOn = false,
 }: {
   actions: PokerAction[];
   yourTurn: boolean;
   amount: string;
+  cards: Card[];
   onAmount: (value: string) => void;
   onAction: (action: PokerAction) => void;
   onTalk: () => void;
+  micOn?: boolean;
 }) {
   const quiet = actions.filter((action) => action !== "bet" && action !== "raise");
   const sized = actions.filter((action) => action === "bet" || action === "raise");
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardInset();
 
   return (
-    <View style={[dock.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View style={[dock.bar, { marginBottom: keyboard, paddingBottom: keyboard > 0 ? 10 : Math.max(insets.bottom, 10) }]}>
+      <View style={dock.hole}>
+        {cards.slice(0, 2).map((card, index) => (
+          <PlayingCard key={index} card={card} size="board" scale={1} />
+        ))}
+      </View>
       <View style={dock.actions}>
         {yourTurn ? (
           <>
             <View style={dock.row}>
               {quiet.map((action) => (
-                <Pressable key={action} style={dock.button} onPress={() => onAction(action)}>
-                  <Text style={dock.buttonText}>{action}</Text>
+                <Pressable key={action} style={({ pressed }) => [dock.button, actionStyle(action), pressed && dock.pressed]} onPress={() => onAction(action)}>
+                  <Text style={dock.buttonText}>{t(action)}</Text>
                 </Pressable>
               ))}
             </View>
@@ -222,154 +455,83 @@ export function ActionDock({
                   value={amount}
                   onChangeText={onAmount}
                   keyboardType="number-pad"
-                  placeholder="amount"
+                  placeholder={t("amount")}
                   placeholderTextColor="#a8a29e"
                 />
                 {sized.map((action) => (
-                  <Pressable key={action} style={dock.button} onPress={() => onAction(action)}>
-                    <Text style={dock.buttonText}>{action}</Text>
+                  <Pressable key={action} style={({ pressed }) => [dock.button, actionStyle(action), pressed && dock.pressed]} onPress={() => onAction(action)}>
+                    <Text style={dock.buttonText}>{t(action)}</Text>
                   </Pressable>
                 ))}
               </View>
             ) : null}
           </>
         ) : (
-          <Text style={dock.wait}>Waiting</Text>
+          <Text style={dock.wait}>{t("waitingTurn")}</Text>
         )}
       </View>
-      <Pressable style={dock.mic} onPress={onTalk}>
-        <MicIcon />
+      <Pressable style={[dock.mic, !micOn && dock.micOff]} onPress={onTalk}>
+        <MicIcon muted={!micOn} />
       </Pressable>
     </View>
   );
+}
+
+function MenuGlyph({ kind }: { kind?: "share" | "leave" | "stats" }) {
+  if (kind === "share") return <Ionicons name="share-outline" size={18} color="#fafaf9" />;
+  if (kind === "leave") return <Ionicons name="warning" size={18} color="#f87171" />;
+  return <Ionicons name="stats-chart" size={18} color="#fafaf9" />;
 }
 
 export function TableMenu({
   items,
 }: {
-  items: { label: string; onPress: () => void }[];
+  items: { label: string; onPress: () => void; danger?: boolean; icon?: "share" | "leave" | "stats" }[];
 }) {
   const [open, setOpen] = useState(false);
+  const insets = useSafeAreaInsets();
   return (
     <View style={menu.wrap}>
-      <Pressable style={menu.button} onPress={() => setOpen((value) => !value)}>
-        <Text style={menu.buttonText}>Menu</Text>
+      <Pressable style={menu.button} onPress={() => setOpen((value) => !value)} hitSlop={8}>
+        <View style={menu.bar} />
+        <View style={menu.bar} />
+        <View style={menu.bar} />
       </Pressable>
-      {open ? (
-        <View style={menu.panel}>
-          {items.map((item) => (
-            <Pressable
-              key={item.label}
-              style={menu.item}
-              onPress={() => {
-                setOpen(false);
-                item.onPress();
-              }}
-            >
-              <Text style={menu.itemText}>{item.label}</Text>
-            </Pressable>
-          ))}
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
+        <View style={menu.backdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
+          <View style={[menu.panel, { top: insets.top + 56, right: 12 }]}>
+            {items.map((item) => (
+              <Pressable
+                key={item.label}
+                style={menu.item}
+                onPress={() => {
+                  setOpen(false);
+                  item.onPress();
+                }}
+              >
+                <MenuGlyph kind={item.icon} />
+                <Text style={[menu.itemText, item.danger && menu.dangerText]}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
-      ) : null}
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  feltWrap: { flex: 1, minHeight: 0, marginHorizontal: 2 },
-  rail: {
+  room: { flex: 1, minHeight: 0, backgroundColor: "#07110d", overflow: "hidden" },
+  wash: {
     position: "absolute",
-    borderRadius: 200,
-    backgroundColor: "#5c3b16",
-    padding: 8,
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: "#0a1a12",
+    pointerEvents: "none",
   },
-  felt: {
-    flex: 1,
-    borderRadius: 190,
-    backgroundColor: "#1f7a45",
-    borderWidth: 3,
-    borderColor: "#d6b25e",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  round: { color: "#d1fae5", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" },
-  board: { flexDirection: "row", gap: 3 },
-  moneyLine: { flexDirection: "row", alignItems: "center", gap: 4 },
-  potLabel: { color: "#ecfccb", fontWeight: "700", fontSize: 12 },
-  card: {
-    width: 16,
-    height: 22,
-    borderRadius: 3,
-    backgroundColor: "white",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cardEmpty: { backgroundColor: "transparent", borderWidth: 1, borderColor: "#166534" },
-  cardBack: { backgroundColor: "#1e3a8a" },
-  cardBackMark: { color: "#93c5fd", fontSize: 11 },
-  cardRank: { fontSize: 10, fontWeight: "800", color: "#1c1917" },
-  cardSuit: { fontSize: 9, color: "#1c1917" },
-  holeCard: {
-    width: 28,
-    height: 36,
-    borderRadius: 4,
-    backgroundColor: "white",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  holeRank: { fontSize: 14, fontWeight: "800", color: "#1c1917" },
-  holeSuit: { fontSize: 13, color: "#1c1917" },
-  holeBackMark: { color: "#93c5fd", fontSize: 16 },
-  red: { color: "#b91c1c" },
-  chip: {
-    minWidth: 22,
-    paddingHorizontal: 4,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: "#b45309",
-    borderWidth: 2,
-    borderColor: "#fde68a",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chipText: { color: "white", fontSize: 10, fontWeight: "700" },
-  seat: {
-    position: "absolute",
-    width: SEAT_W,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#a8a29e",
-    backgroundColor: "#1c1917",
-    padding: 4,
-    gap: 2,
-  },
-  seatTurn: { borderColor: "#fbbf24", borderWidth: 2 },
-  seatYou: { backgroundColor: "#292524" },
-  seatTop: { flex: 1, flexDirection: "row", alignItems: "stretch", gap: 3 },
-  cardsCol: { gap: 2 },
-  video: {
-    flex: 1,
-    borderRadius: 4,
-    backgroundColor: "#292524",
-    borderWidth: 1,
-    borderColor: "#57534e",
-  },
-  betBadge: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 3,
-    backgroundColor: "#fde68a",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  betBadgeText: { color: "#1c1917", fontSize: 9, fontWeight: "800" },
-  seatName: { flex: 1, color: "white", fontWeight: "600", fontSize: 11 },
-  seatStack: { color: "#fbbf24", fontSize: 11, fontWeight: "700" },
   mic: { width: 18, height: 24, alignItems: "center" },
   micHead: { width: 8, height: 12, borderRadius: 4, backgroundColor: "white" },
   micArc: {
@@ -384,10 +546,29 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   micStem: { width: 2, height: 5, backgroundColor: "white" },
+  micMuted: { backgroundColor: "#a8a29e" },
+  micMutedBorder: { borderColor: "#a8a29e" },
+  micSlash: {
+    position: "absolute",
+    width: 2,
+    height: 26,
+    backgroundColor: "#fca5a5",
+    transform: [{ rotate: "35deg" }],
+  },
 });
 
 const dock = StyleSheet.create({
-  bar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 8 },
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    backgroundColor: "#100e0c",
+    borderTopWidth: 1,
+    borderTopColor: "#3f2e18",
+  },
+  hole: { flexDirection: "row", gap: 4, minWidth: 64 },
   mic: {
     width: 48,
     height: 48,
@@ -396,52 +577,67 @@ const dock = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  actions: { flex: 1, gap: 6, justifyContent: "center" },
+  micOff: { backgroundColor: "#44403c" },
+  actions: { flex: 1, minHeight: 88, gap: 6, justifyContent: "center" },
   row: { flexDirection: "row", gap: 6 },
   button: {
     flex: 1,
-    backgroundColor: "#1c1917",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#44403c",
-    paddingVertical: 10,
+    borderRadius: 24,
+    paddingVertical: 13,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#f6d36b",
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
-  buttonText: { color: "white", fontWeight: "700", fontSize: 13, textTransform: "capitalize" },
+  pressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
+  fold: { backgroundColor: "#9f1239" },
+  call: { backgroundColor: "#c2410c" },
+  raise: { backgroundColor: "#166534" },
+  buttonText: { color: "white", fontWeight: "800", fontSize: 13, letterSpacing: 1.2, textTransform: "uppercase" },
   amount: {
     flex: 1.4,
     borderWidth: 1,
-    borderColor: "#44403c",
-    borderRadius: 8,
-    color: "white",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderColor: "#f6d36b",
+    borderRadius: 24,
+    backgroundColor: "#1c1917",
+    color: "#f6d36b",
+    paddingHorizontal: 14,
+    fontSize: 16,
+    fontWeight: "800",
+    textAlign: "center",
   },
-  wait: { color: "#a8a29e", fontSize: 14 },
+  wait: { color: "#a8a29e", fontSize: 14, textAlign: "center" },
 });
 
 const menu = StyleSheet.create({
   wrap: { alignItems: "flex-end" },
   button: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(12,10,9,0.78)",
     borderWidth: 1,
-    borderColor: "#44403c",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: "rgba(246,211,107,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
   },
-  buttonText: { color: "#fafaf9", fontWeight: "700", fontSize: 12 },
+  bar: { width: 16, height: 2, borderRadius: 1, backgroundColor: "#fafaf9" },
+  backdrop: { flex: 1, direction: "ltr" },
   panel: {
     position: "absolute",
-    top: 36,
-    right: 0,
-    zIndex: 5,
-    minWidth: 160,
-    backgroundColor: "#1c1917",
-    borderRadius: 10,
+    zIndex: 6,
+    minWidth: 180,
+    backgroundColor: "rgba(28,25,23,0.96)",
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#44403c",
     overflow: "hidden",
   },
-  item: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#292524" },
-  itemText: { color: "white", fontSize: 14 },
+  item: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#292524" },
+  itemText: { color: "white", fontSize: 15, fontWeight: "600" },
+  dangerText: { color: "#fecaca" },
 });

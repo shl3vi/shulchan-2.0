@@ -6,8 +6,14 @@ Poker table. The table service owns seats and sockets. The poker engine owns the
 npm run dev
 ```
 
-That starts Redis, the poker engine, the table service, a Cloudflare tunnel, and Expo. Scan the QR with Expo Go on two phones. Create a table on one, join with that table id on the other, and deal.
+That starts Redis, LiveKit, the poker engine, the table service, and a Cloudflare tunnel. Then, from `client/`:
 
-Node 24. From the repo root, `nvm install` then `nvm use` (there is an `.nvmrc` in the root, `client`, `table`, and `poker-engine`).
+```bash
+npx expo run:android
+```
+
+Node 24. In each terminal, run `nvm use` after you enter the repo. The `.nvmrc` files do not switch the shell on their own.
 
 Docker and `cloudflared` need to be installed. `brew install cloudflared` if the tunnel command is missing.
+
+LiveKit runs in Docker on this Mac. Phones must be on the same Wi-Fi so the video can reach it. Expo Go cannot load the camera SDK, so use the dev build from `npx expo run:android`.

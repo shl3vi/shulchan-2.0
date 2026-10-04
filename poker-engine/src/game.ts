@@ -24,6 +24,9 @@ export type EngineDoc = {
   waiting: { seat: number; stack: number }[];
   hand: { seed: number; actions: PlayedAction[] } | null;
   lastWinners: { seat: number; amount: number }[];
+  lastShown: { seat: number; cards: Card[] }[];
+  lastBoard: Card[];
+  leaving: number[];
 };
 
 type PokerTable = {
@@ -57,6 +60,7 @@ export type EngineView = {
   legalActions: ActionName[];
   chipRange: { min: number; max: number } | null;
   lastWinners: { seat: number; amount: number }[];
+  shownCards: { seat: number; cards: Card[] }[];
 };
 
 function emptyDoc(smallBlind: number): EngineDoc {
@@ -68,6 +72,9 @@ function emptyDoc(smallBlind: number): EngineDoc {
     waiting: [],
     hand: null,
     lastWinners: [],
+    lastShown: [],
+    lastBoard: [],
+    leaving: [],
   };
 }
 
@@ -101,7 +108,11 @@ function play(table: PokerTable, action: PlayedAction) {
   const button = table.button();
   table.endBettingRound();
   if (!table.areBettingRoundsCompleted()) return;
+  const shown = table.holeCards().flatMap((cards, seat) => (cards ? [{ seat, cards }] : []));
+  const board = table.communityCards();
   table.showdown();
+  (table as unknown as { settledBoard?: Card[] }).settledBoard = board;
+  (table as unknown as { settledShown?: EngineDoc["lastShown"] }).settledShown = shown;
   const winners = table.winners().flatMap((potWinners, potIndex) =>
     potWinners.map(([seat]) => ({
       seat,
@@ -130,12 +141,13 @@ export function viewOf(doc: EngineDoc, table: PokerTable): EngineView {
   const actor = betting ? table.playerToAct() : null;
   const legal = actor != null ? table.legalActions() : null;
   return {
-    communityCards: inHand ? table.communityCards() : [],
+    communityCards: inHand ? table.communityCards() : (doc.lastBoard ?? []),
     pots: inHand ? table.pots() : [],
     round: inHand ? table.roundOfBetting() : null,
     playerToActSeat: actor,
     seats,
     holeCards: holes.flatMap((cards, seat) => (cards ? [{ seat, cards }] : [])),
+    shownCards: inHand ? [] : (doc.lastShown ?? []),
     legalActions: legal?.actions ?? [],
     chipRange: legal?.chipRange ? { min: legal.chipRange.min, max: legal.chipRange.max } : null,
     lastWinners: doc.lastWinners,
@@ -143,10 +155,17 @@ export function viewOf(doc: EngineDoc, table: PokerTable): EngineView {
 }
 
 function finish(doc: EngineDoc, table: PokerTable): EngineDoc {
-  const settled = (table as unknown as { settledWinners?: EngineDoc["lastWinners"] }).settledWinners;
+  const settledTable = table as unknown as {
+    settledWinners?: EngineDoc["lastWinners"];
+    settledShown?: EngineDoc["lastShown"];
+    settledBoard?: Card[];
+  };
+  const settled = settledTable.settledWinners;
   if (table.isHandInProgress()) return doc;
-  const seats = table.seats().map((seat) => seat?.stack ?? null);
+  const leaving = new Set(doc.leaving ?? []);
+  const seats = table.seats().map((seat, index) => (leaving.has(index) ? null : (seat?.stack ?? null)));
   for (const waiting of doc.waiting) {
+    if (leaving.has(waiting.seat)) continue;
     if (seats[waiting.seat] == null) seats[waiting.seat] = waiting.stack;
   }
   return {
@@ -157,6 +176,9 @@ function finish(doc: EngineDoc, table: PokerTable): EngineDoc {
     waiting: [],
     hand: null,
     lastWinners: settled ?? doc.lastWinners,
+    lastShown: settledTable.settledShown ?? [],
+    lastBoard: settledTable.settledBoard ?? [],
+    leaving: [],
   };
 }
 
@@ -173,6 +195,26 @@ export function seatPlayer(doc: EngineDoc, seat: number, stack: number): EngineD
   const seats = doc.seats.slice();
   seats[seat] = stack;
   return { ...doc, seats };
+}
+
+export function unseat(doc: EngineDoc, seat: number): EngineDoc {
+  if (seat < 0 || seat >= MAX_SEATS) throw new Error("Invalid seat");
+  const waiting = doc.waiting.some((player) => player.seat === seat);
+  const seated = doc.seats[seat] != null;
+  if (!seated && !waiting) throw new Error("Seat is empty");
+  if (doc.hand && seated) {
+    const leaving = new Set(doc.leaving ?? []);
+    leaving.add(seat);
+    return { ...doc, leaving: [...leaving] };
+  }
+  const seats = doc.seats.slice();
+  seats[seat] = null;
+  return {
+    ...doc,
+    seats,
+    waiting: doc.waiting.filter((player) => player.seat !== seat),
+    leaving: (doc.leaving ?? []).filter((index) => index !== seat),
+  };
 }
 
 export function startHand(doc: EngineDoc): EngineDoc {

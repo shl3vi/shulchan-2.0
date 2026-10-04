@@ -1,12 +1,33 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { writeFile } from "node:fs/promises";
+import { networkInterfaces } from "node:os";
 import { fileURLToPath } from "node:url";
+
+const nvmDir = process.env.NVM_DIR ?? `${process.env.HOME}/.nvm`;
+const node24 = execFileSync("bash", ["-lc", `source "${nvmDir}/nvm.sh" && nvm version 24`], {
+  encoding: "utf8",
+}).trim();
+const nodeBin = `${nvmDir}/versions/node/${node24}/bin`;
+const pathWithNode24 = `${nodeBin}:${process.env.PATH ?? ""}`;
+
+function lanIp() {
+  for (const entries of Object.values(networkInterfaces())) {
+    for (const entry of entries ?? []) {
+      if (entry.family === "IPv4" && !entry.internal) return entry.address;
+    }
+  }
+  return "127.0.0.1";
+}
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const children = [];
 
-function start(command, args, name) {
-  const child = spawn(command, args, { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+function start(command, args, name, env = process.env) {
+  const child = spawn(command, args, {
+    cwd: root,
+    env: { ...env, PATH: pathWithNode24 },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   children.push(child);
   const tag = `[${name}]`;
   child.stdout.on("data", (chunk) => process.stdout.write(`${tag} ${chunk}`));
@@ -28,7 +49,21 @@ function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-const docker = spawn("docker", ["compose", "up", "-d", "redis"], { cwd: root, stdio: "inherit" });
+const ip = lanIp();
+await writeFile(
+  new URL("../livekit.yaml", import.meta.url),
+  `port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50010
+  node_ip: ${ip}
+keys:
+  devkey: secret
+`,
+);
+
+const docker = spawn("docker", ["compose", "up", "-d", "redis", "livekit"], { cwd: root, stdio: "inherit" });
 const dockerCode = await new Promise((resolve) => docker.on("exit", resolve));
 if (dockerCode !== 0) {
   console.error("Redis did not start. Docker needs to be running.");
@@ -36,7 +71,12 @@ if (dockerCode !== 0) {
 }
 
 start("npm", ["run", "dev", "--prefix", "poker-engine"], "poker");
-start("npm", ["run", "dev", "--prefix", "table"], "table");
+start("npm", ["run", "dev", "--prefix", "table"], "table", {
+  ...process.env,
+  LIVEKIT_URL: `ws://${ip}:7880`,
+  LIVEKIT_API_KEY: "devkey",
+  LIVEKIT_API_SECRET: "secret",
+});
 
 const tunnel = start("cloudflared", ["tunnel", "--url", "http://127.0.0.1:4000"], "tunnel");
 const url = await new Promise((resolve, reject) => {
@@ -58,12 +98,7 @@ for (const stream of [tunnel.stdout, tunnel.stderr]) {
   stream.removeAllListeners("data");
   stream.on("data", () => {});
 }
-console.log(`\nPhones reach this Mac at ${url}\n`);
+console.log(`\nPhones reach this Mac at ${url}`);
+console.log("In another terminal, from client/: npx expo run:android\n");
 
-const expo = spawn("npx", ["expo", "start", "--tunnel"], {
-  cwd: fileURLToPath(new URL("../client/", import.meta.url)),
-  stdio: "inherit",
-});
-children.push(expo);
-await new Promise((resolve) => expo.on("exit", resolve));
-shutdown();
+await new Promise(() => {});

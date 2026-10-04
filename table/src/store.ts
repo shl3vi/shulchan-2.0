@@ -5,6 +5,7 @@ export type SeatPlayer = {
   name: string;
   secret: string;
   seat: number;
+  pendingRemoval?: boolean;
 };
 
 export type TableRecord = {
@@ -12,6 +13,7 @@ export type TableRecord = {
   adminSecret: string;
   smallBlind: number;
   buyIn: number;
+  password: string;
   players: SeatPlayer[];
 };
 

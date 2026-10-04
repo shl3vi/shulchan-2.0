@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { createPokerTable, readPoker, seatPoker } from "./engine.js";
+import { createPokerTable, readPoker, seatPoker, unseatPoker } from "./engine.js";
+import { liveKitToken } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
 import { publishTable, readTable, writeTable, type TableRecord } from "./store.js";
 
@@ -22,6 +23,7 @@ router.post("/", async (req, res) => {
     adminSecret: crypto.randomUUID(),
     smallBlind,
     buyIn,
+    password: String(crypto.getRandomValues(new Uint32Array(1))[0]! % 900000 + 100000),
     players: [],
   };
   await createPokerTable(table.id, smallBlind);
@@ -29,6 +31,7 @@ router.post("/", async (req, res) => {
   res.status(201).json({
     gameId: table.id,
     adminSecret: table.adminSecret,
+    password: table.password,
     state: snapshot(table, await readPoker(table.id)),
   });
 });
@@ -40,8 +43,13 @@ router.post("/:id/join", async (req, res) => {
     return;
   }
   const name = String(req.body?.name ?? "").trim();
+  const password = String(req.body?.password ?? "");
   if (!name) {
     res.status(400).json({ error: "Name is required" });
+    return;
+  }
+  if (!table.password || password !== table.password) {
+    res.status(403).json({ error: "Wrong password" });
     return;
   }
   if (table.players.length >= MAX_SEATS) {
@@ -65,6 +73,22 @@ router.post("/:id/join", async (req, res) => {
   await writeTable(table);
   await publishTable(table.id);
   res.status(201).json({ id: player.id, secret: player.secret });
+});
+
+router.post("/:id/livekit", async (req, res) => {
+  const table = await readTable(String(req.params.id));
+  if (!table) {
+    res.status(404).json({ error: "Game not found" });
+    return;
+  }
+  const playerId = String(req.body?.playerId ?? "");
+  const secret = String(req.body?.secret ?? "");
+  const player = table.players.find((seat) => seat.id === playerId && seat.secret === secret);
+  if (!player) {
+    res.status(401).json({ error: "Invalid player" });
+    return;
+  }
+  res.json(await liveKitToken(table.id, player.id, player.name));
 });
 
 router.get("/:id", async (req, res) => {
