@@ -50,6 +50,20 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 const ip = lanIp();
+
+function cloudProject(name) {
+  try {
+    const raw = execFileSync("lk", ["project", "list", "--json"], { encoding: "utf8" });
+    const projects = JSON.parse(raw);
+    return projects.find((project) => project.Name === name) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const cloud = cloudProject("shulchan");
+const liveKitServices = cloud ? ["redis"] : ["redis", "livekit"];
+
 await writeFile(
   new URL("../livekit.yaml", import.meta.url),
   `port: 7880
@@ -63,7 +77,7 @@ keys:
 `,
 );
 
-const docker = spawn("docker", ["compose", "up", "-d", "redis", "livekit"], { cwd: root, stdio: "inherit" });
+const docker = spawn("docker", ["compose", "up", "-d", ...liveKitServices], { cwd: root, stdio: "inherit" });
 const dockerCode = await new Promise((resolve) => docker.on("exit", resolve));
 if (dockerCode !== 0) {
   console.error("Redis did not start. Docker needs to be running.");
@@ -73,9 +87,9 @@ if (dockerCode !== 0) {
 start("npm", ["run", "dev", "--prefix", "poker-engine"], "poker");
 start("npm", ["run", "dev", "--prefix", "table"], "table", {
   ...process.env,
-  LIVEKIT_URL: `ws://${ip}:7880`,
-  LIVEKIT_API_KEY: "devkey",
-  LIVEKIT_API_SECRET: "secret",
+  LIVEKIT_URL: cloud?.URL ?? `ws://${ip}:7880`,
+  LIVEKIT_API_KEY: cloud?.APIKey ?? "devkey",
+  LIVEKIT_API_SECRET: cloud?.APISecret ?? "secret",
 });
 
 const tunnel = start("cloudflared", ["tunnel", "--url", "http://127.0.0.1:4000"], "tunnel");

@@ -104,21 +104,29 @@ function play(table: PokerTable, action: PlayedAction) {
     table.actionTaken(action.action);
   }
   if (!table.isHandInProgress() || table.isBettingRoundInProgress()) return;
-  const pots = table.pots();
   const button = table.button();
   table.endBettingRound();
   if (!table.areBettingRoundsCompleted()) return;
-  const shown = table.holeCards().flatMap((cards, seat) => (cards ? [{ seat, cards }] : []));
+  const pots = table.pots();
+  const uncontested = pots.every((pot) => pot.eligiblePlayers.length <= 1);
+  const shown = uncontested
+    ? []
+    : table.holeCards().flatMap((cards, seat) => (cards ? [{ seat, cards }] : []));
   const board = table.communityCards();
   table.showdown();
   (table as unknown as { settledBoard?: Card[] }).settledBoard = board;
   (table as unknown as { settledShown?: EngineDoc["lastShown"] }).settledShown = shown;
-  const winners = table.winners().flatMap((potWinners, potIndex) =>
+  const ranked = table.winners().flatMap((potWinners, potIndex) =>
     potWinners.map(([seat]) => ({
       seat,
       amount: pots[potIndex]?.size ?? 0,
     })),
   );
+  const winners = ranked.length
+    ? ranked
+    : pots.flatMap((pot) =>
+        pot.eligiblePlayers.length === 1 ? [{ seat: pot.eligiblePlayers[0]!, amount: pot.size }] : [],
+      );
   const settled = table as unknown as { settledWinners?: EngineDoc["lastWinners"]; settledButton?: number };
   settled.settledWinners = winners;
   settled.settledButton = button;

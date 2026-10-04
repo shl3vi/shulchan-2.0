@@ -2,10 +2,10 @@
 export const STAGE_W = 390;
 export const STAGE_H = 610;
 
-export const SEAT_W = 68;
-export const SEAT_H = 108;
+export const SEAT_W = 76;
+export const SEAT_H = 124;
 /** Distance from the top of a seat widget to the center of the video frame. */
-export const SEAT_TOP = 39;
+export const SEAT_TOP = 47;
 
 /** Avatar centers. Index 0 is the hero at the bottom. The rest go clockwise, mirrored left and right. */
 export const SEAT_CENTERS = [

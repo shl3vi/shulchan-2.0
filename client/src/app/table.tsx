@@ -34,6 +34,7 @@ export default function TableScreen() {
     );
   }
 
+  const winnerSeats = new Set(state?.round == null ? (state?.lastWinners ?? []).map((winner) => winner.seat) : []);
   const seats: Array<SeatSlot | undefined> = [];
   for (const player of state?.players ?? []) {
     const isYou = player.id === you?.id;
@@ -44,6 +45,7 @@ export default function TableScreen() {
       bet: player.betSize,
       toAct: state?.playerToActId === player.id,
       isYou,
+      winner: winnerSeats.has(player.seat),
       video: track ? <SeatVideo track={track} /> : undefined,
     };
   }

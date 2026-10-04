@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Animated, Easing, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { betAnchor, FELT, RAIL, SEAT_CENTERS, SEAT_H, SEAT_TOP, SEAT_W, STAGE_H, STAGE_W } from "@/game/tableStage";
@@ -13,6 +13,7 @@ export type SeatSlot = {
   bet: number;
   toAct: boolean;
   isYou: boolean;
+  winner?: boolean;
   video?: ReactNode;
 };
 
@@ -125,32 +126,91 @@ function ShownCards({ cards, scale }: { cards: Card[]; scale: number }) {
   );
 }
 
+function WinnerFrame({ scale, children }: { scale: number; children: ReactNode }) {
+  const u = (n: number) => n * scale;
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 1400,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [spin]);
+  const w = u(64);
+  const h = u(96);
+  const span = Math.hypot(w, h);
+  return (
+    <View style={{ width: w, height: h, borderRadius: u(8), overflow: "hidden" }}>
+      <Animated.View
+        style={{
+          position: "absolute",
+          width: span,
+          height: span,
+          left: (w - span) / 2,
+          top: (h - span) / 2,
+          transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: "#b45309" }} />
+        <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "46%", backgroundColor: "#fbbf24" }} />
+        <View style={{ position: "absolute", left: "38%", top: 0, bottom: 0, width: "14%", backgroundColor: "#fff7d6" }} />
+      </Animated.View>
+      <View
+        style={{
+          position: "absolute",
+          top: u(3),
+          left: u(3),
+          right: u(3),
+          bottom: u(3),
+          borderRadius: u(6),
+          overflow: "hidden",
+          backgroundColor: "#1c1917",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
 function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
   const u = (n: number) => n * scale;
   const occupied = player != null;
   const ring = player?.toAct ? "#f6d36b" : player?.isYou ? "#e8c98a" : occupied ? "#44403c" : "#57534e";
+  const face = player?.video ?? (
+    <Text style={{ color: occupied ? "#fafaf9" : "#78716c", fontSize: u(16), fontWeight: "700" }}>
+      {occupied ? player.name.trim().slice(0, 1).toUpperCase() : "+"}
+    </Text>
+  );
   return (
     <View style={{ width: u(SEAT_W), height: u(SEAT_H), alignItems: "center" }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: u(3) }}>
-        <View
-          style={{
-            width: u(52),
-            height: u(78),
-            borderRadius: u(8),
-            overflow: "hidden",
-            borderWidth: u(2),
-            borderColor: ring,
-            backgroundColor: "#1c1917",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {player?.video ?? (
-            <Text style={{ color: occupied ? "#fafaf9" : "#78716c", fontSize: u(16), fontWeight: "700" }}>
-              {occupied ? player.name.trim().slice(0, 1).toUpperCase() : "+"}
-            </Text>
-          )}
-        </View>
+        {player?.winner ? (
+          <WinnerFrame scale={scale}>{face}</WinnerFrame>
+        ) : (
+          <View
+            style={{
+              width: u(64),
+              height: u(96),
+              borderRadius: u(8),
+              overflow: "hidden",
+              borderWidth: u(2),
+              borderColor: ring,
+              backgroundColor: "#1c1917",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {face}
+          </View>
+        )}
       </View>
       <View
         style={{

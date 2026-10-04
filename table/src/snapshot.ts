@@ -25,7 +25,7 @@ export type TableSnapshot = {
     legalActions: EngineView["legalActions"];
     chipRange: { min: number; max: number } | null;
   } | null;
-  lastWinners: { name: string; amount: number }[];
+  lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: EngineView["communityCards"] }[];
 };
 
@@ -66,7 +66,7 @@ export function snapshot(table: TableRecord, view: EngineView, viewerId?: string
     shownCards: view.shownCards ?? [],
     lastWinners: view.lastWinners.flatMap((winner) => {
       const player = bySeat.get(winner.seat);
-      return player ? [{ name: player.name, amount: winner.amount }] : [];
+      return player ? [{ seat: winner.seat, name: player.name, amount: winner.amount }] : [];
     }),
   };
 }
