@@ -10,6 +10,7 @@ export type SeatPlayer = {
 
 export type TableRecord = {
   id: string;
+  adminId?: string;
   adminSecret: string;
   smallBlind: number;
   buyIn: number;

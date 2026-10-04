@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -15,10 +15,10 @@ import { t } from "@/i18n";
 export default function TableScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { credentials, state, error, startHand, act, leave, removePlayer } = useGameSession();
+  const { credentials, state, error, startHand, act, leave, removePlayer, transferAdmin } = useGameSession();
   const video = useTableVideo(credentials);
   const [amount, setAmount] = useState("");
-  const [stats, setStats] = useState(false);
+  const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
   const you = state?.you;
   const pot = state?.pots.reduce((sum, entry) => sum + entry.size, 0) ?? 0;
 
@@ -71,24 +71,36 @@ export default function TableScreen() {
           winners={state?.lastWinners ?? []}
           onDeal={credentials.adminSecret && state?.round == null ? startHand : undefined}
         />
-        {stats ? (
-          <View style={styles.stats}>
-            {(state?.players ?? []).length === 0 ? <Text style={styles.statsLine}>{t("noPlayers")}</Text> : null}
-            {(state?.players ?? []).map((player) => (
-              <View key={player.id} style={styles.statsRow}>
-                <Text style={styles.statsLine}>
-                  {player.name} · {player.stack}
-                </Text>
-                {credentials.adminSecret && player.id !== you?.id ? (
-                  <Pressable onPress={() => removePlayer(player.id)}>
-                    <Text style={styles.remove}>{t("remove")}</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ))}
-            <Text style={styles.statsLine}>{t("pot", { n: pot })}</Text>
-          </View>
-        ) : null}
+        <Modal visible={sheet != null} transparent animationType="fade" onRequestClose={() => setSheet(null)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setSheet(null)}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <Text style={styles.sheetTitle}>{sheet === "admin" ? t("adminOptions") : t("statistics")}</Text>
+              {(state?.players ?? []).length === 0 ? <Text style={styles.statsLine}>{t("noPlayers")}</Text> : null}
+              {(state?.players ?? []).map((player) => (
+                <View key={player.id} style={styles.statsRow}>
+                  <Text style={styles.statsLine}>
+                    {player.name}
+                    {sheet === "stats" ? ` · ${player.stack}` : ""}
+                  </Text>
+                  {sheet === "admin" && player.id !== you?.id ? (
+                    <View style={styles.statsActions}>
+                      <Pressable onPress={() => transferAdmin(player.id)}>
+                        <Text style={styles.makeAdmin}>{t("makeAdmin")}</Text>
+                      </Pressable>
+                      <Pressable onPress={() => removePlayer(player.id)} hitSlop={8}>
+                        <Ionicons name="trash-outline" size={20} color="#fecaca" />
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+              {sheet === "stats" ? <Text style={styles.statsLine}>{t("pot", { n: pot })}</Text> : null}
+              <Pressable style={styles.cancel} onPress={() => setSheet(null)}>
+                <Text style={styles.cancelText}>{t("cancel")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
           <Ionicons name="home" size={20} color="#fafaf9" />
@@ -96,8 +108,11 @@ export default function TableScreen() {
         <View style={[styles.menu, { top: insets.top + 8 }]}>
           <TableMenu
             items={[
-              { label: t("statistics"), icon: "stats", onPress: () => setStats((value) => !value) },
-              { label: t("shareTable"), icon: "share", onPress: shareTable },
+              { label: t("statistics"), icon: "stats", onPress: () => setSheet("stats") },
+              ...(credentials.adminSecret
+                ? [{ label: t("adminOptions"), icon: "admin" as const, onPress: () => setSheet("admin") }]
+                : []),
+              { label: t("shareTable"), icon: "share" as const, onPress: shareTable },
               {
                 label: t("leaveGame"),
                 icon: "leave",
@@ -142,22 +157,37 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   menu: { position: "absolute", right: 12, zIndex: 8 },
-  stats: {
-    position: "absolute",
-    top: 8,
-    left: 12,
-    right: 12,
-    zIndex: 3,
-    backgroundColor: "rgba(12,10,9,0.92)",
-    borderRadius: 10,
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  sheet: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "rgba(12,10,9,0.96)",
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#44403c",
-    padding: 12,
-    gap: 4,
+    padding: 16,
+    gap: 10,
   },
+  sheetTitle: { color: "#f6d36b", fontSize: 18, fontWeight: "800" },
   statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  statsLine: { color: "#fafaf9", fontSize: 14 },
-  remove: { color: "#fecaca", fontWeight: "800" },
+  statsActions: { flexDirection: "row", alignItems: "center", gap: 14 },
+  statsLine: { color: "#fafaf9", fontSize: 16, flexShrink: 1 },
+  makeAdmin: { color: "#f6d36b", fontWeight: "800" },
+  cancel: {
+    marginTop: 6,
+    alignSelf: "stretch",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "#292524",
+  },
+  cancelText: { color: "#fafaf9", fontWeight: "700" },
   error: {
     position: "absolute",
     left: 12,

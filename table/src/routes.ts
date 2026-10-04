@@ -70,6 +70,7 @@ router.post("/:id/join", async (req, res) => {
     return;
   }
   table.players.push(player);
+  if (!table.adminId) table.adminId = player.id;
   await writeTable(table);
   await publishTable(table.id);
   res.status(201).json({ id: player.id, secret: player.secret });

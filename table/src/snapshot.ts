@@ -24,6 +24,7 @@ export type TableSnapshot = {
     holeCards: EngineView["communityCards"];
     legalActions: EngineView["legalActions"];
     chipRange: { min: number; max: number } | null;
+    adminSecret: string | null;
   } | null;
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: EngineView["communityCards"] }[];
@@ -61,6 +62,7 @@ export function snapshot(table: TableRecord, view: EngineView, viewerId?: string
           holeCards: view.holeCards.find((cards) => cards.seat === viewer.seat)?.cards ?? [],
           legalActions: yourTurn ? view.legalActions : [],
           chipRange: yourTurn ? view.chipRange : null,
+          adminSecret: viewer.id === table.adminId ? table.adminSecret : null,
         }
       : null,
     shownCards: view.shownCards ?? [],

@@ -10,14 +10,14 @@ export const SEAT_TOP = 47;
 /** Avatar centers. Index 0 is the hero at the bottom. The rest go clockwise, mirrored left and right. */
 export const SEAT_CENTERS = [
   { x: 195, y: 528 },
-  { x: 336, y: 430 },
-  { x: 350, y: 300 },
-  { x: 348, y: 175 },
-  { x: 248, y: 78 },
-  { x: 142, y: 78 },
-  { x: 42, y: 175 },
-  { x: 40, y: 300 },
   { x: 54, y: 430 },
+  { x: 40, y: 300 },
+  { x: 42, y: 175 },
+  { x: 142, y: 78 },
+  { x: 248, y: 78 },
+  { x: 348, y: 175 },
+  { x: 350, y: 300 },
+  { x: 336, y: 430 },
 ] as const;
 
 export const FELT = { x: 46, y: 86, w: 298, h: 428 };

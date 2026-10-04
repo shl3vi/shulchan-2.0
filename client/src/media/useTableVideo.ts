@@ -8,6 +8,10 @@ export function useTableVideo(credentials: Credentials | null) {
   const [micOn, setMicOn] = useState(false);
   const [toggleMic, setToggleMic] = useState<() => void>(() => () => {});
 
+  const gameId = credentials?.gameId;
+  const playerId = credentials?.playerId;
+  const playerSecret = credentials?.playerSecret;
+
   useEffect(() => {
     if (!videoSupported || !credentials) return;
     let stopped = false;
@@ -25,7 +29,7 @@ export function useTableVideo(credentials: Credentials | null) {
       setTracks(new Map());
       setMicOn(false);
     };
-  }, [credentials]);
+  }, [gameId, playerId, playerSecret]);
 
   return { tracks, micOn, toggleMic };
 }

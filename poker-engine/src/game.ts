@@ -79,6 +79,7 @@ function emptyDoc(smallBlind: number): EngineDoc {
 }
 
 function restore(doc: EngineDoc): PokerTable {
+  if (doc.hand) useSeed(doc.hand.seed);
   const table = new Table({ smallBlind: doc.smallBlind, bigBlind: doc.smallBlind * 2 }, MAX_SEATS);
   doc.seats.forEach((stack, seat) => {
     if (stack != null) table.sitDown(seat, stack);
@@ -87,7 +88,6 @@ function restore(doc: EngineDoc): PokerTable {
   internal._firstTimeButton = doc.firstHand;
   internal._button = doc.button;
   if (doc.hand) {
-    useSeed(doc.hand.seed);
     table.startHand();
     clearSeed();
     for (const action of doc.hand.actions) {

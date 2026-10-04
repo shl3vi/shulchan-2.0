@@ -25,6 +25,7 @@ export type TableSnapshot = {
     holeCards: Card[];
     legalActions: Array<"fold" | "check" | "call" | "bet" | "raise">;
     chipRange: { min: number; max: number } | null;
+    adminSecret: string | null;
   } | null;
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: Card[] }[];

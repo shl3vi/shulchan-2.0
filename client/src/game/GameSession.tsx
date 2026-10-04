@@ -14,6 +14,7 @@ type GameSessionValue = {
   ready: boolean;
   leave: () => Promise<void>;
   removePlayer: (playerId: string) => void;
+  transferAdmin: (playerId: string) => void;
   startHand: () => void;
   act: (action: string, amount?: number) => void;
 };
@@ -39,19 +40,26 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     void saveSeat(next);
   }
 
+  const gameId = credentials?.gameId;
+  const playerId = credentials?.playerId;
+  const playerSecret = credentials?.playerSecret;
+
   useEffect(() => {
-    if (!credentials) return;
+    if (!gameId || !playerId || !playerSecret) return;
     const next = io(`${API_URL}/table`, {
-      auth: {
-        gameId: credentials.gameId,
-        playerId: credentials.playerId,
-        playerSecret: credentials.playerSecret,
-      },
+      auth: { gameId, playerId, playerSecret },
       transports: ["websocket"],
     });
     next.on("state", (snapshot: TableSnapshot) => {
       setState(snapshot);
       setError(null);
+      const adminSecret = snapshot.you?.adminSecret ?? null;
+      setCredentials((current) => {
+        if (!current || current.adminSecret === adminSecret) return current;
+        const updated = { ...current, adminSecret };
+        void saveSeat(updated);
+        return updated;
+      });
     });
     next.on("kicked", () => {
       remember(null);
@@ -66,7 +74,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       next.close();
       setSocket(null);
     };
-  }, [credentials]);
+  }, [gameId, playerId, playerSecret]);
 
   const value = useMemo<GameSessionValue>(
     () => ({
@@ -98,7 +106,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         });
       },
       async leave() {
-        socket?.emit("leave");
+        socket?.emit("leave", { adminSecret: credentials?.adminSecret });
         remember(null);
         setState(null);
         setError(null);
@@ -106,6 +114,10 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       removePlayer(playerId) {
         if (!credentials?.adminSecret) return;
         socket?.emit("remove-player", { adminSecret: credentials.adminSecret, playerId });
+      },
+      transferAdmin(playerId) {
+        if (!credentials?.adminSecret) return;
+        socket?.emit("transfer-admin", { adminSecret: credentials.adminSecret, playerId });
       },
       startHand() {
         if (!credentials?.adminSecret) return;

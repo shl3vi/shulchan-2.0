@@ -37,7 +37,8 @@ export function startTableVideo(
     if (stopped) return;
     onMic(true);
     sync();
-  })().catch((error) => {
+  })().catch((error: { reasonName?: string }) => {
+    if (error?.reasonName === "LeaveRequest") return;
     console.warn("LiveKit failed", error);
   });
 

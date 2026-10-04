@@ -77,10 +77,11 @@ function PlayingCard({
     );
   }
   const red = isRed(card.suit);
+  const rank = card.rank === "T" ? "10" : card.rank;
   return (
     <View style={box}>
-      <Text style={{ fontSize: u(board ? 14 : 11), fontWeight: "800", color: red ? "#b91c1c" : "#1c1917" }}>
-        {card.rank}
+      <Text style={{ fontSize: u(rank === "10" ? (board ? 12 : 9) : board ? 14 : 11), fontWeight: "800", color: red ? "#b91c1c" : "#1c1917" }}>
+        {rank}
       </Text>
       <Text style={{ fontSize: u(board ? 12 : 10), color: red ? "#b91c1c" : "#1c1917" }}>
         {suitMark[card.suit] ?? card.suit}
@@ -537,16 +538,17 @@ export function ActionDock({
   );
 }
 
-function MenuGlyph({ kind }: { kind?: "share" | "leave" | "stats" }) {
+function MenuGlyph({ kind }: { kind?: "share" | "leave" | "stats" | "admin" }) {
   if (kind === "share") return <Ionicons name="share-outline" size={18} color="#fafaf9" />;
   if (kind === "leave") return <Ionicons name="warning" size={18} color="#f87171" />;
+  if (kind === "admin") return <Ionicons name="shield-checkmark-outline" size={18} color="#fafaf9" />;
   return <Ionicons name="stats-chart" size={18} color="#fafaf9" />;
 }
 
 export function TableMenu({
   items,
 }: {
-  items: { label: string; onPress: () => void; danger?: boolean; icon?: "share" | "leave" | "stats" }[];
+  items: { label: string; onPress: () => void; danger?: boolean; icon?: "share" | "leave" | "stats" | "admin" }[];
 }) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();

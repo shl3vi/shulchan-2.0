@@ -1,8 +1,8 @@
 import type { Server, Socket } from "socket.io";
 import { actPoker, readPoker, startPoker, type ActionName } from "./engine.js";
 import { snapshot } from "./snapshot.js";
-import { dropRemovedPlayers, releaseSeat } from "./players.js";
-import { publishTable, readTable, subscriber } from "./store.js";
+import { assignAdmin, dropRemovedPlayers, releaseSeat } from "./players.js";
+import { publishTable, readTable, subscriber, writeTable } from "./store.js";
 
 const actions = new Set<ActionName>(["fold", "check", "call", "bet", "raise"]);
 
@@ -47,7 +47,12 @@ export function attachSockets(io: Server) {
     socket.emit("state", snapshot(table, await readPoker(tableId), playerId));
 
     socket.on("start-hand", async (body: { adminSecret?: string }) => {
-      if (String(body?.adminSecret ?? "") !== table.adminSecret) {
+      const current = await readTable(tableId);
+      if (current && !current.adminId && String(body?.adminSecret ?? "") === current.adminSecret) {
+        current.adminId = player.id;
+        await writeTable(current);
+      }
+      if (!current || player.id !== current.adminId || String(body?.adminSecret ?? "") !== current.adminSecret) {
         socket.emit("error", { message: "Not the table admin" });
         return;
       }
@@ -61,17 +66,46 @@ export function attachSockets(io: Server) {
       }
     });
 
-    socket.on("leave", async () => {
+    socket.on("leave", async (body: { adminSecret?: string }) => {
       try {
+        const current = await readTable(tableId);
+        if (current && !current.adminId && String(body?.adminSecret ?? "") === current.adminSecret) {
+          current.adminId = player.id;
+          await writeTable(current);
+        }
         await releaseSeat(tableId, player.id);
       } catch (error) {
         socket.emit("error", { message: error instanceof Error ? error.message : "Cannot leave" });
       }
     });
 
+    socket.on("transfer-admin", async (body: { adminSecret?: string; playerId?: string }) => {
+      const current = await readTable(tableId);
+      if (current && !current.adminId && String(body?.adminSecret ?? "") === current.adminSecret) {
+        current.adminId = player.id;
+        await writeTable(current);
+      }
+      if (!current || player.id !== current.adminId || String(body?.adminSecret ?? "") !== current.adminSecret) {
+        socket.emit("error", { message: "Not the table admin" });
+        return;
+      }
+      const next = current.players.find((seat) => seat.id === body?.playerId && !seat.pendingRemoval);
+      if (!next || next.id === player.id) {
+        socket.emit("error", { message: "Player not found" });
+        return;
+      }
+      assignAdmin(current, next.id);
+      await writeTable(current);
+      await publishTable(current.id);
+    });
+
     socket.on("remove-player", async (body: { adminSecret?: string; playerId?: string }) => {
       const current = await readTable(tableId);
-      if (!current || String(body?.adminSecret ?? "") !== current.adminSecret) {
+      if (current && !current.adminId && String(body?.adminSecret ?? "") === current.adminSecret) {
+        current.adminId = player.id;
+        await writeTable(current);
+      }
+      if (!current || player.id !== current.adminId || String(body?.adminSecret ?? "") !== current.adminSecret) {
         socket.emit("error", { message: "Not the table admin" });
         return;
       }
