@@ -116,12 +116,17 @@ function play(table: PokerTable, action: PlayedAction) {
   table.showdown();
   (table as unknown as { settledBoard?: Card[] }).settledBoard = board;
   (table as unknown as { settledShown?: EngineDoc["lastShown"] }).settledShown = shown;
-  const ranked = table.winners().flatMap((potWinners, potIndex) =>
-    potWinners.map(([seat]) => ({
+  const ranked = table.winners().flatMap((potWinners, potIndex) => {
+    const size = pots[potIndex]?.size ?? 0;
+    const count = potWinners.length;
+    if (count === 0) return [];
+    const share = Math.floor(size / count);
+    const extra = size % count;
+    return potWinners.map(([seat], index) => ({
       seat,
-      amount: pots[potIndex]?.size ?? 0,
-    })),
-  );
+      amount: share + (index < extra ? 1 : 0),
+    }));
+  });
   const winners = ranked.length
     ? ranked
     : pots.flatMap((pot) =>

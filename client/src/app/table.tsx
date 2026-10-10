@@ -68,7 +68,7 @@ export default function TableScreen() {
           community={state?.communityCards ?? []}
           pot={pot}
           round={state?.round ?? null}
-          winners={state?.lastWinners ?? []}
+          winners={state?.round == null ? (state?.lastWinners ?? []) : []}
           onDeal={credentials.adminSecret && state?.round == null ? startHand : undefined}
         />
         <Modal visible={sheet != null} transparent animationType="fade" onRequestClose={() => setSheet(null)}>
