@@ -1,0 +1,7 @@
+{
+  "name": "server",
+  "private": true,
+  "scripts": {
+    "postinstall": "npm install --prefix ../table && npm install --prefix ../poker-engine"
+  }
+}
