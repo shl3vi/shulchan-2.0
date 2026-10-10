@@ -18,6 +18,7 @@ export type TableSnapshot = {
     betSize: number;
     inHand: boolean;
     sittingOut: boolean;
+    bought: number;
   }[];
   you: {
     id: string;
@@ -26,6 +27,7 @@ export type TableSnapshot = {
     chipRange: { min: number; max: number } | null;
     adminSecret: string | null;
   } | null;
+  buyIn: number;
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: EngineView["communityCards"] }[];
 };
@@ -54,6 +56,7 @@ export function snapshot(table: TableRecord, view: EngineView, viewerId?: string
         betSize: seat?.betSize ?? 0,
         inHand: seat?.inHand ?? false,
         sittingOut: false,
+        bought: player.bought ?? table.buyIn,
       }];
     }),
     you: viewer
@@ -65,6 +68,7 @@ export function snapshot(table: TableRecord, view: EngineView, viewerId?: string
           adminSecret: viewer.id === table.adminId ? table.adminSecret : null,
         }
       : null,
+    buyIn: table.buyIn,
     shownCards: view.shownCards ?? [],
     lastWinners: view.lastWinners.flatMap((winner) => {
       const player = bySeat.get(winner.seat);

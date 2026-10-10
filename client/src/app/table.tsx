@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Modal, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
-import { ActionDock, PokerTableLayout, TableMenu, type SeatSlot } from "@/game/PokerTableLayout";
+import { ActionDock, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
 import type { Card } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { t } from "@/i18n";
@@ -15,12 +15,31 @@ import { t } from "@/i18n";
 export default function TableScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { credentials, state, error, startHand, act, leave, removePlayer, transferAdmin } = useGameSession();
+  const { credentials, state, error, dismissError, startHand, act, leave, removePlayer, transferAdmin, rebuy } = useGameSession();
   const video = useTableVideo(credentials);
-  const [amount, setAmount] = useState("");
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
+  const [buying, setBuying] = useState(false);
+  const [buyChips, setBuyChips] = useState(0);
+  const hold = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdStart = useRef<ReturnType<typeof setTimeout> | null>(null);
   const you = state?.you;
   const pot = state?.pots.reduce((sum, entry) => sum + entry.size, 0) ?? 0;
+  const buyStep = Math.max(1, state?.bigBlind ?? 1);
+
+  function stopBuy() {
+    if (holdStart.current) clearTimeout(holdStart.current);
+    if (hold.current) clearInterval(hold.current);
+    holdStart.current = null;
+    hold.current = null;
+  }
+
+  function startBuy(direction: -1 | 1) {
+    stopBuy();
+    setBuyChips((value) => Math.max(1, value + direction * buyStep));
+    holdStart.current = setTimeout(() => {
+      hold.current = setInterval(() => setBuyChips((value) => Math.max(1, value + direction * buyStep)), 70);
+    }, 320);
+  }
 
   if (!credentials) {
     return (
@@ -80,7 +99,7 @@ export default function TableScreen() {
                 <View key={player.id} style={styles.statsRow}>
                   <Text style={styles.statsLine}>
                     {player.name}
-                    {sheet === "stats" ? ` · ${player.stack}` : ""}
+                    {sheet === "stats" ? ` · ${player.stack} · ${t("putIn", { n: player.bought ?? 0 })}` : ""}
                   </Text>
                   {sheet === "admin" && player.id !== you?.id ? (
                     <View style={styles.statsActions}>
@@ -94,14 +113,63 @@ export default function TableScreen() {
                   ) : null}
                 </View>
               ))}
-              {sheet === "stats" ? <Text style={styles.statsLine}>{t("pot", { n: pot })}</Text> : null}
+              {sheet === "stats" ? (
+                <>
+                  <Text style={styles.statsLine}>{t("pot", { n: pot })}</Text>
+                  <Pressable
+                    style={styles.cancel}
+                    onPress={() => {
+                      setBuyChips(state?.buyIn ?? state?.bigBlind ?? 1);
+                      setBuying(true);
+                    }}
+                  >
+                    <Text style={styles.cancelText}>{t("buyMore")}</Text>
+                  </Pressable>
+                </>
+              ) : null}
               <Pressable style={styles.cancel} onPress={() => setSheet(null)}>
                 <Text style={styles.cancelText}>{t("cancel")}</Text>
               </Pressable>
             </Pressable>
           </Pressable>
         </Modal>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <Modal visible={buying} transparent animationType="fade" onRequestClose={() => setBuying(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setBuying(false)}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <Text style={styles.sheetTitle}>{t("buyMore")}</Text>
+              <View style={styles.buyRow}>
+                <Pressable style={styles.buyStep} onPressIn={() => startBuy(-1)} onPressOut={stopBuy}>
+                  <Text style={styles.buyStepText}>−</Text>
+                </Pressable>
+                <Text style={styles.buyChips}>{buyChips}</Text>
+                <Pressable style={styles.buyStep} onPressIn={() => startBuy(1)} onPressOut={stopBuy}>
+                  <Text style={styles.buyStepText}>+</Text>
+                </Pressable>
+              </View>
+              <Pressable
+                style={styles.cancel}
+                onPress={() => {
+                  rebuy(buyChips);
+                  setBuying(false);
+                }}
+              >
+                <Text style={styles.cancelText}>{t("buyMore")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+        {error ? (
+          <View style={styles.error}>
+            <Text style={styles.errorText}>
+              {error === "Bet size is outside the allowed range" && you?.chipRange
+                ? t("betOutOfRange", { min: you.chipRange.min, max: you.chipRange.max })
+                : error}
+            </Text>
+            <Pressable onPress={dismissError} hitSlop={8}>
+              <Ionicons name="close" size={18} color="#fecaca" />
+            </Pressable>
+          </View>
+        ) : null}
         <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
           <Ionicons name="home" size={20} color="#fafaf9" />
         </Pressable>
@@ -124,17 +192,19 @@ export default function TableScreen() {
             ]}
           />
         </View>
+        <TalkButton on={video.micOn} onTalk={video.setMic} />
       </View>
       <ActionDock
         yourTurn={(you?.legalActions.length ?? 0) > 0}
         actions={you?.legalActions ?? []}
-        amount={amount}
+        chipRange={you?.chipRange ?? null}
+        step={state?.bigBlind ?? 1}
         cards={you?.holeCards ?? []}
-        onAmount={setAmount}
-        onTalk={video.setMic}
-        micOn={video.micOn}
-        onAction={(action) => act(action, action === "bet" || action === "raise" ? Number(amount) : undefined)}
+        onAction={(action, chips) => act(action, chips)}
       />
+      <View style={{ paddingBottom: insets.bottom, backgroundColor: "#0c0a09" }}>
+        <View style={styles.ad} />
+      </View>
     </View>
   );
 }
@@ -143,6 +213,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#07110d", direction: "ltr" },
   meta: { color: "#d6d3d1", padding: 24 },
   stage: { flex: 1, minHeight: 0 },
+  ad: { height: 50, width: "100%", backgroundColor: "#292524" },
   home: {
     position: "absolute",
     left: 12,
@@ -188,17 +259,23 @@ const styles = StyleSheet.create({
     backgroundColor: "#292524",
   },
   cancelText: { color: "#fafaf9", fontWeight: "700" },
+  buyRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  buyStep: { width: 48, height: 48, borderRadius: 8, backgroundColor: "#292524", alignItems: "center", justifyContent: "center" },
+  buyStepText: { color: "#fafaf9", fontSize: 28, lineHeight: 32 },
+  buyChips: { color: "#fafaf9", fontSize: 32, fontWeight: "700" },
   error: {
     position: "absolute",
     left: 12,
     right: 12,
     bottom: 8,
     zIndex: 3,
-    color: "#fecaca",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     backgroundColor: "#450a0a",
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    overflow: "hidden",
   },
+  errorText: { color: "#fecaca", flex: 1 },
 });

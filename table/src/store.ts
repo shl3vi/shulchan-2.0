@@ -5,6 +5,7 @@ export type SeatPlayer = {
   name: string;
   secret: string;
   seat: number;
+  bought: number;
   pendingRemoval?: boolean;
 };
 

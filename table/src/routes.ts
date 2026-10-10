@@ -62,7 +62,7 @@ router.post("/:id/join", async (req, res) => {
     res.status(400).json({ error: "Table is full" });
     return;
   }
-  const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), seat };
+  const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), seat, bought: table.buyIn };
   try {
     await seatPoker(table.id, seat, table.buyIn);
   } catch (error) {

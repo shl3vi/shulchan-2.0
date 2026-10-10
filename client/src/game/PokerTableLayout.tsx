@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, Easing, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { betAnchor, FELT, RAIL, SEAT_CENTERS, SEAT_H, SEAT_TOP, SEAT_W, STAGE_H, STAGE_W } from "@/game/tableStage";
-import { useKeyboardInset } from "@/game/useKeyboardInset";
 import type { Card } from "@/game/types";
 import { t } from "@/i18n";
 
@@ -184,7 +183,7 @@ function WinnerFrame({ scale, children }: { scale: number; children: ReactNode }
 function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
   const u = (n: number) => n * scale;
   const occupied = player != null;
-  const ring = player?.toAct ? "#f6d36b" : player?.isYou ? "#e8c98a" : occupied ? "#44403c" : "#57534e";
+  const ring = player?.toAct ? "#f6d36b" : occupied ? "#44403c" : "#57534e";
   const face = player?.video ?? (
     <Text style={{ color: occupied ? "#fafaf9" : "#78716c", fontSize: u(16), fontWeight: "700" }}>
       {occupied ? player.name.trim().slice(0, 1).toUpperCase() : "+"}
@@ -222,7 +221,7 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
           paddingHorizontal: u(4),
           backgroundColor: occupied ? "rgba(12,10,9,0.92)" : "rgba(12,10,9,0.45)",
           borderWidth: u(1),
-          borderColor: player?.isYou || player?.toAct ? "#e8c98a" : "rgba(255,255,255,0.08)",
+          borderColor: player?.toAct ? "#e8c98a" : "rgba(255,255,255,0.08)",
           alignItems: "center",
           justifyContent: "center",
         }}
@@ -451,6 +450,18 @@ export function PokerTableLayout({
   );
 }
 
+export function TalkButton({ on, onTalk }: { on: boolean; onTalk: (on: boolean) => void }) {
+  return (
+    <Pressable
+      style={[styles.talk, on && styles.talkOn]}
+      onPressIn={() => onTalk(true)}
+      onPressOut={() => onTalk(false)}
+    >
+      <MicIcon muted={!on} />
+    </Pressable>
+  );
+}
+
 function MicIcon({ muted }: { muted: boolean }) {
   return (
     <View style={styles.mic}>
@@ -462,6 +473,15 @@ function MicIcon({ muted }: { muted: boolean }) {
   );
 }
 
+function betPresets(min: number, max: number) {
+  const span = Math.max(0, max - min);
+  return [0, 1, 2, 3].map((step) => {
+    const value = Math.round(min + (span * step) / 3);
+    const label = step === 0 ? t("minBet") : step === 3 ? t("maxBet") : "";
+    return { value, label, key: String(step) };
+  });
+}
+
 function actionStyle(action: PokerAction) {
   if (action === "fold") return dock.fold;
   if (action === "bet" || action === "raise") return dock.raise;
@@ -471,74 +491,130 @@ function actionStyle(action: PokerAction) {
 export function ActionDock({
   actions,
   yourTurn,
-  amount,
+  chipRange = null,
+  step,
   cards,
-  onAmount,
   onAction,
-  onTalk,
-  micOn = false,
 }: {
   actions: PokerAction[];
   yourTurn: boolean;
-  amount: string;
+  chipRange?: { min: number; max: number } | null;
+  step: number;
   cards: Card[];
-  onAmount: (value: string) => void;
-  onAction: (action: PokerAction) => void;
-  onTalk: (on: boolean) => void;
-  micOn?: boolean;
+  onAction: (action: PokerAction, amount?: number) => void;
 }) {
+  const [sizing, setSizing] = useState<PokerAction | null>(null);
+  const [chips, setChips] = useState(0);
   const quiet = actions.filter((action) => action !== "bet" && action !== "raise");
   const sized = actions.filter((action) => action === "bet" || action === "raise");
-  const insets = useSafeAreaInsets();
-  const keyboard = useKeyboardInset();
+  const min = chipRange?.min ?? 0;
+  const max = chipRange?.max ?? 0;
+  const jump = Math.max(1, Math.min(step, Math.max(1, max - min)));
+  const hold = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdStart = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function stopHold() {
+    if (holdStart.current) clearTimeout(holdStart.current);
+    if (hold.current) clearInterval(hold.current);
+    holdStart.current = null;
+    hold.current = null;
+  }
+
+  function nudge(direction: -1 | 1) {
+    setChips((value) => Math.min(max, Math.max(min, value + direction * jump)));
+  }
+
+  function startHold(direction: -1 | 1) {
+    stopHold();
+    nudge(direction);
+    holdStart.current = setTimeout(() => {
+      hold.current = setInterval(() => nudge(direction), 70);
+    }, 320);
+  }
 
   return (
-    <View style={[dock.bar, { marginBottom: keyboard, paddingBottom: keyboard > 0 ? 10 : Math.max(insets.bottom, 10) }]}>
-      <View style={dock.hole}>
-        {cards.slice(0, 2).map((card, index) => (
-          <PlayingCard key={index} card={card} size="board" scale={1} />
-        ))}
-      </View>
-      <View style={dock.actions}>
-        {yourTurn ? (
-          <>
+    <>
+      <View style={dock.bar}>
+        <View style={dock.hole}>
+          {cards.slice(0, 2).map((card, index) => (
+            <PlayingCard key={index} card={card} size="board" scale={1} />
+          ))}
+        </View>
+        <View style={dock.actions}>
+          {yourTurn ? (
             <View style={dock.row}>
               {quiet.map((action) => (
                 <Pressable key={action} style={({ pressed }) => [dock.button, actionStyle(action), pressed && dock.pressed]} onPress={() => onAction(action)}>
                   <Text style={dock.buttonText}>{t(action)}</Text>
                 </Pressable>
               ))}
+              {chipRange ? (
+                <Pressable
+                  style={({ pressed }) => [dock.button, dock.allIn, pressed && dock.pressed]}
+                  onPress={() => sized[0] && onAction(sized[0], chipRange.max)}
+                >
+                  <Text style={dock.buttonText}>{t("allIn")}</Text>
+                </Pressable>
+              ) : null}
+              {sized.map((action) => (
+                <Pressable
+                  key={action}
+                  style={({ pressed }) => [dock.button, actionStyle(action), pressed && dock.pressed]}
+                  onPress={() => {
+                    setChips(min);
+                    setSizing(action);
+                  }}
+                >
+                  <Text style={dock.buttonText}>{t(action)}</Text>
+                </Pressable>
+              ))}
             </View>
-            {sized.length > 0 ? (
-              <View style={dock.row}>
-                <TextInput
-                  style={dock.amount}
-                  value={amount}
-                  onChangeText={onAmount}
-                  keyboardType="number-pad"
-                  placeholder={t("amount")}
-                  placeholderTextColor="#a8a29e"
-                />
-                {sized.map((action) => (
-                  <Pressable key={action} style={({ pressed }) => [dock.button, actionStyle(action), pressed && dock.pressed]} onPress={() => onAction(action)}>
-                    <Text style={dock.buttonText}>{t(action)}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-          </>
-        ) : (
-          <Text style={dock.wait}>{t("waitingTurn")}</Text>
-        )}
+          ) : (
+            <Text style={dock.wait}>{t("waitingTurn")}</Text>
+          )}
+        </View>
       </View>
-      <Pressable
-        style={[dock.mic, !micOn && dock.micOff]}
-        onPressIn={() => onTalk(true)}
-        onPressOut={() => onTalk(false)}
-      >
-        <MicIcon muted={!micOn} />
-      </Pressable>
-    </View>
+      <Modal visible={sizing != null} transparent animationType="fade" onRequestClose={() => setSizing(null)}>
+        <View style={dock.shade}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSizing(null)} />
+          <View style={dock.prompt}>
+            <View style={dock.promptHead}>
+              <Text style={dock.promptTitle}>{sizing ? t(sizing) : ""}</Text>
+              <Pressable onPress={() => setSizing(null)} hitSlop={8}>
+                <Ionicons name="close" size={18} color="#a8a29e" />
+              </Pressable>
+            </View>
+            <View style={dock.stepper}>
+              <Pressable style={dock.step} onPressIn={() => startHold(-1)} onPressOut={stopHold}>
+                <Text style={dock.stepText}>−</Text>
+              </Pressable>
+              <Text style={dock.chips}>{chips}</Text>
+              <Pressable style={dock.step} onPressIn={() => startHold(1)} onPressOut={stopHold}>
+                <Text style={dock.stepText}>+</Text>
+              </Pressable>
+            </View>
+            <View style={dock.presets}>
+              {betPresets(min, max).map((preset) => (
+                <Pressable key={preset.key} style={[dock.preset, chips === preset.value && dock.presetOn]} onPress={() => setChips(preset.value)}>
+                  <Text style={dock.presetLabel}>{preset.label}</Text>
+                  <Text style={dock.presetValue}>{preset.value}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable
+              style={({ pressed }) => [dock.confirm, pressed && dock.pressed]}
+              onPress={() => {
+                if (!sizing) return;
+                onAction(sizing, chips);
+                setSizing(null);
+              }}
+            >
+              <Text style={dock.buttonText}>{sizing ? t(sizing) : ""}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -589,6 +665,21 @@ export function TableMenu({
 
 const styles = StyleSheet.create({
   room: { flex: 1, minHeight: 0, backgroundColor: "#07110d", overflow: "hidden" },
+  talk: {
+    position: "absolute",
+    right: 16,
+    bottom: 16,
+    zIndex: 8,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#1c1917",
+    borderWidth: 1,
+    borderColor: "#44403c",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  talkOn: { backgroundColor: "#1e3a8a", borderColor: "#93c5fd" },
   wash: {
     position: "absolute",
     left: 0,
@@ -627,55 +718,59 @@ const dock = StyleSheet.create({
   bar: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingTop: 8,
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingTop: 6,
     backgroundColor: "#100e0c",
     borderTopWidth: 1,
-    borderTopColor: "#3f2e18",
+    borderTopColor: "#292524",
   },
-  hole: { flexDirection: "row", gap: 4, minWidth: 64 },
-  mic: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#1e3a8a",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  micOff: { backgroundColor: "#44403c" },
-  actions: { flex: 1, minHeight: 88, gap: 6, justifyContent: "center" },
-  row: { flexDirection: "row", gap: 6 },
+  hole: { flexDirection: "row", gap: 3, minWidth: 52 },
+  actions: { flex: 1, gap: 4, justifyContent: "center" },
+  row: { flexDirection: "row", gap: 4 },
   button: {
     flex: 1,
-    borderRadius: 24,
-    paddingVertical: 13,
+    borderRadius: 6,
+    paddingVertical: 7,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#f6d36b",
-    shadowColor: "#000",
-    shadowOpacity: 0.35,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  pressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
-  fold: { backgroundColor: "#9f1239" },
-  call: { backgroundColor: "#c2410c" },
-  raise: { backgroundColor: "#166534" },
-  buttonText: { color: "white", fontWeight: "800", fontSize: 13, letterSpacing: 1.2, textTransform: "uppercase" },
-  amount: {
-    flex: 1.4,
-    borderWidth: 1,
-    borderColor: "#f6d36b",
-    borderRadius: 24,
     backgroundColor: "#1c1917",
-    color: "#f6d36b",
-    paddingHorizontal: 14,
-    fontSize: 16,
-    fontWeight: "800",
+    borderWidth: 1,
+    borderColor: "#44403c",
+  },
+  pressed: { opacity: 0.75 },
+  fold: { borderColor: "#7f1d1d" },
+  call: { borderColor: "#57534e" },
+  raise: { borderColor: "#a16207" },
+  allIn: { borderColor: "#a16207" },
+  buttonText: { color: "#fafaf9", fontWeight: "600", fontSize: 12, letterSpacing: 0.4 },
+  amount: {
+    flex: 1.2,
+    height: 32,
+    borderWidth: 1,
+    borderColor: "#44403c",
+    borderRadius: 6,
+    backgroundColor: "#0c0a09",
+    color: "#fafaf9",
+    paddingHorizontal: 8,
+    fontSize: 13,
+    fontWeight: "600",
     textAlign: "center",
   },
   wait: { color: "#a8a29e", fontSize: 14, textAlign: "center" },
+  shade: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center", padding: 28 },
+  prompt: { width: "100%", maxWidth: 320, backgroundColor: "#1c1917", borderRadius: 12, borderWidth: 1, borderColor: "#44403c", padding: 16, gap: 12, zIndex: 1 },
+  stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  step: { width: 48, height: 48, borderRadius: 8, backgroundColor: "#292524", alignItems: "center", justifyContent: "center" },
+  stepText: { color: "#fafaf9", fontSize: 28, lineHeight: 32 },
+  chips: { color: "#fafaf9", fontSize: 36, fontWeight: "700" },
+  presets: { flexDirection: "row", gap: 6 },
+  preset: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 6, backgroundColor: "#0c0a09", borderWidth: 1, borderColor: "#44403c" },
+  presetOn: { borderColor: "#a16207" },
+  presetLabel: { color: "#a8a29e", fontSize: 11 },
+  presetValue: { color: "#fafaf9", fontSize: 14, fontWeight: "600", marginTop: 2 },
+  promptHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  promptTitle: { color: "#fafaf9", fontSize: 16, fontWeight: "600" },
+  confirm: { borderRadius: 6, paddingVertical: 10, alignItems: "center", backgroundColor: "#292524", borderWidth: 1, borderColor: "#a16207" },
 });
 
 const menu = StyleSheet.create({

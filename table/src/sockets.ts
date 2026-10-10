@@ -1,5 +1,5 @@
 import type { Server, Socket } from "socket.io";
-import { actPoker, readPoker, startPoker, type ActionName } from "./engine.js";
+import { actPoker, addChips, readPoker, startPoker, type ActionName } from "./engine.js";
 import { snapshot } from "./snapshot.js";
 import { assignAdmin, dropRemovedPlayers, releaseSeat } from "./players.js";
 import { publishTable, readTable, subscriber, writeTable } from "./store.js";
@@ -113,6 +113,26 @@ export function attachSockets(io: Server) {
         await releaseSeat(tableId, String(body?.playerId ?? ""));
       } catch (error) {
         socket.emit("error", { message: error instanceof Error ? error.message : "Cannot remove player" });
+      }
+    });
+
+    socket.on("rebuy", async (body: { amount?: number }) => {
+      const amount = Number(body?.amount);
+      if (!Number.isInteger(amount) || amount < 1) {
+        socket.emit("error", { message: "Buy-in must be a positive whole number" });
+        return;
+      }
+      try {
+        await addChips(tableId, player.seat, amount);
+        const current = await readTable(tableId);
+        const seated = current?.players.find((seat) => seat.id === player.id);
+        if (current && seated) {
+          seated.bought = (seated.bought ?? current.buyIn) + amount;
+          await writeTable(current);
+        }
+        await publishTable(tableId);
+      } catch (error) {
+        socket.emit("error", { message: error instanceof Error ? error.message : "Buy-in failed" });
       }
     });
 

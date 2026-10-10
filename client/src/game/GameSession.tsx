@@ -9,6 +9,7 @@ type GameSessionValue = {
   credentials: Credentials | null;
   state: TableSnapshot | null;
   error: string | null;
+  dismissError: () => void;
   createAndSit: (name: string, smallBlind: number, buyIn: number) => Promise<void>;
   join: (name: string, gameId: string, password: string) => Promise<void>;
   ready: boolean;
@@ -17,6 +18,7 @@ type GameSessionValue = {
   transferAdmin: (playerId: string) => void;
   startHand: () => void;
   act: (action: string, amount?: number) => void;
+  rebuy: (amount: number) => void;
 };
 
 const GameSessionContext = createContext<GameSessionValue | null>(null);
@@ -81,6 +83,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       credentials,
       state,
       error,
+      dismissError() {
+        setError(null);
+      },
       ready,
       async createAndSit(name, smallBlind, buyIn) {
         if (credentials) throw new Error(t("alreadyAtTable"));
@@ -125,6 +130,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       },
       act(action, amount) {
         socket?.emit("act", { action, amount });
+      },
+      rebuy(amount) {
+        socket?.emit("rebuy", { amount });
       },
     }),
     [credentials, error, ready, socket, state],

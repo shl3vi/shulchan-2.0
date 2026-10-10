@@ -27,6 +27,7 @@ export type EngineDoc = {
   lastShown: { seat: number; cards: Card[] }[];
   lastBoard: Card[];
   leaving: number[];
+  topUp: number[];
 };
 
 type PokerTable = {
@@ -75,6 +76,7 @@ function emptyDoc(smallBlind: number): EngineDoc {
     lastShown: [],
     lastBoard: [],
     leaving: [],
+    topUp: Array.from({ length: MAX_SEATS }, () => 0),
   };
 }
 
@@ -176,7 +178,12 @@ function finish(doc: EngineDoc, table: PokerTable): EngineDoc {
   const settled = settledTable.settledWinners;
   if (table.isHandInProgress()) return doc;
   const leaving = new Set(doc.leaving ?? []);
-  const seats = table.seats().map((seat, index) => (leaving.has(index) ? null : (seat?.stack ?? null)));
+  const topUp = doc.topUp ?? [];
+  const seats = table.seats().map((seat, index) => {
+    if (leaving.has(index)) return null;
+    if (seat == null && !(topUp[index] > 0)) return null;
+    return (seat?.stack ?? 0) + (topUp[index] ?? 0);
+  });
   for (const waiting of doc.waiting) {
     if (leaving.has(waiting.seat)) continue;
     if (seats[waiting.seat] == null) seats[waiting.seat] = waiting.stack;
@@ -192,7 +199,29 @@ function finish(doc: EngineDoc, table: PokerTable): EngineDoc {
     lastShown: settledTable.settledShown ?? [],
     lastBoard: settledTable.settledBoard ?? [],
     leaving: [],
+    topUp: Array.from({ length: MAX_SEATS }, () => 0),
   };
+}
+
+export function addChips(doc: EngineDoc, seat: number, amount: number): EngineDoc {
+  if (seat < 0 || seat >= MAX_SEATS) throw new Error("Invalid seat");
+  if (!Number.isInteger(amount) || amount < 1) throw new Error("Buy-in must be a positive whole number");
+  if (doc.seats[seat] == null && !doc.waiting.some((player) => player.seat === seat)) throw new Error("Seat is empty");
+  const waiting = doc.waiting.find((player) => player.seat === seat);
+  if (waiting) {
+    return {
+      ...doc,
+      waiting: doc.waiting.map((player) => (player.seat === seat ? { ...player, stack: player.stack + amount } : player)),
+    };
+  }
+  if (doc.hand) {
+    const topUp = (doc.topUp ?? Array.from({ length: MAX_SEATS }, () => 0)).slice();
+    topUp[seat] = (topUp[seat] ?? 0) + amount;
+    return { ...doc, topUp };
+  }
+  const seats = doc.seats.slice();
+  seats[seat] = (seats[seat] ?? 0) + amount;
+  return { ...doc, seats };
 }
 
 export function createDoc(smallBlind: number): EngineDoc {

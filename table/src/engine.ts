@@ -35,6 +35,10 @@ export function seatPoker(tableId: string, seat: number, stack: number) {
   return post<EngineView>(`/tables/${tableId}/seat`, { seat, stack });
 }
 
+export function addChips(tableId: string, seat: number, amount: number) {
+  return post<EngineView>(`/tables/${tableId}/add`, { seat, amount });
+}
+
 export function unseatPoker(tableId: string, seat: number) {
   return post<EngineView>(`/tables/${tableId}/unseat`, { seat });
 }

@@ -1,6 +1,6 @@
 import express from "express";
 import { createClient, type RedisClientType } from "redis";
-import { act, createDoc, present, seatPlayer, startHand, unseat, type ActionName, type EngineDoc } from "./game.js";
+import { act, addChips, createDoc, present, seatPlayer, startHand, unseat, type ActionName, type EngineDoc } from "./game.js";
 
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 const redis: RedisClientType = createClient({ url: redisUrl });
@@ -84,6 +84,24 @@ app.post("/tables/:id/seat", async (req, res) => {
     res.status(201).json(view);
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Seat failed" });
+  }
+});
+
+app.post("/tables/:id/add", async (req, res) => {
+  const id = String(req.params.id);
+  const seat = Number(req.body?.seat);
+  const amount = Number(req.body?.amount);
+  try {
+    const view = await locked(id, async () => {
+      const doc = await read(id);
+      if (!doc) throw new Error("Game not found");
+      const next = addChips(doc, seat, amount);
+      await write(id, next);
+      return present(next);
+    });
+    res.json(view);
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Buy-in failed" });
   }
 });
 

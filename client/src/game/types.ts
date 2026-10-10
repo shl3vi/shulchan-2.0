@@ -8,6 +8,7 @@ export type PublicPlayer = {
   betSize: number;
   inHand: boolean;
   sittingOut: boolean;
+  bought: number;
 };
 
 export type TableSnapshot = {
@@ -15,6 +16,7 @@ export type TableSnapshot = {
   status: "waiting" | "playing";
   smallBlind: number;
   bigBlind: number;
+  buyIn: number;
   communityCards: Card[];
   pots: { size: number; eligiblePlayers: number[] }[];
   round: "preflop" | "flop" | "turn" | "river" | null;
