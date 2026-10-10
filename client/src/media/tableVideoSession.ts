@@ -33,9 +33,9 @@ export function startTableVideo(
     if (stopped) return;
     await room.connect(session.url, session.token);
     await room.localParticipant.setCameraEnabled(true);
-    await room.localParticipant.setMicrophoneEnabled(true);
+    await room.localParticipant.setMicrophoneEnabled(false);
     if (stopped) return;
-    onMic(true);
+    onMic(false);
     sync();
   })().catch((error: { reasonName?: string }) => {
     if (error?.reasonName === "LeaveRequest") return;
@@ -47,10 +47,9 @@ export function startTableVideo(
       stopped = true;
       room.disconnect();
     },
-    toggleMic() {
-      const enabled = room.localParticipant.isMicrophoneEnabled ?? false;
-      void room.localParticipant.setMicrophoneEnabled(!enabled);
-      onMic(!enabled);
+    setMic(enabled: boolean) {
+      void room.localParticipant.setMicrophoneEnabled(enabled);
+      onMic(enabled);
     },
   };
 }

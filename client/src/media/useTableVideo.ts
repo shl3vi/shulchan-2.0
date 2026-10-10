@@ -6,7 +6,7 @@ import { videoSupported } from "@/media/videoSupport";
 export function useTableVideo(credentials: Credentials | null) {
   const [tracks, setTracks] = useState<Map<string, VideoTrack>>(new Map());
   const [micOn, setMicOn] = useState(false);
-  const [toggleMic, setToggleMic] = useState<() => void>(() => () => {});
+  const [setMic, setSetMic] = useState<(enabled: boolean) => void>(() => () => {});
 
   const gameId = credentials?.gameId;
   const playerId = credentials?.playerId;
@@ -15,13 +15,13 @@ export function useTableVideo(credentials: Credentials | null) {
   useEffect(() => {
     if (!videoSupported || !credentials) return;
     let stopped = false;
-    const handle = { disconnect() {}, toggleMic() {} };
+    const handle = { disconnect() {}, setMic(_enabled: boolean) {} };
     void import("@/media/tableVideoSession").then((mod) => {
       if (stopped) return;
       const session = mod.startTableVideo(credentials, setTracks, setMicOn);
       handle.disconnect = session.disconnect;
-      handle.toggleMic = session.toggleMic;
-      setToggleMic(() => session.toggleMic);
+      handle.setMic = session.setMic;
+      setSetMic(() => session.setMic);
     });
     return () => {
       stopped = true;
@@ -31,5 +31,5 @@ export function useTableVideo(credentials: Credentials | null) {
     };
   }, [gameId, playerId, playerSecret]);
 
-  return { tracks, micOn, toggleMic };
+  return { tracks, micOn, setMic };
 }

@@ -131,7 +131,7 @@ export default function TableScreen() {
         amount={amount}
         cards={you?.holeCards ?? []}
         onAmount={setAmount}
-        onTalk={() => video.toggleMic()}
+        onTalk={video.setMic}
         micOn={video.micOn}
         onAction={(action) => act(action, action === "bet" || action === "raise" ? Number(amount) : undefined)}
       />

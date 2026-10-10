@@ -484,7 +484,7 @@ export function ActionDock({
   cards: Card[];
   onAmount: (value: string) => void;
   onAction: (action: PokerAction) => void;
-  onTalk: () => void;
+  onTalk: (on: boolean) => void;
   micOn?: boolean;
 }) {
   const quiet = actions.filter((action) => action !== "bet" && action !== "raise");
@@ -531,7 +531,11 @@ export function ActionDock({
           <Text style={dock.wait}>{t("waitingTurn")}</Text>
         )}
       </View>
-      <Pressable style={[dock.mic, !micOn && dock.micOff]} onPress={onTalk}>
+      <Pressable
+        style={[dock.mic, !micOn && dock.micOff]}
+        onPressIn={() => onTalk(true)}
+        onPressOut={() => onTalk(false)}
+      >
         <MicIcon muted={!micOn} />
       </Pressable>
     </View>
