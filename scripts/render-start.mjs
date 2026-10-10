@@ -21,8 +21,8 @@ function shutdown() {
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
-start("poker-engine", process.env);
+start("poker-engine", { ...process.env, PORT: "4001" });
 start("table", {
   ...process.env,
-  POKER_ENGINE_URL: process.env.POKER_ENGINE_URL ?? "http://127.0.0.1:4001",
+  POKER_ENGINE_URL: "http://127.0.0.1:4001",
 });
