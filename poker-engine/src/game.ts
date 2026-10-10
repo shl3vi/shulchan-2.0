@@ -206,7 +206,6 @@ function finish(doc: EngineDoc, table: PokerTable): EngineDoc {
 export function addChips(doc: EngineDoc, seat: number, amount: number): EngineDoc {
   if (seat < 0 || seat >= MAX_SEATS) throw new Error("Invalid seat");
   if (!Number.isInteger(amount) || amount < 1) throw new Error("Buy-in must be a positive whole number");
-  if (doc.seats[seat] == null && !doc.waiting.some((player) => player.seat === seat)) throw new Error("Seat is empty");
   const waiting = doc.waiting.find((player) => player.seat === seat);
   if (waiting) {
     return {

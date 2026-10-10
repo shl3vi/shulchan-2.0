@@ -113,20 +113,7 @@ export default function TableScreen() {
                   ) : null}
                 </View>
               ))}
-              {sheet === "stats" ? (
-                <>
-                  <Text style={styles.statsLine}>{t("pot", { n: pot })}</Text>
-                  <Pressable
-                    style={styles.cancel}
-                    onPress={() => {
-                      setBuyChips(state?.buyIn ?? state?.bigBlind ?? 1);
-                      setBuying(true);
-                    }}
-                  >
-                    <Text style={styles.cancelText}>{t("buyMore")}</Text>
-                  </Pressable>
-                </>
-              ) : null}
+              {sheet === "stats" ? <Text style={styles.statsLine}>{t("pot", { n: pot })}</Text> : null}
               <Pressable style={styles.cancel} onPress={() => setSheet(null)}>
                 <Text style={styles.cancelText}>{t("cancel")}</Text>
               </Pressable>
@@ -177,6 +164,14 @@ export default function TableScreen() {
           <TableMenu
             items={[
               { label: t("statistics"), icon: "stats", onPress: () => setSheet("stats") },
+              {
+                label: t("buyMore"),
+                icon: "buy" as const,
+                onPress: () => {
+                  setBuyChips(state?.buyIn ?? state?.bigBlind ?? 1);
+                  setBuying(true);
+                },
+              },
               ...(credentials.adminSecret
                 ? [{ label: t("adminOptions"), icon: "admin" as const, onPress: () => setSheet("admin") }]
                 : []),
@@ -267,8 +262,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 12,
     right: 12,
-    bottom: 8,
-    zIndex: 3,
+    bottom: 76,
+    zIndex: 30,
+    elevation: 30,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
