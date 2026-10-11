@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Client app — parts</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #fff;
+      --line: #d5dbe3;
+      --text: #1c2430;
+      --muted: #5c6b7e;
+      --blue: #1d4f91;
+      --blue-bg: #e8f1fb;
+      --green: #1b6b45;
+      --green-bg: #e7f6ee;
+      --amber: #8a5a12;
+      --amber-bg: #fff4e0;
+      --purple: #5b3d8a;
+      --purple-bg: #f3ecfb;
+      --font: "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); padding: 28px 22px 48px; }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    .lead { color: var(--muted); margin: 0 0 22px; max-width: 720px; line-height: 1.45; }
+    .shell {
+      max-width: 980px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 16px 16px 18px;
+    }
+    .shell > .name { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+    .shell code, .box code { font-family: var(--mono); font-size: 12px; }
+    .screens { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    @media (max-width: 800px) { .screens, .row { grid-template-columns: 1fr; } }
+    .box { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--card); }
+    .box strong { display: block; font-size: 15px; margin-bottom: 2px; }
+    .box p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .box.green { background: var(--green-bg); border-color: #b7e0c8; }
+    .box.green strong { color: var(--green); }
+    .box.blue { background: var(--blue-bg); border-color: #b9d3f0; }
+    .box.blue strong { color: var(--blue); }
+    .box.amber { background: var(--amber-bg); border-color: #f0d7a8; }
+    .box.amber strong { color: var(--amber); }
+    .box.purple { background: var(--purple-bg); border-color: #d9c6f0; }
+    .box.purple strong { color: var(--purple); }
+    .arrow { text-align: center; color: var(--muted); font-size: 12px; margin: 8px 0; }
+    .row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; }
+    .flow { margin-top: 16px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Client app — parts</h1>
+  <p class="lead">Expo app under <code>client/src</code>. Three screens share one session. The table screen is the only place that draws the felt.</p>
+
+  <div class="shell">
+    <div class="name">Root · app/_layout.tsx</div>
+    <div class="box blue" style="margin-bottom:12px">
+      <strong>GameSessionProvider</strong>
+      <code>game/GameSession.tsx</code>
+      <p>Holds credentials, the table snapshot, and the socket. Every screen reads it through <code>useGameSession</code>.</p>
+    </div>
+    <div class="screens">
+      <div class="box green">
+        <strong>Home</strong>
+        <code>app/index.tsx</code>
+        <p>Name, small blind, buy-in. Creates a table and sits down. If you are already seated, a banner returns you to the table.</p>
+      </div>
+      <div class="box green">
+        <strong>Join</strong>
+        <code>app/join.tsx</code>
+        <p>Invite link with game id and password. Name, then sit. Missing invite shows an error.</p>
+      </div>
+      <div class="box green">
+        <strong>Table</strong>
+        <code>app/table.tsx</code>
+        <p>Felt, seats, dock, menu, sheets, talk, errors. Sends actions back into the session.</p>
+      </div>
+    </div>
+    <p class="flow">Home and join push to <code>/table</code>. Home on the table returns to <code>/</code>. Leave clears the seat and returns home.</p>
+  </div>
+
+  <div class="arrow">screens call</div>
+
+  <div class="row" style="max-width:980px">
+    <div class="box blue">
+      <strong>Session</strong>
+      <code>GameSession · sessionStore · api · types</code>
+      <p><code>api.ts</code> creates a game, joins, and fetches a LiveKit token. <code>sessionStore</code> keeps credentials on the device. The socket applies snapshots and sends fold, check, call, bet, deal, rebuy, admin, and leave.</p>
+    </div>
+    <div class="box amber">
+      <strong>Table view</strong>
+      <code>PokerTableLayout · tableStage</code>
+      <p>Felt, nine seats, board, pot, bet chips, action dock, menu button, talk button. <code>tableStage</code> is the seat geometry. Copy comes from <code>i18n</code>.</p>
+    </div>
+    <div class="box purple">
+      <strong>Video</strong>
+      <code>media/</code>
+      <p><code>useTableVideo</code> starts a LiveKit room from the credentials. Tracks land on seats. The talk button toggles the mic. Web skips native video.</p>
+    </div>
+  </div>
+
+  <div class="arrow">session and video talk to</div>
+
+  <div class="box" style="max-width:980px">
+    <strong>Server</strong>
+    <code>HTTP /api/games · socket /table · LiveKit</code>
+    <p>The client does not run the poker rules. It stores credentials, renders the snapshot, and sends intents.</p>
+  </div>
+</body>
+</html>

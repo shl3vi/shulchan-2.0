@@ -115,6 +115,41 @@ function BetChip({ amount, scale }: { amount: number; scale: number }) {
   );
 }
 
+function cardId(card?: Card) {
+  return card ? `${card.rank}${card.suit}` : "";
+}
+
+/** Mounted only when a card arrives, so the first frame is already above the felt. */
+function FallingCard({ card, scale, delay }: { card: Card; scale: number; delay: number }) {
+  const translateY = useRef(new Animated.Value(-168 * scale)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const easing = Easing.out(Easing.cubic);
+    Animated.parallel([
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(translateY, { toValue: 0, duration: 460, easing, useNativeDriver: true }),
+      ]),
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(opacity, { toValue: 1, duration: 280, easing, useNativeDriver: true }),
+      ]),
+    ]).start();
+  }, [delay, opacity, translateY]);
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+      <PlayingCard card={card} size="board" scale={scale} />
+    </Animated.View>
+  );
+}
+
+function BoardCard({ card, scale, delay, fall }: { card?: Card; scale: number; delay: number; fall: boolean }) {
+  if (!card || !fall) return <PlayingCard card={card} size="board" scale={scale} />;
+  return <FallingCard key={cardId(card)} card={card} scale={scale} delay={delay} />;
+}
+
 function ShownCards({ cards, scale }: { cards: Card[]; scale: number }) {
   const u = (n: number) => n * scale;
   return (
@@ -256,6 +291,23 @@ function TableFelt({
   onDeal?: () => void;
 }) {
   const u = (n: number) => n * scale;
+  const signature = community.map((card) => cardId(card)).join("|");
+  const previous = useRef(signature);
+  const deal = useRef({ signature, delays: [0, 0, 0, 0, 0], fresh: [false, false, false, false, false] });
+  if (deal.current.signature !== signature) {
+    let stagger = 0;
+    const delays = [0, 0, 0, 0, 0];
+    const fresh = [false, false, false, false, false];
+    signature.split("|").forEach((id, index) => {
+      const prior = previous.current.split("|")[index] ?? "";
+      if (!id || id === prior) return;
+      delays[index] = stagger * 90;
+      fresh[index] = true;
+      stagger += 1;
+    });
+    previous.current = signature;
+    deal.current = { signature, delays, fresh };
+  }
   const railW = FELT.w + RAIL * 2;
   const railH = FELT.h + RAIL * 2;
   const radius = u(railW / 2);
@@ -317,7 +369,13 @@ function TableFelt({
           </Text>
           <View style={{ flexDirection: "row", gap: u(4), zIndex: 1 }}>
             {Array.from({ length: 5 }, (_, index) => (
-              <PlayingCard key={index} card={community[index]} size="board" scale={scale} />
+              <BoardCard
+                key={index}
+                card={community[index]}
+                scale={scale}
+                delay={deal.current.delays[index] ?? 0}
+                fall={deal.current.fresh[index] ?? false}
+              />
             ))}
           </View>
           <View style={{ height: u(20), marginTop: u(6), flexDirection: "row", alignItems: "center", gap: u(6) }}>

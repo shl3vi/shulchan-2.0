@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Modal, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,7 +10,6 @@ import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
 import { ActionDock, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
 import type { Card } from "@/game/types";
-import { API_URL } from "@/game/api";
 import { t } from "@/i18n";
 
 export default function TableScreen() {
@@ -70,7 +70,10 @@ export default function TableScreen() {
   }
 
   function shareTable() {
-    const link = `${API_URL}/join?${new URLSearchParams({ game: credentials.gameId, password: credentials.password })}`;
+    const query = new URLSearchParams({ game: credentials.gameId, password: credentials.password });
+    const prod = `client://join?${query}`;
+    const host = Constants.expoConfig?.hostUri;
+    const link = host ? `${prod}\nexp://${host}/--/join?${query}` : prod;
     Share.share({ message: t("shareMessage", { link }) });
   }
 

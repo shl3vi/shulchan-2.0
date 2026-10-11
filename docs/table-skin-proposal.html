@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Table skin — proposal</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --text: #1c2430;
+      --muted: #5c6b7e;
+      --line: #c5ced8;
+      --blue: #1d4f91;
+      --blue-bg: #e8f1fb;
+      --green: #1b6b45;
+      --green-bg: #e7f6ee;
+      --amber: #8a5a12;
+      --amber-bg: #fff6e6;
+      --purple: #5b3d8a;
+      --purple-bg: #f3ecfb;
+      --font: "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--text); padding: 28px 20px 48px; }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    .lead { color: var(--muted); margin: 0 0 18px; max-width: 760px; line-height: 1.45; }
+    svg.diagram { width: 100%; max-width: 980px; height: auto; display: block; }
+    .note { max-width: 980px; margin-top: 16px; font-size: 13px; color: var(--muted); line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <h1>Proposal — swap the table skin</h1>
+  <p class="lead">The session stays. A pure function turns the snapshot into a view model. Either skin draws that model and sends intents back. Chrome never enters the felt.</p>
+
+  <svg class="diagram" viewBox="0 0 980 640" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1.2 L 9 5 L 0 8.8 z" fill="#5c6b7e" />
+      </marker>
+    </defs>
+
+    <!-- session -->
+    <rect x="340" y="16" width="300" height="78" rx="10" fill="#e8f1fb" stroke="#b9d3f0" />
+    <text x="490" y="44" text-anchor="middle" font-size="15" font-weight="700" fill="#1d4f91">GameSession</text>
+    <text x="490" y="66" text-anchor="middle" font-size="12" fill="#5c6b7e">snapshot · you · act · startHand</text>
+    <text x="490" y="82" text-anchor="middle" font-size="11" fill="#5c6b7e" font-family="ui-monospace, monospace">useGameSession</text>
+
+    <!-- arrow session -> screen -->
+    <line x1="490" y1="94" x2="490" y2="128" stroke="#5c6b7e" stroke-width="1.5" marker-end="url(#arrow)" />
+    <text x="502" y="116" font-size="11" fill="#5c6b7e">snapshot</text>
+
+    <!-- table screen -->
+    <rect x="250" y="136" width="480" height="92" rx="10" fill="#ffffff" stroke="#c5ced8" />
+    <text x="490" y="164" text-anchor="middle" font-size="15" font-weight="700" fill="#1c2430">table.tsx</text>
+    <text x="490" y="186" text-anchor="middle" font-size="12" fill="#5c6b7e">chrome: menu, stats, admin, rebuy, share, errors</text>
+    <text x="490" y="206" text-anchor="middle" font-size="12" fill="#5c6b7e">picks a skin · maps intents to the session</text>
+
+    <!-- toTableView -->
+    <line x1="360" y1="228" x2="250" y2="278" stroke="#5c6b7e" stroke-width="1.5" marker-end="url(#arrow)" />
+    <text x="268" y="258" font-size="11" fill="#5c6b7e">snapshot, you</text>
+
+    <rect x="36" y="286" width="250" height="86" rx="10" fill="#e7f6ee" stroke="#b7e0c8" />
+    <text x="161" y="316" text-anchor="middle" font-size="15" font-weight="700" fill="#1b6b45">toTableView</text>
+    <text x="161" y="338" text-anchor="middle" font-size="12" fill="#5c6b7e">pure function</text>
+    <text x="161" y="356" text-anchor="middle" font-size="11" fill="#5c6b7e" font-family="ui-monospace, monospace">hero at the bottom</text>
+
+    <!-- view model -->
+    <line x1="286" y1="329" x2="338" y2="329" stroke="#5c6b7e" stroke-width="1.5" marker-end="url(#arrow)" />
+    <text x="312" y="318" text-anchor="middle" font-size="11" fill="#5c6b7e">view</text>
+
+    <rect x="346" y="286" width="288" height="86" rx="10" fill="#fff6e6" stroke="#f0d7a8" />
+    <text x="490" y="314" text-anchor="middle" font-size="15" font-weight="700" fill="#8a5a12">TableView</text>
+    <text x="490" y="336" text-anchor="middle" font-size="12" fill="#5c6b7e">seats · board · pot · street</text>
+    <text x="490" y="354" text-anchor="middle" font-size="12" fill="#5c6b7e">winners · action bar · playerId</text>
+
+    <!-- video -->
+    <line x1="620" y1="228" x2="760" y2="286" stroke="#5c6b7e" stroke-width="1.5" marker-end="url(#arrow)" />
+    <text x="720" y="252" font-size="11" fill="#5c6b7e">credentials</text>
+
+    <rect x="694" y="286" width="250" height="86" rx="10" fill="#f3ecfb" stroke="#d9c6f0" />
+    <text x="819" y="316" text-anchor="middle" font-size="15" font-weight="700" fill="#5b3d8a">useTableVideo</text>
+    <text x="819" y="338" text-anchor="middle" font-size="12" fill="#5c6b7e">trackFor(playerId)</text>
+    <text x="819" y="356" text-anchor="middle" font-size="11" fill="#5c6b7e" font-family="ui-monospace, monospace">LiveKit</text>
+
+    <!-- view + media into skins -->
+    <line x1="430" y1="372" x2="300" y2="430" stroke="#5c6b7e" stroke-width="1.5" marker-end="url(#arrow)" />
+    <line x1="550" y1="372" x2="680" y2="430" stroke="#5c6b7e" stroke-width="1.5" marker-end="url(#arrow)" />
+    <line x1="819" y1="372" x2="720" y2="430" stroke="#5c6b7e" stroke-width="1.5" marker-end="url(#arrow)" />
+    <line x1="819" y1="372" x2="300" y2="448" stroke="#5c6b7e" stroke-width="1.5" marker-end="url(#arrow)" />
+    <text x="490" y="412" text-anchor="middle" font-size="11" fill="#5c6b7e">view + trackFor(playerId)</text>
+
+    <!-- skins -->
+    <rect x="70" y="438" width="360" height="100" rx="10" fill="#e7f6ee" stroke="#b7e0c8" />
+    <text x="250" y="468" text-anchor="middle" font-size="15" font-weight="700" fill="#1b6b45">React Native skin</text>
+    <text x="250" y="490" text-anchor="middle" font-size="12" fill="#5c6b7e">PokerTableLayout · ActionDock</text>
+    <text x="250" y="510" text-anchor="middle" font-size="12" fill="#5c6b7e">SeatVideo on each seat</text>
+    <text x="250" y="526" text-anchor="middle" font-size="11" fill="#5c6b7e">current felt</text>
+
+    <rect x="550" y="438" width="360" height="100" rx="10" fill="#e7f6ee" stroke="#b7e0c8" />
+    <text x="730" y="468" text-anchor="middle" font-size="15" font-weight="700" fill="#1b6b45">Three.js skin</text>
+    <text x="730" y="490" text-anchor="middle" font-size="12" fill="#5c6b7e">felt, seats, and cards as meshes</text>
+    <text x="730" y="510" text-anchor="middle" font-size="12" fill="#5c6b7e">track drawn on a texture</text>
+    <text x="730" y="526" text-anchor="middle" font-size="11" fill="#5c6b7e">same props, later</text>
+
+    <!-- intents back -->
+    <path d="M 250 538 L 250 580 L 430 580 L 430 228" fill="none" stroke="#1b6b45" stroke-width="1.5" marker-end="url(#arrow)" />
+    <path d="M 730 538 L 730 600 L 560 600 L 560 228" fill="none" stroke="#1b6b45" stroke-width="1.5" marker-end="url(#arrow)" />
+    <text x="300" y="574" font-size="11" fill="#1b6b45">onAction · onDeal</text>
+    <text x="600" y="594" font-size="11" fill="#1b6b45">onAction · onDeal</text>
+  </svg>
+
+  <p class="note">Green arrows return to <b>table.tsx</b>, which calls <b>act</b> and <b>startHand</b> on the session. The skins never see the socket, the admin secret, or the invite password.</p>
+</body>
+</html>
