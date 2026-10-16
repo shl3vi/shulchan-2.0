@@ -1,0 +1,282 @@
+[
+  {
+    "isdone": true,
+    "name": "Make the poker engine private",
+    "description": "The engine now listens on 127.0.0.1 only, inside the same Render service as the table, and rejects every route except /health without a per-boot token. render.yaml now matches the single service Render actually runs."
+  },
+  {
+    "isdone": false,
+    "name": "Stop leaking hole cards",
+    "description": "GET /api/games/:id?playerId= returns that player's hole cards without checking their secret. Require the player secret for any personalized view, and keep the public view card-free."
+  },
+  {
+    "isdone": false,
+    "name": "Unpredictable shuffle",
+    "description": "Each hand's deck comes from a 32-bit seed through a small PRNG, so known cards can be brute-forced to reveal everyone's hand and the board. Shuffle with crypto randomness over the full deck, store the deck server-side, and never derive it from a short seed."
+  },
+  {
+    "isdone": false,
+    "name": "Atomic table updates",
+    "description": "The table service reads, edits, and rewrites the whole table JSON with no lock, so simultaneous joins, leaves, rebuys, or admin changes can drop each other's writes. Put table changes under the same per-table lock the engine uses, and change seat and engine state together."
+  },
+  {
+    "isdone": false,
+    "name": "Table admin authentication",
+    "description": "Admin power is a random secret sent to the client in every snapshot, and the first player to send it while there is no admin takes over. Check admin rights by the authenticated socket's player id on the server (no accounts needed), drop the secret from client payloads, and log every admin action."
+  },
+  {
+    "isdone": false,
+    "name": "Final app identity",
+    "description": "The Android package is com.anonymous.shulchan, there is no iOS bundle id, and the link scheme is 'client'. Pick the final ids, name, and scheme now (it's free), because Play can't change them after publishing and AdMob registers apps by them."
+  },
+  {
+    "isdone": false,
+    "name": "Ads SDK integration with test ads",
+    "description": "Add react-native-google-mobile-ads through its Expo config plugin using Google's public test app and ad unit ids, which need no AdMob account, and ship it in a dev build because Expo Go can't load it. Wrap it in one ads module so placements, frequency caps, and the kill switch live in one place."
+  },
+  {
+    "isdone": false,
+    "name": "Ad placement rules",
+    "description": "Ads must never appear during a hand, over a seat's video, or while it is your turn, and no ad reward may give chips or a table advantage. Allow ads only in the lobby, after leaving a table, and on the end-of-game summary, with a remote kill switch."
+  },
+  {
+    "isdone": false,
+    "name": "Postgres setup on Render free",
+    "description": "Add a Render free Postgres for testing, accessed through plain SQL with Drizzle migrations and a single DATABASE_URL, so it moves to Neon, Supabase, RDS, or Cloud SQL unchanged. Render free databases expire after 30 days, so upgrade or move before real users arrive."
+  },
+  {
+    "isdone": false,
+    "name": "Lobby banner ad",
+    "description": "The create and join screens have room for a small adaptive banner. Show one there, using test ads until the AdMob account is live."
+  },
+  {
+    "isdone": false,
+    "name": "End-of-game interstitial",
+    "description": "When a player leaves a table or the game ends, show one full-screen ad. Cap the frequency (for example at most one per 20 minutes), and make the cap configurable from the server."
+  },
+  {
+    "isdone": false,
+    "name": "Rewarded ads for cosmetics",
+    "description": "Let players watch a video ad to unlock a card back, felt, or avatar for a while. Rewards are cosmetic only and never chips or table advantages."
+  },
+  {
+    "isdone": false,
+    "name": "Turn timer and time bank",
+    "description": "No one has a clock, so one slow or missing player stalls the table forever. Give each decision a visible timer with a small time bank, then auto-check or fold when it runs out."
+  },
+  {
+    "isdone": false,
+    "name": "Disconnect, reconnect, and sit out",
+    "description": "sittingOut is always false, and a dropped phone keeps its seat and blocks hands. Mark absent players as sitting out, skip them when dealing, and let them return to the same seat and stack."
+  },
+  {
+    "isdone": false,
+    "name": "Auto-deal and pause",
+    "description": "Every hand waits for the admin to press deal. Deal the next hand automatically after a short showdown pause, and give the admin pause and resume."
+  },
+  {
+    "isdone": false,
+    "name": "Rebuy rules and approval",
+    "description": "Any seated player can add any number of chips at any time without asking. Add a table max buy-in, rebuy only at zero or below the cap, and an admin approve or deny step everyone can see."
+  },
+  {
+    "isdone": false,
+    "name": "API and socket hardening",
+    "description": "CORS is '*', inputs are lightly checked, there is no rate limit, and join links put the table password in the URL. Restrict origins, validate every payload with a schema, rate-limit join and actions, and use one-time invite tokens."
+  },
+  {
+    "isdone": false,
+    "name": "Analytics and crash reporting",
+    "description": "You can't tune ad frequency or find crashes without data. Add Sentry and PostHog or Firebase Analytics on their free tiers, tracking ad impressions next to game events."
+  },
+  {
+    "isdone": false,
+    "name": "Automated tests and CI",
+    "description": "There are no tests or pipeline. Cover dealing, betting, side pots, leave and kick, rebuy, admin transfer, reconnect, and ad placement gating, and run them on every push with GitHub Actions."
+  },
+  {
+    "isdone": false,
+    "name": "Database schema and migrations",
+    "description": "Nothing is stored beyond temporary Redis JSON. Create users, games, seats, buy-ins, hands, unlocked cosmetics, and ad events in Postgres, and keep Redis for the live table only."
+  },
+  {
+    "isdone": false,
+    "name": "Secure storage on device",
+    "description": "Player and admin secrets sit in AsyncStorage in plain text. Move them to expo-secure-store, or to session tokens once accounts exist."
+  },
+  {
+    "isdone": false,
+    "name": "Observability and alerts",
+    "description": "Health checks return a fixed ok, and errors only go to console logs. Add structured logs, uptime checks, and per-table metrics for stuck hands."
+  },
+  {
+    "isdone": false,
+    "name": "End-of-game settle-up (calculator only)",
+    "description": "The table already tracks bought chips per player but never says who owes whom. Show each player's net and the fewest payments to settle, without processing or linking to any payment."
+  },
+  {
+    "isdone": false,
+    "name": "Live table statistics",
+    "description": "Players only see the current hand. During the game, show hands played, net per player, biggest pot, and VPIP, plus an end-of-game summary that also hosts the interstitial slot."
+  },
+  {
+    "isdone": false,
+    "name": "Hand history and replay",
+    "description": "Finished hands disappear when the next one starts. Save every action, board, and showdown so players can replay hands and settle disputes."
+  },
+  {
+    "isdone": false,
+    "name": "Table settings at create time",
+    "description": "Creating a table only sets the small blind and buy-in. Add min and max buy-in, seat count, decision time, ante, straddle, and rebuy rules, changeable by the admin between hands."
+  },
+  {
+    "isdone": false,
+    "name": "Chat and reactions",
+    "description": "The only interaction beyond poker actions is video. Add text chat, emoji reactions, and per-player mute."
+  },
+  {
+    "isdone": false,
+    "name": "Sound, haptics, and turn alerts",
+    "description": "Nothing sounds or vibrates when it is your turn or cards are dealt. Add sounds, haptics, and a push notification for your turn when the app is in the background."
+  },
+  {
+    "isdone": false,
+    "name": "Show or muck and rabbit hunt",
+    "description": "At showdown, cards are shown or hidden automatically. Let uncalled winners choose to show, let losers muck, and optionally reveal the cards that would have come."
+  },
+  {
+    "isdone": false,
+    "name": "Run it twice and all-in equity",
+    "description": "When players are all in, the board just runs out. Show each hand's win chance, and allow running the board twice by agreement."
+  },
+  {
+    "isdone": false,
+    "name": "Seat choice and spectators",
+    "description": "Joining takes the first free seat, and you can only watch by sitting down. Let players pick seats, and let invited spectators watch without seeing hole cards."
+  },
+  {
+    "isdone": false,
+    "name": "Recurring game groups",
+    "description": "Each game is a one-off link. Let friends schedule a weekly game with the same people and an all-time leaderboard."
+  },
+  {
+    "isdone": false,
+    "name": "More game variants",
+    "description": "Only No-Limit Texas Hold'em is supported. Add Pot-Limit Omaha first, then bomb pots, short deck, and a 7-2 bounty as table options."
+  },
+  {
+    "isdone": false,
+    "name": "Home tournament mode",
+    "description": "There are only cash tables with fixed blinds. Add a blind schedule, eliminations, and final standings for small private tournaments, with no prizes handled by the app."
+  },
+  {
+    "isdone": false,
+    "name": "Abuse, reporting, and bans",
+    "description": "Names have no length limit, and there is no block, report, or ban. Add name limits, player reports, and admin bans that persist across games."
+  },
+  {
+    "isdone": false,
+    "name": "Replace engine internals hacks",
+    "description": "The engine reaches into poker-ts private fields and replays the whole hand on every action. Store explicit hand state, or own a tested engine, so a library upgrade cannot silently break the button or deck."
+  },
+  {
+    "isdone": false,
+    "name": "Onboarding and empty states",
+    "description": "New players land straight on create or join with no explanation. Add a short how-to, clear errors for full, closed, or wrong-password tables, and a path back after any failure."
+  },
+  {
+    "isdone": false,
+    "name": "Accessibility and localization pass",
+    "description": "The app has English and Hebrew strings, but screen reader labels, contrast, and RTL table layout have not been reviewed. Audit them, and make adding more languages straightforward."
+  },
+  {
+    "isdone": false,
+    "name": "AdMob account and app registration (free, before launch)",
+    "description": "Create a free AdMob account, register Android and iOS apps under the final ids, and create banner, interstitial, and rewarded units to replace the test ids. Real ads serve only after the app is in a store and passes AdMob app review."
+  },
+  {
+    "isdone": false,
+    "name": "Check ad policy for simulated gambling (before launch)",
+    "description": "Poker without real money is simulated gambling under Google Play, Apple, and AdMob rules. Confirm the required adult age rating, and block gambling and kid-targeted ad categories in AdMob."
+  },
+  {
+    "isdone": false,
+    "name": "Ad consent and privacy (before launch)",
+    "description": "EEA and UK users need a consent message before personalized ads, and iOS needs the App Tracking Transparency prompt. Configure Google's UMP form in AdMob, show ATT on iOS, and serve non-personalized ads when consent is declined."
+  },
+  {
+    "isdone": false,
+    "name": "Video in production (before launch)",
+    "description": "Video works with LiveKit, but local setups need phones on the same Wi-Fi, and nothing asks before the camera starts. Use LiveKit Cloud everywhere with short-lived tokens, a consent step, and per-player mute and hide."
+  },
+  {
+    "isdone": false,
+    "name": "Deferred: SMS sign-in",
+    "description": "Skipped for now; players stay as a name plus a per-table secret on the phone. When it's time, use Better Auth's phone number plugin in your own Postgres with a pluggable SMS sender, rate limits, and app attestation against SMS fraud."
+  },
+  {
+    "isdone": false,
+    "name": "Deferred: player accounts",
+    "description": "Without sign-in, reinstalling or switching phones loses the seat, history, and unlocked cosmetics. After SMS sign-in exists, tie seats, history, cosmetics, and bans to the user."
+  },
+  {
+    "isdone": false,
+    "name": "Blocked: domain and public website",
+    "description": "AdMob needs app-ads.txt on a developer website, and the stores need privacy policy, terms, and account deletion URLs. Needs a paid domain, so it waits until launch prep."
+  },
+  {
+    "isdone": false,
+    "name": "Blocked: store developer accounts",
+    "description": "Live ads need a store listing, which needs Google Play Console (one-time fee) and Apple Developer Program (yearly fee). Set them up with tax and bank details so AdMob can pay out."
+  },
+  {
+    "isdone": false,
+    "name": "Blocked: paid Postgres, Redis, and always-on services",
+    "description": "In testing, the free services sleep, free Postgres expires after 30 days, and free Redis evicts keys under memory pressure. Before real users, move to paid Postgres, Key Value with noeviction, and always-on instances."
+  },
+  {
+    "isdone": false,
+    "name": "Blocked: store release for Android and iOS",
+    "description": "Distribution is a sideloaded Android preview APK, and live ads require store builds. Ship signed Play and App Store builds through EAS with an internal testing track, EAS updates, and a forced-upgrade check."
+  },
+  {
+    "isdone": false,
+    "name": "Blocked: legal and store compliance",
+    "description": "There are no terms, privacy policy, age gate, or account deletion. Publish them on the website, add in-app account deletion, and fill in the age rating and data safety forms, including the ads SDK."
+  },
+  {
+    "isdone": false,
+    "name": "Blocked: scaling and table lifecycle",
+    "description": "Each service runs as one instance, and tables never expire. Use the Socket.IO Redis adapter for multiple servers, close idle tables, and archive finished games to Postgres."
+  },
+  {
+    "isdone": true,
+    "name": "Core No-Limit Hold'em hand flow",
+    "description": "Blinds, betting rounds, side pots, showdown, and split pots run through the engine. The poker rules themselves are in place."
+  },
+  {
+    "isdone": true,
+    "name": "Private tables with password join",
+    "description": "A player can create a table, share a link and a six-digit code, and others take seats. This is the basis for invite tokens and admin auth."
+  },
+  {
+    "isdone": true,
+    "name": "Basic admin controls",
+    "description": "The admin can deal, remove a player, and transfer admin, and admin moves to another player when the admin leaves. These need server-side identity checks before launch."
+  },
+  {
+    "isdone": true,
+    "name": "Self-serve rebuy with bought-in tracking",
+    "description": "Players can add chips, and the table keeps a running total of each person's buy-ins. This needs limits and approval, and feeds settle-up."
+  },
+  {
+    "isdone": true,
+    "name": "Seat video",
+    "description": "Each seat can show a LiveKit camera feed in the dev build. It needs production hardening and consent."
+  },
+  {
+    "isdone": true,
+    "name": "English and Hebrew UI",
+    "description": "The client ships with English and Hebrew strings and RTL support. It needs an accessibility and layout review."
+  }
+]
