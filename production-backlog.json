@@ -20,9 +20,9 @@
     "description": "Every table change (join, leave, kick, admin transfer, rebuy, deal, act) now runs under a per-table Redis lock with the engine call inside it. Eight simultaneous joins now seat seven players and refuse the eighth, where before only one got a seat."
   },
   {
-    "isdone": false,
+    "isdone": true,
     "name": "Table admin authentication",
-    "description": "Admin power is a random secret sent to the client in every snapshot, and the first player to send it while there is no admin takes over. Check admin rights by the authenticated socket's player id on the server (no accounts needed), drop the secret from client payloads, and log every admin action."
+    "description": "Admin actions now check the authenticated socket's player id against the table's admin, and the snapshot carries isAdmin instead of a secret. The creator's join uses a one-time token to become admin; admin action logging is still to do."
   },
   {
     "isdone": false,

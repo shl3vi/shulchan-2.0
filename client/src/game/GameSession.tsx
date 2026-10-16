@@ -55,13 +55,6 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     next.on("state", (snapshot: TableSnapshot) => {
       setState(snapshot);
       setError(null);
-      const adminSecret = snapshot.you?.adminSecret ?? null;
-      setCredentials((current) => {
-        if (!current || current.adminSecret === adminSecret) return current;
-        const updated = { ...current, adminSecret };
-        void saveSeat(updated);
-        return updated;
-      });
     });
     next.on("kicked", () => {
       remember(null);
@@ -90,12 +83,11 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       async createAndSit(name, smallBlind, buyIn) {
         if (credentials) throw new Error(t("alreadyAtTable"));
         const table = await createTable(smallBlind, buyIn);
-        const player = await joinTable(table.gameId, name, table.password);
+        const player = await joinTable(table.gameId, name, table.password, table.adminSecret);
         remember({
           gameId: table.gameId,
           playerId: player.id,
           playerSecret: player.secret,
-          adminSecret: table.adminSecret,
           password: table.password,
         });
       },
@@ -106,27 +98,26 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
           gameId: gameId.trim(),
           playerId: player.id,
           playerSecret: player.secret,
-          adminSecret: null,
           password,
         });
       },
       async leave() {
-        socket?.emit("leave", { adminSecret: credentials?.adminSecret });
+        socket?.emit("leave");
         remember(null);
         setState(null);
         setError(null);
       },
       removePlayer(playerId) {
-        if (!credentials?.adminSecret) return;
-        socket?.emit("remove-player", { adminSecret: credentials.adminSecret, playerId });
+        if (!state?.you?.isAdmin) return;
+        socket?.emit("remove-player", { playerId });
       },
       transferAdmin(playerId) {
-        if (!credentials?.adminSecret) return;
-        socket?.emit("transfer-admin", { adminSecret: credentials.adminSecret, playerId });
+        if (!state?.you?.isAdmin) return;
+        socket?.emit("transfer-admin", { playerId });
       },
       startHand() {
-        if (!credentials?.adminSecret) return;
-        socket?.emit("start-hand", { adminSecret: credentials.adminSecret });
+        if (!state?.you?.isAdmin) return;
+        socket?.emit("start-hand");
       },
       act(action, amount) {
         socket?.emit("act", { action, amount });

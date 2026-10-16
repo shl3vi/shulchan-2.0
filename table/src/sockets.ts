@@ -55,42 +55,36 @@ export function attachSockets(io: Server) {
       }
     }
 
-    function claimAdmin(current: TableRecord, adminSecret: string) {
-      if (!current.adminId && adminSecret === current.adminSecret) current.adminId = player!.id;
+    function requireAdmin(current: TableRecord) {
+      if (player!.id !== current.adminId) throw new Error("Not the table admin");
     }
 
-    function requireAdmin(current: TableRecord, adminSecret: string) {
-      claimAdmin(current, adminSecret);
-      if (player!.id !== current.adminId || adminSecret !== current.adminSecret) throw new Error("Not the table admin");
-    }
-
-    socket.on("start-hand", (body: { adminSecret?: string }) =>
+    socket.on("start-hand", () =>
       change("Cannot start", async (current) => {
-        requireAdmin(current, String(body?.adminSecret ?? ""));
+        requireAdmin(current);
         await startPoker(tableId);
         await dropRemovedPlayers(current);
       }),
     );
 
-    socket.on("leave", (body: { adminSecret?: string }) =>
+    socket.on("leave", () =>
       change("Cannot leave", async (current) => {
-        claimAdmin(current, String(body?.adminSecret ?? ""));
         await releaseSeat(current, player.id);
       }),
     );
 
-    socket.on("transfer-admin", (body: { adminSecret?: string; playerId?: string }) =>
+    socket.on("transfer-admin", (body: { playerId?: string }) =>
       change("Cannot transfer admin", async (current) => {
-        requireAdmin(current, String(body?.adminSecret ?? ""));
+        requireAdmin(current);
         const next = current.players.find((seat) => seat.id === body?.playerId && !seat.pendingRemoval);
         if (!next || next.id === player.id) throw new Error("Player not found");
         assignAdmin(current, next.id);
       }),
     );
 
-    socket.on("remove-player", (body: { adminSecret?: string; playerId?: string }) =>
+    socket.on("remove-player", (body: { playerId?: string }) =>
       change("Cannot remove player", async (current) => {
-        requireAdmin(current, String(body?.adminSecret ?? ""));
+        requireAdmin(current);
         await releaseSeat(current, String(body?.playerId ?? ""));
       }),
     );

@@ -88,7 +88,7 @@ export default function TableScreen() {
           pot={pot}
           round={state?.round ?? null}
           winners={state?.round == null ? (state?.lastWinners ?? []) : []}
-          onDeal={credentials.adminSecret && state?.round == null ? startHand : undefined}
+          onDeal={state?.you?.isAdmin && state.round == null ? startHand : undefined}
         />
         <Modal visible={sheet != null} transparent animationType="fade" onRequestClose={() => setSheet(null)}>
           <Pressable style={styles.sheetBackdrop} onPress={() => setSheet(null)}>
@@ -172,7 +172,7 @@ export default function TableScreen() {
                   setBuying(true);
                 },
               },
-              ...(credentials.adminSecret
+              ...(state?.you?.isAdmin
                 ? [{ label: t("adminOptions"), icon: "admin" as const, onPress: () => setSheet("admin") }]
                 : []),
               { label: t("shareTable"), icon: "share" as const, onPress: shareTable },

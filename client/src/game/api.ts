@@ -17,8 +17,8 @@ export function createTable(smallBlind: number, buyIn: number) {
   return post<{ gameId: string; adminSecret: string; password: string }>("/api/games", { smallBlind, buyIn });
 }
 
-export function joinTable(gameId: string, name: string, password: string) {
-  return post<{ id: string; secret: string }>(`/api/games/${gameId}/join`, { name, password });
+export function joinTable(gameId: string, name: string, password: string, adminSecret?: string) {
+  return post<{ id: string; secret: string }>(`/api/games/${gameId}/join`, { name, password, adminSecret });
 }
 
 export function liveKitToken(gameId: string, playerId: string, secret: string) {

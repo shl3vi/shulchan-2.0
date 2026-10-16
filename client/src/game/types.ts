@@ -27,7 +27,7 @@ export type TableSnapshot = {
     holeCards: Card[];
     legalActions: Array<"fold" | "check" | "call" | "bet" | "raise">;
     chipRange: { min: number; max: number } | null;
-    adminSecret: string | null;
+    isAdmin: boolean;
   } | null;
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: Card[] }[];
@@ -37,6 +37,5 @@ export type Credentials = {
   gameId: string;
   playerId: string;
   playerSecret: string;
-  adminSecret: string | null;
   password: string;
 };

@@ -9,7 +9,6 @@ export async function dropRemovedPlayers(table: TableRecord) {
 
 export function assignAdmin(table: TableRecord, playerId: string | null) {
   table.adminId = playerId ?? undefined;
-  table.adminSecret = crypto.randomUUID();
 }
 
 export async function releaseSeat(table: TableRecord, playerId: string) {

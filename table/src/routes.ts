@@ -46,6 +46,7 @@ router.post("/:id/join", async (req, res) => {
   const id = String(req.params.id);
   const name = String(req.body?.name ?? "").trim();
   const password = String(req.body?.password ?? "");
+  const adminSecret = String(req.body?.adminSecret ?? "");
   if (!name) {
     res.status(400).json({ error: "Name is required" });
     return;
@@ -59,7 +60,12 @@ router.post("/:id/join", async (req, res) => {
       const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), seat, bought: table.buyIn };
       await seatPoker(table.id, seat, table.buyIn);
       table.players.push(player);
-      if (!table.adminId) table.adminId = player.id;
+      if (table.adminSecret && adminSecret === table.adminSecret) {
+        table.adminId = player.id;
+        delete table.adminSecret;
+      } else if (!table.adminId) {
+        table.adminId = player.id;
+      }
       return player;
     });
     await publishTable(id);
