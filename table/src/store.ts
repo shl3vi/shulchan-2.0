@@ -42,6 +42,10 @@ export async function writeTable(table: TableRecord) {
   await redis.set(tableKey(table.id), JSON.stringify(table));
 }
 
+export async function insertTable(table: TableRecord) {
+  return (await redis.set(tableKey(table.id), JSON.stringify(table), { NX: true })) === "OK";
+}
+
 const releaseLock = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`;
 
 export class TableNotFound extends Error {

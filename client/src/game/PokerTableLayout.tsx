@@ -618,7 +618,10 @@ export function ActionDock({
   );
 }
 
-function MenuGlyph({ kind }: { kind?: "share" | "leave" | "stats" | "admin" | "buy" }) {
+type MenuIcon = "info" | "share" | "leave" | "stats" | "admin" | "buy";
+
+function MenuGlyph({ kind }: { kind?: MenuIcon }) {
+  if (kind === "info") return <Ionicons name="information-circle-outline" size={18} color="#fafaf9" />;
   if (kind === "share") return <Ionicons name="share-outline" size={18} color="#fafaf9" />;
   if (kind === "leave") return <Ionicons name="warning" size={18} color="#f87171" />;
   if (kind === "admin") return <Ionicons name="shield-checkmark-outline" size={18} color="#fafaf9" />;
@@ -629,7 +632,7 @@ function MenuGlyph({ kind }: { kind?: "share" | "leave" | "stats" | "admin" | "b
 export function TableMenu({
   items,
 }: {
-  items: { label: string; onPress: () => void; danger?: boolean; icon?: "share" | "leave" | "stats" | "admin" | "buy" }[];
+  items: { label: string; onPress: () => void; danger?: boolean; icon?: MenuIcon }[];
 }) {
   const [open, setOpen] = useState(false);
   const insets = useSafeAreaInsets();

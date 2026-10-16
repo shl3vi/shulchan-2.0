@@ -170,6 +170,12 @@ export default function HomeScreen() {
         </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
+      {seated ? null : (
+        <Pressable style={styles.joinCode} onPress={() => router.push("/join")}>
+          <Ionicons name="enter-outline" size={20} color="#f6d36b" />
+          <Text style={styles.joinCodeText}>{t("joinWithId")}</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }
@@ -220,4 +226,16 @@ const styles = StyleSheet.create({
   dealBusy: { opacity: 0.7 },
   dealText: { color: "#1c1917", fontWeight: "900", fontSize: 18, letterSpacing: 0.4 },
   error: { color: "#fecaca", marginTop: 4 },
+  joinCode: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: "#f6d36b",
+    paddingVertical: 13,
+  },
+  joinCodeText: { color: "#f6d36b", fontWeight: "900", fontSize: 17, letterSpacing: 0.4 },
 });

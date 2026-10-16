@@ -2,10 +2,16 @@ import { Router } from "express";
 import { createPokerTable, readPoker, seatPoker, unseatPoker } from "./engine.js";
 import { liveKitToken } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
-import { publishTable, readTable, TableNotFound, withTable, writeTable, type TableRecord } from "./store.js";
+import { insertTable, publishTable, readTable, redis, tableKey, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
 const MAX_SEATS = 9;
+// No 0/O or 1/I, so a code read aloud or copied by hand still matches.
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function tableCode() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(6)), (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
+}
 
 router.post("/", async (req, res) => {
   const smallBlind = Number(req.body?.smallBlind);
@@ -19,15 +25,20 @@ router.post("/", async (req, res) => {
     return;
   }
   const table: TableRecord = {
-    id: crypto.randomUUID(),
+    id: tableCode(),
     adminSecret: crypto.randomUUID(),
     smallBlind,
     buyIn,
     password: String(crypto.getRandomValues(new Uint32Array(1))[0]! % 900000 + 100000),
     players: [],
   };
-  await createPokerTable(table.id, smallBlind);
-  await writeTable(table);
+  while (!(await insertTable(table))) table.id = tableCode();
+  try {
+    await createPokerTable(table.id, smallBlind);
+  } catch (error) {
+    await redis.del(tableKey(table.id));
+    throw error;
+  }
   res.status(201).json({
     gameId: table.id,
     adminSecret: table.adminSecret,

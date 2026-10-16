@@ -261,6 +261,11 @@
   },
   {
     "isdone": true,
+    "name": "Join by table ID and table info",
+    "description": "New tables get a six-character code, and the home screen has a join form for the code and password. The table menu's Table info shows the code, password, blinds, and buy-in, with a share button."
+  },
+  {
+    "isdone": true,
     "name": "Basic admin controls",
     "description": "The admin can deal, remove a player, and transfer admin, and admin moves to another player when the admin leaves. These need server-side identity checks before launch."
   },

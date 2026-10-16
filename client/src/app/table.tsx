@@ -20,6 +20,7 @@ export default function TableScreen() {
   const { credentials, state, error, dismissError, startHand, act, leave, removePlayer, transferAdmin, rebuy } = useGameSession();
   const video = useTableVideo(credentials);
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
+  const [info, setInfo] = useState(false);
   const [buying, setBuying] = useState(false);
   const [buyChips, setBuyChips] = useState(0);
   const hold = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -122,6 +123,29 @@ export default function TableScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+        <Modal visible={info} transparent animationType="fade" onRequestClose={() => setInfo(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setInfo(false)}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <Text style={styles.sheetTitle}>{t("tableInfo")}</Text>
+              <Text style={styles.infoLabel}>{t("tableId")}</Text>
+              <Text style={styles.infoValue} selectable>
+                {credentials.gameId}
+              </Text>
+              <Text style={styles.infoLabel}>{t("password")}</Text>
+              <Text style={styles.infoValue} selectable>
+                {credentials.password}
+              </Text>
+              {state ? (
+                <Text style={styles.statsLine}>
+                  {t("blindsAndBuyIn", { small: state.smallBlind, big: state.bigBlind, buyIn: state.buyIn })}
+                </Text>
+              ) : null}
+              <Pressable style={styles.cancel} onPress={shareTable}>
+                <Text style={styles.cancelText}>{t("shareTable")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
         <Modal visible={buying} transparent animationType="fade" onRequestClose={() => setBuying(false)}>
           <Pressable style={styles.sheetBackdrop} onPress={() => setBuying(false)}>
             <Pressable style={styles.sheet} onPress={() => {}}>
@@ -165,6 +189,7 @@ export default function TableScreen() {
         <View style={[styles.menu, { top: insets.top + 8 }]}>
           <TableMenu
             items={[
+              { label: t("tableInfo"), icon: "info", onPress: () => setInfo(true) },
               { label: t("statistics"), icon: "stats", onPress: () => setSheet("stats") },
               {
                 label: t("buyMore"),
@@ -247,6 +272,8 @@ const styles = StyleSheet.create({
   statsActions: { flexDirection: "row", alignItems: "center", gap: 14 },
   statsLine: { color: "#fafaf9", fontSize: 16, flexShrink: 1 },
   makeAdmin: { color: "#f6d36b", fontWeight: "800" },
+  infoLabel: { color: "#a8a29e", fontSize: 13, fontWeight: "700", letterSpacing: 0.6 },
+  infoValue: { color: "#fafaf9", fontSize: 26, fontWeight: "900", letterSpacing: 3, marginTop: -6 },
   cancel: {
     marginTop: 6,
     alignSelf: "stretch",
