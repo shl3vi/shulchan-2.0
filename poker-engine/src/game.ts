@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { clearSeed, useSeed } from "./deck.js";
+import { clearDeck, shuffledDeck, useDeck, useSeed } from "./deck.js";
 
 const require = createRequire(import.meta.url);
 const { Table } = require("poker-ts") as {
@@ -22,7 +22,7 @@ export type EngineDoc = {
   button: number;
   seats: Array<number | null>;
   waiting: { seat: number; stack: number }[];
-  hand: { seed: number; actions: PlayedAction[] } | null;
+  hand: { deck?: number[]; seed?: number; actions: PlayedAction[] } | null;
   lastWinners: { seat: number; amount: number }[];
   lastShown: { seat: number; cards: Card[] }[];
   lastBoard: Card[];
@@ -81,7 +81,8 @@ function emptyDoc(smallBlind: number): EngineDoc {
 }
 
 function restore(doc: EngineDoc): PokerTable {
-  if (doc.hand) useSeed(doc.hand.seed);
+  if (doc.hand?.deck) useDeck(doc.hand.deck);
+  else if (doc.hand?.seed != null) useSeed(doc.hand.seed);
   const table = new Table({ smallBlind: doc.smallBlind, bigBlind: doc.smallBlind * 2 }, MAX_SEATS);
   doc.seats.forEach((stack, seat) => {
     if (stack != null) table.sitDown(seat, stack);
@@ -91,7 +92,7 @@ function restore(doc: EngineDoc): PokerTable {
   internal._button = doc.button;
   if (doc.hand) {
     table.startHand();
-    clearSeed();
+    clearDeck();
     for (const action of doc.hand.actions) {
       play(table, action);
     }
@@ -268,7 +269,7 @@ export function startHand(doc: EngineDoc): EngineDoc {
     ...doc,
     seats,
     waiting: [],
-    hand: { seed: crypto.getRandomValues(new Uint32Array(1))[0]!, actions: [] },
+    hand: { deck: shuffledDeck(), actions: [] },
   };
   restore(next);
   return next;

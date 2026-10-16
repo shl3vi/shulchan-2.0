@@ -10,9 +10,9 @@
     "description": "GET /api/games/:id now personalizes the view only when x-player-id and x-player-secret headers match a seated player. Without them it returns the public, card-free view."
   },
   {
-    "isdone": false,
+    "isdone": true,
     "name": "Unpredictable shuffle",
-    "description": "Each hand's deck comes from a 32-bit seed through a small PRNG, so known cards can be brute-forced to reveal everyone's hand and the board. Shuffle with crypto randomness over the full deck, store the deck server-side, and never derive it from a short seed."
+    "description": "Each new hand now gets a full 52-card order from crypto.randomInt, stored in the engine's Redis doc and replayed exactly. Hands dealt before this change still restore from their old seed."
   },
   {
     "isdone": false,
