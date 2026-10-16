@@ -30,9 +30,9 @@
     "description": "The Android package is com.anonymous.shulchan, there is no iOS bundle id, and the link scheme is 'client'. Pick the final ids, name, and scheme now (it's free), because Play can't change them after publishing and AdMob registers apps by them."
   },
   {
-    "isdone": false,
+    "isdone": true,
     "name": "Ads SDK integration with test ads",
-    "description": "Add react-native-google-mobile-ads through its Expo config plugin using Google's public test app and ad unit ids, which need no AdMob account, and ship it in a dev build because Expo Go can't load it. Wrap it in one ads module so placements, frequency caps, and the kill switch live in one place."
+    "description": "react-native-google-mobile-ads is installed with Google's test app ids, and src/ads shows a 320x50 test banner in the table's bottom slot only between hands. EXPO_PUBLIC_ADS_ENABLED=false turns ads off and EXPO_PUBLIC_ADMOB_BANNER_ID swaps in a real unit."
   },
   {
     "isdone": false,

@@ -4,6 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AdBanner } from "@/ads/AdBanner";
+import { tableAdAllowed } from "@/ads/placement";
 import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
@@ -198,7 +200,7 @@ export default function TableScreen() {
         onAction={(action, chips) => act(action, chips)}
       />
       <View style={{ paddingBottom: insets.bottom, backgroundColor: "#0c0a09" }}>
-        <View style={styles.ad} />
+        <View style={styles.ad}>{tableAdAllowed(state) ? <AdBanner /> : null}</View>
       </View>
     </View>
   );
@@ -208,7 +210,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#07110d", direction: "ltr" },
   meta: { color: "#d6d3d1", padding: 24 },
   stage: { flex: 1, minHeight: 0 },
-  ad: { height: 50, width: "100%", backgroundColor: "#292524" },
+  ad: { height: 50, width: "100%", backgroundColor: "#292524", alignItems: "center", overflow: "hidden" },
   home: {
     position: "absolute",
     left: 12,
