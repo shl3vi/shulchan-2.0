@@ -20,7 +20,7 @@ LiveKit runs in Docker on this Mac. Phones must be on the same Wi-Fi so the vide
 
 ## Cloud
 
-`render.yaml` is the Render blueprint: Redis, the poker engine (`shulchan-poker`), and the table (`shulchan-server`). Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Render.
+`render.yaml` is the Render blueprint: Redis and one web service (`shulchan-server`) that runs the table and the poker engine together. The engine listens on localhost only and accepts requests carrying a token generated at each boot. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Render.
 
 An installable APK, from `client/`:
 

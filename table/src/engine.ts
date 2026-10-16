@@ -1,4 +1,7 @@
 const engineUrl = process.env.POKER_ENGINE_URL ?? "http://127.0.0.1:4001";
+const engineToken = process.env.ENGINE_TOKEN;
+if (!engineToken) throw new Error("ENGINE_TOKEN is required");
+const engineHeaders = { "x-engine-token": engineToken };
 
 export type Card = { rank: string; suit: string };
 export type ActionName = "fold" | "check" | "call" | "bet" | "raise";
@@ -19,7 +22,7 @@ export type EngineView = {
 async function post<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${engineUrl}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { ...engineHeaders, "content-type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
   const payload = (await response.json()) as T & { error?: string };
@@ -52,7 +55,7 @@ export function actPoker(tableId: string, seat: number, action: ActionName, amou
 }
 
 export async function readPoker(tableId: string): Promise<EngineView> {
-  const response = await fetch(`${engineUrl}/tables/${tableId}`);
+  const response = await fetch(`${engineUrl}/tables/${tableId}`, { headers: engineHeaders });
   const payload = (await response.json()) as EngineView & { error?: string };
   if (!response.ok) throw new Error(payload.error ?? "Poker engine failed");
   return payload;

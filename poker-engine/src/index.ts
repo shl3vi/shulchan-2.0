@@ -1,6 +1,11 @@
+import { timingSafeEqual } from "node:crypto";
 import express from "express";
 import { createClient, type RedisClientType } from "redis";
 import { act, addChips, createDoc, present, seatPlayer, startHand, unseat, type ActionName, type EngineDoc } from "./game.js";
+
+const engineToken = process.env.ENGINE_TOKEN;
+if (!engineToken) throw new Error("ENGINE_TOKEN is required");
+const expectedToken = Buffer.from(engineToken);
 
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 const redis: RedisClientType = createClient({ url: redisUrl });
@@ -12,6 +17,15 @@ app.use(express.json());
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.use((req, res, next) => {
+  const given = Buffer.from(req.get("x-engine-token") ?? "");
+  if (given.length !== expectedToken.length || !timingSafeEqual(given, expectedToken)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
 });
 
 function key(id: string) {
@@ -162,6 +176,6 @@ app.post("/tables/:id/act", async (req, res) => {
 });
 
 const port = Number(process.env.PORT ?? 4001);
-app.listen(port, "0.0.0.0", () => {
+app.listen(port, "127.0.0.1", () => {
   console.log(`Poker engine listening on http://localhost:${port}`);
 });

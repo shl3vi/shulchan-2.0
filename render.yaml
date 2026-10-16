@@ -1,4 +1,6 @@
 # Render Blueprint. LiveKit stays on LiveKit Cloud: Render cannot open the UDP range WebRTC needs.
+# One web service runs both the table and the poker engine. The engine listens on 127.0.0.1 only
+# and takes a per-boot token from scripts/render-start.mjs.
 services:
   - type: keyvalue
     name: shulchan-redis
@@ -7,28 +9,10 @@ services:
     ipAllowList: []
 
   - type: web
-    name: shulchan-poker
-    runtime: node
-    plan: free
-    rootDir: poker-engine
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_VERSION
-        value: "24"
-      - key: REDIS_URL
-        fromService:
-          name: shulchan-redis
-          type: keyvalue
-          property: connectionString
-
-  - type: web
     name: shulchan-server
     runtime: node
     plan: free
-    rootDir: table
-    buildCommand: npm install
+    buildCommand: npm install --prefix server
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -39,8 +23,6 @@ services:
           name: shulchan-redis
           type: keyvalue
           property: connectionString
-      - key: POKER_ENGINE_URL
-        value: https://shulchan-poker.onrender.com
       - key: LIVEKIT_URL
         sync: false
       - key: LIVEKIT_API_KEY

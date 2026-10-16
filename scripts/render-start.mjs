@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 
 const children = [];
+const engineToken = randomBytes(32).toString("hex");
 
 function start(prefix, env) {
   const child = spawn("npm", ["start", "--prefix", prefix], {
@@ -21,8 +23,9 @@ function shutdown() {
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
-start("poker-engine", { ...process.env, PORT: "4001" });
+start("poker-engine", { ...process.env, PORT: "4001", ENGINE_TOKEN: engineToken });
 start("table", {
   ...process.env,
   POKER_ENGINE_URL: "http://127.0.0.1:4001",
+  ENGINE_TOKEN: engineToken,
 });

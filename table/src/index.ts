@@ -10,7 +10,7 @@ await connectRedis();
 const app = express();
 app.use(express.json());
 app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT ?? null });
 });
 app.get("/join", (req, res) => {
   const game = String(req.query.game ?? "");

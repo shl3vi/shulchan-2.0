@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { networkInterfaces } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -84,9 +85,11 @@ if (dockerCode !== 0) {
   process.exit(1);
 }
 
-start("npm", ["run", "dev", "--prefix", "poker-engine"], "poker");
+const engineToken = randomBytes(32).toString("hex");
+start("npm", ["run", "dev", "--prefix", "poker-engine"], "poker", { ...process.env, ENGINE_TOKEN: engineToken });
 start("npm", ["run", "dev", "--prefix", "table"], "table", {
   ...process.env,
+  ENGINE_TOKEN: engineToken,
   LIVEKIT_URL: cloud?.URL ?? `ws://${ip}:7880`,
   LIVEKIT_API_KEY: cloud?.APIKey ?? "devkey",
   LIVEKIT_API_SECRET: cloud?.APISecret ?? "secret",
