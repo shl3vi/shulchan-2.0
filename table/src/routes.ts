@@ -98,6 +98,8 @@ router.get("/:id", async (req, res) => {
     res.status(404).json({ error: "Game not found" });
     return;
   }
-  const playerId = typeof req.query.playerId === "string" ? req.query.playerId : undefined;
-  res.json(snapshot(table, await readPoker(table.id), playerId));
+  const playerId = req.get("x-player-id") ?? "";
+  const secret = req.get("x-player-secret") ?? "";
+  const viewer = table.players.find((player) => player.id === playerId && player.secret === secret);
+  res.json(snapshot(table, await readPoker(table.id), viewer?.id));
 });

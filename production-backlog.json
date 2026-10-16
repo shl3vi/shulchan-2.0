@@ -5,9 +5,9 @@
     "description": "The engine now listens on 127.0.0.1 only, inside the same Render service as the table, and rejects every route except /health without a per-boot token. render.yaml now matches the single service Render actually runs."
   },
   {
-    "isdone": false,
+    "isdone": true,
     "name": "Stop leaking hole cards",
-    "description": "GET /api/games/:id?playerId= returns that player's hole cards without checking their secret. Require the player secret for any personalized view, and keep the public view card-free."
+    "description": "GET /api/games/:id now personalizes the view only when x-player-id and x-player-secret headers match a seated player. Without them it returns the public, card-free view."
   },
   {
     "isdone": false,
