@@ -2,7 +2,7 @@ import type { Server, Socket } from "socket.io";
 import { actPoker, addChips, readPoker, startPoker, type ActionName } from "./engine.js";
 import { snapshot } from "./snapshot.js";
 import { assignAdmin, dropRemovedPlayers, releaseSeat } from "./players.js";
-import { publishTable, readTable, subscriber, writeTable } from "./store.js";
+import { publishTable, readTable, subscriber, withTable, type TableRecord } from "./store.js";
 
 const actions = new Set<ActionName>(["fold", "check", "call", "bet", "raise"]);
 
@@ -46,110 +46,79 @@ export function attachSockets(io: Server) {
     socket.join(tableId);
     socket.emit("state", snapshot(table, await readPoker(tableId), playerId));
 
-    socket.on("start-hand", async (body: { adminSecret?: string }) => {
-      const current = await readTable(tableId);
-      if (current && !current.adminId && String(body?.adminSecret ?? "") === current.adminSecret) {
-        current.adminId = player.id;
-        await writeTable(current);
-      }
-      if (!current || player.id !== current.adminId || String(body?.adminSecret ?? "") !== current.adminSecret) {
-        socket.emit("error", { message: "Not the table admin" });
-        return;
-      }
+    async function change(fallback: string, run: (current: TableRecord) => Promise<void>) {
       try {
-        await startPoker(tableId);
-        const current = await readTable(tableId);
-        if (current) await dropRemovedPlayers(current);
+        await withTable(tableId, run);
         await publishTable(tableId);
       } catch (error) {
-        socket.emit("error", { message: error instanceof Error ? error.message : "Cannot start" });
+        socket.emit("error", { message: error instanceof Error ? error.message : fallback });
       }
-    });
+    }
 
-    socket.on("leave", async (body: { adminSecret?: string }) => {
-      try {
-        const current = await readTable(tableId);
-        if (current && !current.adminId && String(body?.adminSecret ?? "") === current.adminSecret) {
-          current.adminId = player.id;
-          await writeTable(current);
-        }
-        await releaseSeat(tableId, player.id);
-      } catch (error) {
-        socket.emit("error", { message: error instanceof Error ? error.message : "Cannot leave" });
-      }
-    });
+    function claimAdmin(current: TableRecord, adminSecret: string) {
+      if (!current.adminId && adminSecret === current.adminSecret) current.adminId = player!.id;
+    }
 
-    socket.on("transfer-admin", async (body: { adminSecret?: string; playerId?: string }) => {
-      const current = await readTable(tableId);
-      if (current && !current.adminId && String(body?.adminSecret ?? "") === current.adminSecret) {
-        current.adminId = player.id;
-        await writeTable(current);
-      }
-      if (!current || player.id !== current.adminId || String(body?.adminSecret ?? "") !== current.adminSecret) {
-        socket.emit("error", { message: "Not the table admin" });
-        return;
-      }
-      const next = current.players.find((seat) => seat.id === body?.playerId && !seat.pendingRemoval);
-      if (!next || next.id === player.id) {
-        socket.emit("error", { message: "Player not found" });
-        return;
-      }
-      assignAdmin(current, next.id);
-      await writeTable(current);
-      await publishTable(current.id);
-    });
+    function requireAdmin(current: TableRecord, adminSecret: string) {
+      claimAdmin(current, adminSecret);
+      if (player!.id !== current.adminId || adminSecret !== current.adminSecret) throw new Error("Not the table admin");
+    }
 
-    socket.on("remove-player", async (body: { adminSecret?: string; playerId?: string }) => {
-      const current = await readTable(tableId);
-      if (current && !current.adminId && String(body?.adminSecret ?? "") === current.adminSecret) {
-        current.adminId = player.id;
-        await writeTable(current);
-      }
-      if (!current || player.id !== current.adminId || String(body?.adminSecret ?? "") !== current.adminSecret) {
-        socket.emit("error", { message: "Not the table admin" });
-        return;
-      }
-      try {
-        await releaseSeat(tableId, String(body?.playerId ?? ""));
-      } catch (error) {
-        socket.emit("error", { message: error instanceof Error ? error.message : "Cannot remove player" });
-      }
-    });
+    socket.on("start-hand", (body: { adminSecret?: string }) =>
+      change("Cannot start", async (current) => {
+        requireAdmin(current, String(body?.adminSecret ?? ""));
+        await startPoker(tableId);
+        await dropRemovedPlayers(current);
+      }),
+    );
 
-    socket.on("rebuy", async (body: { amount?: number }) => {
+    socket.on("leave", (body: { adminSecret?: string }) =>
+      change("Cannot leave", async (current) => {
+        claimAdmin(current, String(body?.adminSecret ?? ""));
+        await releaseSeat(current, player.id);
+      }),
+    );
+
+    socket.on("transfer-admin", (body: { adminSecret?: string; playerId?: string }) =>
+      change("Cannot transfer admin", async (current) => {
+        requireAdmin(current, String(body?.adminSecret ?? ""));
+        const next = current.players.find((seat) => seat.id === body?.playerId && !seat.pendingRemoval);
+        if (!next || next.id === player.id) throw new Error("Player not found");
+        assignAdmin(current, next.id);
+      }),
+    );
+
+    socket.on("remove-player", (body: { adminSecret?: string; playerId?: string }) =>
+      change("Cannot remove player", async (current) => {
+        requireAdmin(current, String(body?.adminSecret ?? ""));
+        await releaseSeat(current, String(body?.playerId ?? ""));
+      }),
+    );
+
+    socket.on("rebuy", (body: { amount?: number }) => {
       const amount = Number(body?.amount);
       if (!Number.isInteger(amount) || amount < 1) {
         socket.emit("error", { message: "Buy-in must be a positive whole number" });
         return;
       }
-      try {
+      return change("Buy-in failed", async (current) => {
+        const seated = current.players.find((seat) => seat.id === player.id);
+        if (!seated) throw new Error("Player not found");
         await addChips(tableId, player.seat, amount);
-        const current = await readTable(tableId);
-        const seated = current?.players.find((seat) => seat.id === player.id);
-        if (current && seated) {
-          seated.bought = (seated.bought ?? current.buyIn) + amount;
-          await writeTable(current);
-        }
-        await publishTable(tableId);
-      } catch (error) {
-        socket.emit("error", { message: error instanceof Error ? error.message : "Buy-in failed" });
-      }
+        seated.bought = (seated.bought ?? current.buyIn) + amount;
+      });
     });
 
-    socket.on("act", async (body: { action?: ActionName; amount?: number }) => {
+    socket.on("act", (body: { action?: ActionName; amount?: number }) => {
       const action = body?.action;
       if (!action || !actions.has(action)) {
         socket.emit("error", { message: "Unknown action" });
         return;
       }
-      try {
+      return change("Action failed", async (current) => {
         await actPoker(tableId, player.seat, action, body.amount);
-        const current = await readTable(tableId);
-        if (current) await dropRemovedPlayers(current);
-        await publishTable(tableId);
-      } catch (error) {
-        socket.emit("error", { message: error instanceof Error ? error.message : "Action failed" });
-      }
+        await dropRemovedPlayers(current);
+      });
     });
   });
 }

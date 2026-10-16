@@ -2,7 +2,7 @@ import { Router } from "express";
 import { createPokerTable, readPoker, seatPoker, unseatPoker } from "./engine.js";
 import { liveKitToken } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
-import { publishTable, readTable, writeTable, type TableRecord } from "./store.js";
+import { publishTable, readTable, TableNotFound, withTable, writeTable, type TableRecord } from "./store.js";
 
 export const router = Router();
 const MAX_SEATS = 9;
@@ -36,44 +36,38 @@ router.post("/", async (req, res) => {
   });
 });
 
-router.post("/:id/join", async (req, res) => {
-  const table = await readTable(String(req.params.id));
-  if (!table) {
-    res.status(404).json({ error: "Game not found" });
-    return;
+class JoinRefused extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
   }
+}
+
+router.post("/:id/join", async (req, res) => {
+  const id = String(req.params.id);
   const name = String(req.body?.name ?? "").trim();
   const password = String(req.body?.password ?? "");
   if (!name) {
     res.status(400).json({ error: "Name is required" });
     return;
   }
-  if (!table.password || password !== table.password) {
-    res.status(403).json({ error: "Wrong password" });
-    return;
-  }
-  if (table.players.length >= MAX_SEATS) {
-    res.status(400).json({ error: "Table is full" });
-    return;
-  }
-  const taken = new Set(table.players.map((player) => player.seat));
-  const seat = Array.from({ length: MAX_SEATS }, (_, index) => index).find((index) => !taken.has(index));
-  if (seat === undefined) {
-    res.status(400).json({ error: "Table is full" });
-    return;
-  }
-  const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), seat, bought: table.buyIn };
   try {
-    await seatPoker(table.id, seat, table.buyIn);
+    const player = await withTable(id, async (table) => {
+      if (!table.password || password !== table.password) throw new JoinRefused(403, "Wrong password");
+      const taken = new Set(table.players.map((player) => player.seat));
+      const seat = Array.from({ length: MAX_SEATS }, (_, index) => index).find((index) => !taken.has(index));
+      if (seat === undefined) throw new JoinRefused(400, "Table is full");
+      const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), seat, bought: table.buyIn };
+      await seatPoker(table.id, seat, table.buyIn);
+      table.players.push(player);
+      if (!table.adminId) table.adminId = player.id;
+      return player;
+    });
+    await publishTable(id);
+    res.status(201).json({ id: player.id, secret: player.secret });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Join failed" });
-    return;
+    const status = error instanceof TableNotFound ? 404 : error instanceof JoinRefused ? error.status : 400;
+    res.status(status).json({ error: error instanceof Error ? error.message : "Join failed" });
   }
-  table.players.push(player);
-  if (!table.adminId) table.adminId = player.id;
-  await writeTable(table);
-  await publishTable(table.id);
-  res.status(201).json({ id: player.id, secret: player.secret });
 });
 
 router.post("/:id/livekit", async (req, res) => {

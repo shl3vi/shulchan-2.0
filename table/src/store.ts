@@ -42,6 +42,35 @@ export async function writeTable(table: TableRecord) {
   await redis.set(tableKey(table.id), JSON.stringify(table));
 }
 
+const releaseLock = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`;
+
+export class TableNotFound extends Error {
+  constructor() {
+    super("Game not found");
+  }
+}
+
+// Every change to a table record goes through here, so concurrent joins, leaves, and admin moves cannot overwrite each other.
+export async function withTable<T>(id: string, run: (table: TableRecord) => Promise<T>): Promise<T> {
+  const lock = `lock:table:${id}`;
+  const token = crypto.randomUUID();
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (await redis.set(lock, token, { NX: true, PX: 5000 })) {
+      try {
+        const table = await readTable(id);
+        if (!table) throw new TableNotFound();
+        const result = await run(table);
+        await writeTable(table);
+        return result;
+      } finally {
+        await redis.eval(releaseLock, { keys: [lock], arguments: [token] });
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  }
+  throw new Error("Table is busy");
+}
+
 export async function publishTable(id: string) {
   await redis.publish("tables", id);
 }
