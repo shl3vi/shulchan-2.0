@@ -7,6 +7,7 @@ export function startTableVideo(
   credentials: Credentials,
   onTracks: (tracks: Map<string, VideoTrack>) => void,
   onMic: (on: boolean) => void,
+  onDown: () => void,
 ) {
   registerLiveKit();
   const room = new Room();
@@ -23,11 +24,12 @@ export function startTableVideo(
     onTracks(videos);
   };
 
-  const shutdown = () => {
+  const shutdown = (failed = false) => {
     if (stopped) return;
     stopped = true;
     onTracks(new Map());
     onMic(false);
+    if (failed) onDown();
     void (async () => {
       try {
         await room.localParticipant.setCameraEnabled(false);
@@ -66,7 +68,7 @@ export function startTableVideo(
       onMic(false);
       sync();
     } catch {
-      shutdown();
+      shutdown(true);
     }
   })();
 
@@ -74,8 +76,19 @@ export function startTableVideo(
     disconnect: shutdown,
     setMic(enabled: boolean) {
       if (stopped) return;
-      void room.localParticipant.setMicrophoneEnabled(enabled).catch(() => shutdown());
+      void room.localParticipant.setMicrophoneEnabled(enabled).catch(() => shutdown(true));
       onMic(enabled);
+    },
+    setCamera(enabled: boolean) {
+      if (stopped) return;
+      void room.localParticipant.setCameraEnabled(enabled).catch(() => shutdown(true));
+    },
+    mute(identity: string, muted: boolean) {
+      room.remoteParticipants.get(identity)?.setVolume(muted ? 0 : 1);
+    },
+    hide(identity: string, hidden: boolean) {
+      const publication = room.remoteParticipants.get(identity)?.getTrackPublication(Track.Source.Camera) as { setSubscribed?: (subscribed: boolean) => void } | undefined;
+      publication?.setSubscribed?.(!hidden);
     },
   };
 }

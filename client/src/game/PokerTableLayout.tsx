@@ -7,6 +7,7 @@ import type { Card } from "@/game/types";
 import { t } from "@/i18n";
 
 export type SeatSlot = {
+  id: string;
   name: string;
   stack: number;
   bet: number;
@@ -364,6 +365,7 @@ export function PokerTableLayout({
   round,
   winners = [],
   onDeal,
+  onSeat,
 }: {
   seats: Array<SeatSlot | undefined>;
   shown: Card[][];
@@ -372,6 +374,7 @@ export function PokerTableLayout({
   round: string | null;
   winners?: { name: string; amount: number }[];
   onDeal?: () => void;
+  onSeat?: (seat: number) => void;
 }) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const scale = size.width > 0 && size.height > 0 ? Math.min(size.width / STAGE_W, size.height / STAGE_H) : 0;
@@ -429,7 +432,8 @@ export function PokerTableLayout({
             );
           })}
           {SEAT_CENTERS.map((center, visual) => {
-            const player = seats[(hero + visual) % SEAT_CENTERS.length];
+            const seatIndex = (hero + visual) % SEAT_CENTERS.length;
+            const player = seats[seatIndex];
             return (
               <View
                 key={`seat-${visual}`}
@@ -440,7 +444,9 @@ export function PokerTableLayout({
                   zIndex: 3,
                 }}
               >
-                <SeatView player={player} scale={scale} />
+                <Pressable disabled={!player || !onSeat} onPress={() => onSeat?.(seatIndex)}>
+                  <SeatView player={player} scale={scale} />
+                </Pressable>
               </View>
             );
           })}

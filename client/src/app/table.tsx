@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -53,12 +53,19 @@ export default function TableScreen() {
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
   const [info, setInfo] = useState(false);
   const [buying, setBuying] = useState(false);
+  const [cameraAsked, setCameraAsked] = useState(false);
+  const [seatId, setSeatId] = useState<string | null>(null);
   const [buyChips, setBuyChips] = useState(0);
   const hold = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdStart = useRef<ReturnType<typeof setTimeout> | null>(null);
   const you = state?.you;
   const pot = state?.pots.reduce((sum, entry) => sum + entry.size, 0) ?? 0;
   const buyStep = Math.max(1, state?.bigBlind ?? 1);
+
+  useEffect(() => {
+    setCameraAsked(false);
+    setSeatId(null);
+  }, [credentials?.playerId]);
 
   function stopBuy() {
     if (holdStart.current) clearTimeout(holdStart.current);
@@ -94,6 +101,7 @@ export default function TableScreen() {
     const isYou = player.id === you?.id;
     const track = video.tracks.get(player.id);
     seats[player.seat] = {
+      id: player.id,
       name: player.name,
       stack: player.stack,
       bet: player.betSize,
@@ -127,6 +135,11 @@ export default function TableScreen() {
           round={state?.round ?? null}
           winners={state?.round == null ? (state?.lastWinners ?? []) : []}
           onDeal={state?.you?.isAdmin && state.round == null ? startHand : undefined}
+          onSeat={(index) => {
+            const player = state?.players.find((seat) => seat.seat === index);
+            if (!player || player.id === you?.id) return;
+            setSeatId(player.id);
+          }}
         />
         <Modal visible={sheet != null} transparent animationType="fade" onRequestClose={() => setSheet(null)}>
           <Pressable style={styles.sheetBackdrop} onPress={() => setSheet(null)}>
@@ -243,7 +256,56 @@ export default function TableScreen() {
             ]}
           />
         </View>
-        <TalkButton on={video.micOn} onTalk={video.setMic} />
+        {Platform.OS !== "web" && !cameraAsked && !video.live ? (
+          <View style={styles.cameraAsk}>
+            <Text style={styles.cameraAskText}>{t("cameraAsk")}</Text>
+            <View style={styles.cameraAskRow}>
+              <Pressable style={styles.cameraNo} onPress={() => setCameraAsked(true)}>
+                <Text style={styles.cameraNoText}>{t("notNow")}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.cameraYes}
+                onPress={() => {
+                  setCameraAsked(true);
+                  video.start();
+                }}
+              >
+                <Text style={styles.cameraYesText}>{t("turnCameraOn")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+        {video.live ? (
+          <Pressable style={[styles.cameraToggle, video.cameraOn && styles.cameraToggleOn]} onPress={() => video.setCamera(!video.cameraOn)}>
+            <Ionicons name={video.cameraOn ? "videocam" : "videocam-off"} size={22} color={video.cameraOn ? "#1c1917" : "#fafaf9"} />
+          </Pressable>
+        ) : null}
+        {video.live ? <TalkButton on={video.micOn} onTalk={video.setMic} /> : null}
+        <Modal visible={seatId != null} transparent animationType="fade" onRequestClose={() => setSeatId(null)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setSeatId(null)}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <Text style={styles.sheetTitle}>{state?.players.find((player) => player.id === seatId)?.name}</Text>
+              <Pressable
+                style={styles.cancel}
+                onPress={() => {
+                  if (seatId) video.toggleMute(seatId);
+                  setSeatId(null);
+                }}
+              >
+                <Text style={styles.cancelText}>{seatId && video.muted.has(seatId) ? t("unmuteSeat") : t("muteSeat")}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.cancel}
+                onPress={() => {
+                  if (seatId) video.toggleHide(seatId);
+                  setSeatId(null);
+                }}
+              >
+                <Text style={styles.cancelText}>{seatId && video.hidden.has(seatId) ? t("showVideo") : t("hideVideo")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
       <ActionDock
         yourTurn={(you?.legalActions.length ?? 0) > 0}
@@ -333,4 +395,38 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   errorText: { color: "#fecaca", flex: 1 },
+  cameraAsk: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 16,
+    zIndex: 9,
+    backgroundColor: "rgba(12,10,9,0.94)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#44403c",
+    padding: 12,
+    gap: 10,
+  },
+  cameraAskText: { color: "#fafaf9", fontSize: 16, fontWeight: "700" },
+  cameraAskRow: { flexDirection: "row", gap: 8 },
+  cameraNo: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, backgroundColor: "#292524" },
+  cameraNoText: { color: "#fafaf9", fontWeight: "800" },
+  cameraYes: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, backgroundColor: "#f6d36b" },
+  cameraYesText: { color: "#1c1917", fontWeight: "800" },
+  cameraToggle: {
+    position: "absolute",
+    right: 76,
+    bottom: 16,
+    zIndex: 8,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#1c1917",
+    borderWidth: 1,
+    borderColor: "#44403c",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cameraToggleOn: { backgroundColor: "#f6d36b", borderColor: "#f6d36b" },
 });

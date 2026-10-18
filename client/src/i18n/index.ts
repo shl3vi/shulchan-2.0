@@ -73,6 +73,13 @@ const catalogs = {
     buyMore: "Buy in",
     putIn: "in {n}",
     betOutOfRange: "Bet must be between {min} and {max}",
+    cameraAsk: "Show your camera at this table?",
+    turnCameraOn: "Turn camera on",
+    notNow: "Not now",
+    hideVideo: "Hide video",
+    showVideo: "Show video",
+    muteSeat: "Mute",
+    unmuteSeat: "Unmute",
   },
   he: {
     enterYourName: "איך השולחן רואה אותך",
@@ -144,6 +151,13 @@ const catalogs = {
     buyMore: "קניית צ'יפים",
     putIn: "הכניס {n}",
     betOutOfRange: "הסכום חייב להיות בין {min} ל-{max}",
+    cameraAsk: "להראות את המצלמה בשולחן?",
+    turnCameraOn: "הפעלת מצלמה",
+    notNow: "לא עכשיו",
+    hideVideo: "הסתרת וידאו",
+    showVideo: "הצגת וידאו",
+    muteSeat: "השתקה",
+    unmuteSeat: "ביטול השתקה",
   },
 } as const;
 
