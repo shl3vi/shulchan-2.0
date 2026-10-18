@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(authRouter);
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null });
+  res.json({ ok: true });
 });
 app.get("/join", (req, res) => {
   const game = String(req.query.game ?? "");
