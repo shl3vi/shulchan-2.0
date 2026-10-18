@@ -2,6 +2,7 @@ import { Router } from "express";
 import { createPokerTable, readPoker, seatPoker, unseatPoker } from "./engine.js";
 import { liveKitToken } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
+import { readHost } from "./auth.js";
 import { insertTable, publishTable, readTable, redis, tableKey, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
@@ -14,6 +15,11 @@ function tableCode() {
 }
 
 router.post("/", async (req, res) => {
+  const host = await readHost(req.get("authorization"));
+  if (!host) {
+    res.status(401).json({ error: "Sign in with Google to open a table" });
+    return;
+  }
   const smallBlind = Number(req.body?.smallBlind);
   const buyIn = Number(req.body?.buyIn);
   if (!Number.isInteger(smallBlind) || smallBlind < 1) {
@@ -30,6 +36,7 @@ router.post("/", async (req, res) => {
     smallBlind,
     buyIn,
     password: String(crypto.getRandomValues(new Uint32Array(1))[0]! % 900000 + 100000),
+    hostEmail: host.email,
     players: [],
   };
   while (!(await insertTable(table))) table.id = tableCode();

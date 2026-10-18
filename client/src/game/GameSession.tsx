@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { io, type Socket } from "socket.io-client";
-import { API_URL, createTable, joinTable } from "@/game/api";
+import { API_URL, createTable, joinTable, tableExists } from "@/game/api";
 import { loadSeat, saveSeat } from "@/game/sessionStore";
 import type { Credentials, TableSnapshot } from "@/game/types";
 import { t } from "@/i18n";
@@ -10,7 +10,7 @@ type GameSessionValue = {
   state: TableSnapshot | null;
   error: string | null;
   dismissError: () => void;
-  createAndSit: (name: string, smallBlind: number, buyIn: number) => Promise<void>;
+  createAndSit: (name: string, smallBlind: number, buyIn: number, hostToken: string) => Promise<void>;
   join: (name: string, gameId: string, password: string) => Promise<void>;
   ready: boolean;
   leave: () => Promise<void>;
@@ -31,10 +31,26 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    loadSeat().then((saved) => {
+    let live = true;
+    loadSeat().then(async (saved) => {
+      if (!live) return;
+      if (saved && !(await tableExists(saved.gameId))) {
+        if (!live) return;
+        setCredentials((current) => {
+          if (current) return current;
+          void saveSeat(null);
+          return null;
+        });
+        setReady(true);
+        return;
+      }
+      if (!live) return;
       setCredentials((current) => current ?? saved);
       setReady(true);
     });
+    return () => {
+      live = false;
+    };
   }, []);
 
   function remember(next: Credentials | null) {
@@ -62,6 +78,12 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       setError(t("leftTable"));
     });
     next.on("error", (payload: { message?: string }) => {
+      if (payload.message === "Invalid connection") {
+        remember(null);
+        setState(null);
+        setError(null);
+        return;
+      }
       setError(payload.message ?? "Table error");
     });
     setSocket(next);
@@ -80,9 +102,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       ready,
-      async createAndSit(name, smallBlind, buyIn) {
+      async createAndSit(name, smallBlind, buyIn, hostToken) {
         if (credentials) throw new Error(t("alreadyAtTable"));
-        const table = await createTable(smallBlind, buyIn);
+        const table = await createTable(smallBlind, buyIn, hostToken);
         const player = await joinTable(table.gameId, name, table.password, table.adminSecret);
         remember({
           gameId: table.gameId,

@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { API_URL } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
+import { loadHost, saveHost, type Host } from "@/game/hostStore";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
 import { isRtl, t } from "@/i18n";
+
+WebBrowser.maybeCompleteAuthSession();
 
 const BLINDS = [1, 2, 5, 10];
 const BUY_INS = [50, 100, 200, 500];
@@ -109,7 +115,36 @@ export default function HomeScreen() {
   const [blindOk, setBlindOk] = useState(true);
   const [buyInOk, setBuyInOk] = useState(true);
   const [nameMissing, setNameMissing] = useState(false);
+  const [host, setHost] = useState<Host | null>(null);
   const nameInput = useRef<TextInput>(null);
+
+  useEffect(() => {
+    void loadHost().then(setHost);
+  }, []);
+
+  async function signIn() {
+    setError(null);
+    setBusy(true);
+    try {
+      const back = Linking.createURL("auth");
+      const result = await WebBrowser.openAuthSessionAsync(
+        `${API_URL}/auth/google?return=${encodeURIComponent(back)}`,
+        back,
+      );
+      if (result.type !== "success") return;
+      const url = new URL(result.url);
+      const token = url.searchParams.get("token");
+      const email = url.searchParams.get("email");
+      if (!token || !email) throw new Error(t("serverUnreachable"));
+      const next = { token, email };
+      setHost(next);
+      await saveHost(next);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("serverUnreachable"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function create() {
     if (name.trim().length === 0) {
@@ -122,7 +157,8 @@ export default function HomeScreen() {
     setError(null);
     setBusy(true);
     try {
-      await session.createAndSit(name.trim(), smallBlind, buyIn);
+      if (!host) return;
+      await session.createAndSit(name.trim(), smallBlind, buyIn, host.token);
       router.push("/table");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("serverUnreachable"));
@@ -148,6 +184,18 @@ export default function HomeScreen() {
         </Pressable>
       ) : null}
       <View style={[styles.felt, seated && styles.feltOff]}>
+        {host ? (
+          <Text style={[styles.signedIn, { textAlign: align }]}>{t("signedInAs", { email: host.email })}</Text>
+        ) : (
+          <>
+            <Text style={[styles.signInHint, { textAlign: align }]}>{t("signInToCreate")}</Text>
+            <Pressable style={[styles.deal, busy && styles.dealBusy]} disabled={busy || seated} onPress={signIn}>
+              <Text style={styles.dealText}>{t("signInGoogle")}</Text>
+            </Pressable>
+          </>
+        )}
+        {host ? (
+          <>
         <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
         <TextInput
           ref={nameInput}
@@ -169,6 +217,10 @@ export default function HomeScreen() {
           <Text style={styles.dealText}>{busy ? t("shuffling") : t("dealMeIn")}</Text>
         </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
+          </>
+        ) : error ? (
+          <Text style={styles.error}>{error}</Text>
+        ) : null}
       </View>
       {seated ? null : (
         <Pressable style={styles.joinCode} onPress={() => router.push("/join")}>
@@ -225,6 +277,8 @@ const styles = StyleSheet.create({
   deal: { marginTop: 12, backgroundColor: "#f6d36b", borderRadius: 24, paddingVertical: 14, alignItems: "center" },
   dealBusy: { opacity: 0.7 },
   dealText: { color: "#1c1917", fontWeight: "900", fontSize: 18, letterSpacing: 0.4 },
+  signInHint: { color: "#d6d3d1", fontSize: 15, marginBottom: 4 },
+  signedIn: { color: "#d6d3d1", fontSize: 14, marginBottom: 4 },
   error: { color: "#fecaca", marginTop: 4 },
   joinCode: {
     marginTop: 16,

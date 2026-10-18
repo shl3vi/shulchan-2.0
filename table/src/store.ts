@@ -16,6 +16,7 @@ export type TableRecord = {
   smallBlind: number;
   buyIn: number;
   password: string;
+  hostEmail?: string;
   players: SeatPlayer[];
 };
 
