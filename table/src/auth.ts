@@ -11,7 +11,15 @@ function hostTokenSeconds() {
 }
 
 function returnUrl(value: string) {
-  return value.startsWith("client://") || value.startsWith("exp://") ? value : "";
+  try {
+    const url = new URL(value);
+    const path = url.pathname === "/" ? "" : url.pathname;
+    if (url.protocol !== "client:" || url.hostname !== "auth" || path !== "") return "";
+    if (url.username || url.password || url.search || url.hash) return "";
+    return "client://auth";
+  } catch {
+    return "";
+  }
 }
 
 function clientId() {
