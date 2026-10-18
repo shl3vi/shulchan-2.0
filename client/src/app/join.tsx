@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGameSession } from "@/game/GameSession";
+import { playerName } from "@/game/name";
 import { isRtl, t } from "@/i18n";
 
 // Short codes are uppercase; older tables still use lowercase UUIDs.
@@ -25,7 +26,8 @@ export default function JoinScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const align = isRtl() ? "right" : "left";
-  const ready = name.trim().length > 0 && game.trim().length > 0 && password.trim().length > 0;
+  const seatedName = playerName(name);
+  const ready = seatedName != null && game.trim().length > 0 && password.trim().length > 0;
 
   useEffect(() => {
     if (session.ready && session.credentials) router.replace("/table");
@@ -36,11 +38,14 @@ export default function JoinScreen() {
       router.replace("/table");
       return;
     }
-    if (!ready) return;
+    if (!seatedName || !ready) {
+      setError(t("nameLength"));
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
-      await session.join(name.trim(), normalizeCode(game), password.trim());
+      await session.join(seatedName, normalizeCode(game), password.trim());
       router.replace("/table");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("couldNotJoin"));
@@ -91,6 +96,7 @@ export default function JoinScreen() {
           autoCapitalize="words"
           placeholder={t("enterYourName")}
           placeholderTextColor="#78716c"
+          maxLength={24}
         />
         <Pressable style={[styles.deal, (busy || !ready) && styles.dealBusy]} disabled={busy || !ready} onPress={sit}>
           <Text style={styles.dealText}>{busy ? t("sittingDown") : t("sitDown")}</Text>

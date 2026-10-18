@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_URL, redeemHostCode } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
 import { loadHost, saveHost, type Host } from "@/game/hostStore";
+import { playerName } from "@/game/name";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
 import { isRtl, t } from "@/i18n";
 
@@ -163,8 +164,10 @@ export default function HomeScreen() {
   }
 
   async function create() {
-    if (name.trim().length === 0) {
+    const seatedName = playerName(name);
+    if (!seatedName) {
       setNameMissing(true);
+      setError(t("nameLength"));
       scroll.current?.scrollTo({ y: 0, animated: true });
       nameInput.current?.focus();
       return;
@@ -174,7 +177,7 @@ export default function HomeScreen() {
     setBusy(true);
     try {
       if (!host) return;
-      await session.createAndSit(name.trim(), smallBlind, buyIn, host.token);
+      await session.createAndSit(seatedName, smallBlind, buyIn, host.token);
       router.push("/table");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("serverUnreachable"));
@@ -234,6 +237,7 @@ export default function HomeScreen() {
             autoCapitalize="words"
             placeholder={t("enterYourName")}
             placeholderTextColor="#78716c"
+            maxLength={24}
           />
           <Text style={[styles.label, { textAlign: align }]}>{t("smallBlind")}</Text>
           <ChipRow values={BLINDS} selected={smallBlind} minimum={1} onSelect={setSmallBlind} onValidity={setBlindOk} />

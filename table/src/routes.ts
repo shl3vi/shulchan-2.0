@@ -3,6 +3,7 @@ import { createPokerTable, readPoker, seatPoker, unseatPoker } from "./engine.js
 import { liveKitToken, VideoUnavailable } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
+import { playerName } from "./name.js";
 import { insertTable, publishTable, readTable, redis, tableKey, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
@@ -67,11 +68,11 @@ class JoinRefused extends Error {
 
 router.post("/:id/join", async (req, res) => {
   const id = String(req.params.id);
-  const name = String(req.body?.name ?? "").trim();
+  const name = playerName(req.body?.name);
   const password = String(req.body?.password ?? "");
   const adminSecret = String(req.body?.adminSecret ?? "");
   if (!name) {
-    res.status(400).json({ error: "Name is required" });
+    res.status(400).json({ error: "Name must be 1 to 24 characters" });
     return;
   }
   try {
