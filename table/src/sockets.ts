@@ -18,7 +18,8 @@ async function broadcast(io: Server, tableId: string) {
     const viewer = String(socket.handshake.auth.playerId ?? "");
     if (!table.players.some((player) => player.id === viewer)) {
       socket.emit("kicked");
-      return;
+      socket.disconnect(true);
+      continue;
     }
     socket.emit("state", snapshot(table, view, viewer));
   }
