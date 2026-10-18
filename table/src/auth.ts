@@ -9,11 +9,11 @@ function returnUrl(value: string) {
 }
 
 function clientId() {
-  return process.env.GOOGLE_CLIENT_ID ?? "";
+  return process.env.GOOGLE_OAUTH_CLIENT_ID ?? "";
 }
 
 function clientSecret() {
-  return process.env.GOOGLE_CLIENT_SECRET ?? "";
+  return process.env.GOOGLE_OAUTH_SECRET ?? "";
 }
 
 export const authRouter = Router();
