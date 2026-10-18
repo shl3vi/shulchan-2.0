@@ -1,7 +1,9 @@
 import express from "express";
+import helmet from "helmet";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { authRouter } from "./auth.js";
+import { allowedOrigins, cors, rateLimit } from "./http.js";
 import { router } from "./routes.js";
 import { attachSockets } from "./sockets.js";
 import { connectRedis } from "./store.js";
@@ -9,7 +11,15 @@ import { connectRedis } from "./store.js";
 await connectRedis();
 
 const app = express();
+app.set("trust proxy", 1);
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+app.use(cors);
 app.use(express.json());
+app.use(rateLimit);
 app.use(authRouter);
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
@@ -40,7 +50,8 @@ app.get("/join", (req, res) => {
 app.use("/api/games", router);
 
 const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: "*" } });
+const origins = allowedOrigins();
+const io = new Server(httpServer, { cors: { origin: origins.length > 0 ? origins : false } });
 attachSockets(io);
 
 const port = Number(process.env.PORT ?? 4000);

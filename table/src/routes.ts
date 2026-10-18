@@ -4,6 +4,7 @@ import { liveKitToken, VideoUnavailable } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
 import { playerName } from "./name.js";
+import { createBody, joinBody, liveKitBody, readSchema } from "./schema.js";
 import { insertTable, publishTable, readTable, redis, tableKey, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
@@ -26,8 +27,13 @@ router.post("/", async (req, res) => {
     res.status(401).json({ error: "Sign in with Google to open a table" });
     return;
   }
-  const smallBlind = Number(req.body?.smallBlind);
-  const buyIn = Number(req.body?.buyIn);
+  const body = readSchema(createBody, req.body);
+  if (!body) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+  const smallBlind = body.smallBlind;
+  const buyIn = body.buyIn;
   if (!Number.isInteger(smallBlind) || smallBlind < 1) {
     res.status(400).json({ error: "smallBlind must be a positive integer" });
     return;
@@ -68,9 +74,14 @@ class JoinRefused extends Error {
 
 router.post("/:id/join", async (req, res) => {
   const id = String(req.params.id);
-  const name = playerName(req.body?.name);
-  const password = String(req.body?.password ?? "");
-  const adminSecret = String(req.body?.adminSecret ?? "");
+  const body = readSchema(joinBody, req.body);
+  if (!body) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+  const name = playerName(body.name);
+  const password = body.password;
+  const adminSecret = body.adminSecret ?? "";
   if (!name) {
     res.status(400).json({ error: "Name must be 1 to 24 characters" });
     return;
@@ -111,8 +122,13 @@ router.post("/:id/livekit", async (req, res) => {
     res.status(404).json({ error: "Game not found" });
     return;
   }
-  const playerId = String(req.body?.playerId ?? "");
-  const secret = String(req.body?.secret ?? "");
+  const body = readSchema(liveKitBody, req.body);
+  if (!body) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+  const playerId = body.playerId;
+  const secret = body.secret;
   const player = table.players.find((seat) => seat.id === playerId && seat.secret === secret);
   if (!player) {
     res.status(401).json({ error: "Invalid player" });

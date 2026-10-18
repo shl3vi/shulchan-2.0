@@ -1,10 +1,9 @@
 import type { Server, Socket } from "socket.io";
-import { actPoker, addChips, readPoker, startPoker, type ActionName } from "./engine.js";
+import { actPoker, addChips, readPoker, startPoker } from "./engine.js";
 import { snapshot } from "./snapshot.js";
 import { assignAdmin, dropRemovedPlayers, releaseSeat } from "./players.js";
+import { actBody, playerBody, readSchema, rebuyBody } from "./schema.js";
 import { publishTable, readTable, subscriber, withTable, type TableRecord } from "./store.js";
-
-const actions = new Set<ActionName>(["fold", "check", "call", "bet", "raise"]);
 
 async function broadcast(io: Server, tableId: string) {
   const table = await readTable(tableId);
@@ -74,24 +73,39 @@ export function attachSockets(io: Server) {
       }),
     );
 
-    socket.on("transfer-admin", (body: { playerId?: string }) =>
-      change("Cannot transfer admin", async (current) => {
+    socket.on("transfer-admin", (body: unknown) => {
+      const parsed = readSchema(playerBody, body);
+      if (!parsed) {
+        socket.emit("error", { message: "Invalid request" });
+        return;
+      }
+      return change("Cannot transfer admin", async (current) => {
         requireAdmin(current);
-        const next = current.players.find((seat) => seat.id === body?.playerId && !seat.pendingRemoval);
+        const next = current.players.find((seat) => seat.id === parsed.playerId && !seat.pendingRemoval);
         if (!next || next.id === player.id) throw new Error("Player not found");
         assignAdmin(current, next.id);
-      }),
-    );
+      });
+    });
 
-    socket.on("remove-player", (body: { playerId?: string }) =>
-      change("Cannot remove player", async (current) => {
+    socket.on("remove-player", (body: unknown) => {
+      const parsed = readSchema(playerBody, body);
+      if (!parsed) {
+        socket.emit("error", { message: "Invalid request" });
+        return;
+      }
+      return change("Cannot remove player", async (current) => {
         requireAdmin(current);
-        await releaseSeat(current, String(body?.playerId ?? ""));
-      }),
-    );
+        await releaseSeat(current, parsed.playerId);
+      });
+    });
 
-    socket.on("rebuy", (body: { amount?: number }) => {
-      const amount = Number(body?.amount);
+    socket.on("rebuy", (body: unknown) => {
+      const parsed = readSchema(rebuyBody, body);
+      if (!parsed) {
+        socket.emit("error", { message: "Invalid request" });
+        return;
+      }
+      const amount = parsed.amount;
       return change("Buy-in failed", async (current) => {
         if (!Number.isInteger(amount) || amount < 1 || amount > current.buyIn) {
           throw new Error("Buy-in must be a whole number up to the table buy-in");
@@ -103,14 +117,14 @@ export function attachSockets(io: Server) {
       });
     });
 
-    socket.on("act", (body: { action?: ActionName; amount?: number }) => {
-      const action = body?.action;
-      if (!action || !actions.has(action)) {
+    socket.on("act", (body: unknown) => {
+      const parsed = readSchema(actBody, body);
+      if (!parsed) {
         socket.emit("error", { message: "Unknown action" });
         return;
       }
       return change("Action failed", async (current) => {
-        await actPoker(tableId, player.seat, action, body.amount);
+        await actPoker(tableId, player.seat, parsed.action, parsed.amount);
         await dropRemovedPlayers(current);
       });
     });

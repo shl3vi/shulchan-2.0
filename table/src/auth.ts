@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { Router } from "express";
+import { readSchema, sessionBody } from "./schema.js";
 import { redis } from "./store.js";
 
 const redirectUri = "https://shulchan.win/auth/callback";
@@ -94,11 +95,12 @@ authRouter.get("/auth/callback", async (req, res) => {
 });
 
 authRouter.post("/auth/session", async (req, res) => {
-  const code = String(req.body?.code ?? "");
-  if (!/^[a-f0-9]{64}$/.test(code)) {
+  const body = readSchema(sessionBody, req.body);
+  if (!body) {
     res.status(400).json({ error: "Sign-in expired. Try again." });
     return;
   }
+  const code = body.code;
   const raw = await redis.getDel(`oauth-code:${code}`);
   if (!raw) {
     res.status(401).json({ error: "Sign-in expired. Try again." });
