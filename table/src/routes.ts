@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createPokerTable, readPoker, seatPoker, unseatPoker } from "./engine.js";
-import { liveKitToken } from "./livekit.js";
+import { liveKitToken, VideoUnavailable } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
 import { insertTable, publishTable, readTable, redis, tableKey, TableNotFound, withTable, type TableRecord } from "./store.js";
@@ -107,7 +107,12 @@ router.post("/:id/livekit", async (req, res) => {
     res.status(401).json({ error: "Invalid player" });
     return;
   }
-  res.json(await liveKitToken(table.id, player.id, player.name));
+  try {
+    res.json(await liveKitToken(table.id, player.id, player.name));
+  } catch (error) {
+    const status = error instanceof VideoUnavailable ? 503 : 500;
+    res.status(status).json({ error: "Video is not available" });
+  }
 });
 
 router.get("/:id", async (req, res) => {

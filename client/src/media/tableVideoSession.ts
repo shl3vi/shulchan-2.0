@@ -23,32 +23,58 @@ export function startTableVideo(
     onTracks(videos);
   };
 
+  const shutdown = () => {
+    if (stopped) return;
+    stopped = true;
+    onTracks(new Map());
+    onMic(false);
+    void (async () => {
+      try {
+        await room.localParticipant.setCameraEnabled(false);
+        await room.localParticipant.setMicrophoneEnabled(false);
+      } catch {
+        // The room is already gone. The hand keeps going.
+      }
+      room.disconnect();
+    })();
+  };
+
   room.on(RoomEvent.TrackSubscribed, sync);
   room.on(RoomEvent.TrackUnsubscribed, sync);
   room.on(RoomEvent.LocalTrackPublished, sync);
-  room.on(RoomEvent.Disconnected, () => onTracks(new Map()));
-
-  void (async () => {
-    const session = await liveKitToken(credentials.gameId, credentials.playerId, credentials.playerSecret);
-    if (stopped) return;
-    await room.connect(session.url, session.token);
-    await room.localParticipant.setCameraEnabled(true);
-    await room.localParticipant.setMicrophoneEnabled(false);
-    if (stopped) return;
+  room.on(RoomEvent.Disconnected, () => {
+    onTracks(new Map());
     onMic(false);
-    sync();
-  })().catch((error: { reasonName?: string }) => {
-    if (error?.reasonName === "LeaveRequest") return;
-    console.warn("LiveKit failed", error);
   });
 
+  void (async () => {
+    try {
+      const session = await liveKitToken(credentials.gameId, credentials.playerId, credentials.playerSecret);
+      if (stopped) return;
+      await room.connect(session.url, session.token);
+      if (stopped) {
+        room.disconnect();
+        return;
+      }
+      await room.localParticipant.setCameraEnabled(true);
+      await room.localParticipant.setMicrophoneEnabled(false);
+      if (stopped) {
+        await room.localParticipant.setCameraEnabled(false);
+        room.disconnect();
+        return;
+      }
+      onMic(false);
+      sync();
+    } catch {
+      shutdown();
+    }
+  })();
+
   return {
-    disconnect() {
-      stopped = true;
-      room.disconnect();
-    },
+    disconnect: shutdown,
     setMic(enabled: boolean) {
-      void room.localParticipant.setMicrophoneEnabled(enabled);
+      if (stopped) return;
+      void room.localParticipant.setMicrophoneEnabled(enabled).catch(() => shutdown());
       onMic(enabled);
     },
   };
