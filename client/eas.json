@@ -10,7 +10,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://shulchan-server.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://shulchan.win"
       }
     },
     "production": {
@@ -18,7 +18,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://shulchan-server.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://shulchan.win"
       }
     }
   }

@@ -10,7 +10,7 @@ function startAds() {
   return started;
 }
 
-export function AdBanner() {
+export function AdBannerView() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {

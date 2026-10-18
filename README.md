@@ -20,7 +20,7 @@ LiveKit runs in Docker on this Mac. Phones must be on the same Wi-Fi so the vide
 
 ## Cloud
 
-`render.yaml` is the Render blueprint: Redis and one web service (`shulchan-server`) that runs the table and the poker engine together. The engine listens on localhost only and accepts requests carrying a token generated at each boot. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Render.
+Railway hosts Redis and one web service (`shulchan-server`) that runs the table and the poker engine together. The engine listens on localhost only and accepts requests carrying a token generated at each boot. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
 
 An installable APK, from `client/`:
 
@@ -28,4 +28,4 @@ An installable APK, from `client/`:
 npx eas-cli@latest build --platform android --profile preview
 ```
 
-That build talks to `https://shulchan-server.onrender.com`. Sideload the APK; it does not need Metro or this Mac.
+That build talks to `https://shulchan.win`. Sideload the APK; it does not need Metro or this Mac.

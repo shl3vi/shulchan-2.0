@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { betAnchor, FELT, RAIL, SEAT_CENTERS, SEAT_H, SEAT_TOP, SEAT_W, STAGE_H, STAGE_W } from "@/game/tableStage";
@@ -791,7 +791,7 @@ const menu = StyleSheet.create({
     gap: 4,
   },
   bar: { width: 16, height: 2, borderRadius: 1, backgroundColor: "#fafaf9" },
-  backdrop: { flex: 1, direction: "ltr" },
+  backdrop: { flex: 1, ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
   panel: {
     position: "absolute",
     zIndex: 6,

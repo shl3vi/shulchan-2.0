@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Modal, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -13,6 +13,37 @@ import { ActionDock, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } fr
 import type { Card } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { t } from "@/i18n";
+
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function copy() {
+    try {
+      const Clipboard = await import("expo-clipboard");
+      await Clipboard.setStringAsync(value);
+    } catch {
+      return;
+    }
+    setCopied(true);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setCopied(false), 1200);
+  }
+
+  return (
+    <View>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <View style={styles.infoRow}>
+        <Text style={styles.infoValue} selectable>
+          {value}
+        </Text>
+        <Pressable onPress={() => void copy()} hitSlop={8} accessibilityLabel={copied ? t("copied") : t("copy")}>
+          <Ionicons name={copied ? "checkmark" : "copy-outline"} size={22} color="#f6d36b" />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
 
 export default function TableScreen() {
   const router = useRouter();
@@ -127,14 +158,8 @@ export default function TableScreen() {
           <Pressable style={styles.sheetBackdrop} onPress={() => setInfo(false)}>
             <Pressable style={styles.sheet} onPress={() => {}}>
               <Text style={styles.sheetTitle}>{t("tableInfo")}</Text>
-              <Text style={styles.infoLabel}>{t("tableId")}</Text>
-              <Text style={styles.infoValue} selectable>
-                {credentials.gameId}
-              </Text>
-              <Text style={styles.infoLabel}>{t("password")}</Text>
-              <Text style={styles.infoValue} selectable>
-                {credentials.password}
-              </Text>
+              <CopyField label={t("tableId")} value={credentials.gameId} />
+              <CopyField label={t("password")} value={credentials.password} />
               {state ? (
                 <Text style={styles.statsLine}>
                   {t("blindsAndBuyIn", { small: state.smallBlind, big: state.bigBlind, buyIn: state.buyIn })}
@@ -232,7 +257,7 @@ export default function TableScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#07110d", direction: "ltr" },
+  screen: { flex: 1, backgroundColor: "#07110d", ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
   meta: { color: "#d6d3d1", padding: 24 },
   stage: { flex: 1, minHeight: 0 },
   ad: { height: 50, width: "100%", backgroundColor: "#292524", alignItems: "center", overflow: "hidden" },
@@ -273,7 +298,8 @@ const styles = StyleSheet.create({
   statsLine: { color: "#fafaf9", fontSize: 16, flexShrink: 1 },
   makeAdmin: { color: "#f6d36b", fontWeight: "800" },
   infoLabel: { color: "#a8a29e", fontSize: 13, fontWeight: "700", letterSpacing: 0.6 },
-  infoValue: { color: "#fafaf9", fontSize: 26, fontWeight: "900", letterSpacing: 3, marginTop: -6 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  infoValue: { color: "#fafaf9", fontSize: 22, fontWeight: "900", letterSpacing: 2, flex: 1 },
   cancel: {
     marginTop: 6,
     alignSelf: "stretch",

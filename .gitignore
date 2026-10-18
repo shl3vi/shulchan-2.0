@@ -6,4 +6,5 @@ node_modules/
 .env
 .env.*
 shulchan-512018-*.json
+client_secret_*.json
 livekit.yaml

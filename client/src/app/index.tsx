@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_URL } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
@@ -116,11 +116,13 @@ export default function HomeScreen() {
   const [buyInOk, setBuyInOk] = useState(true);
   const [nameMissing, setNameMissing] = useState(false);
   const [host, setHost] = useState<Host | null>(null);
+  const [creating, setCreating] = useState(false);
   const nameInput = useRef<TextInput>(null);
 
-  useEffect(() => {
+  const refreshHost = useCallback(() => {
     void loadHost().then(setHost);
   }, []);
+  useFocusEffect(refreshHost);
 
   async function signIn() {
     setError(null);
@@ -144,6 +146,17 @@ export default function HomeScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function logout() {
+    setHost(null);
+    setCreating(false);
+    setError(null);
+    await saveHost(null);
+  }
+
+  function openCreate() {
+    setCreating((open) => !open);
   }
 
   async function create() {
@@ -177,51 +190,59 @@ export default function HomeScreen() {
       <StatusBar style="light" />
       <Text style={styles.mark}>SHULCHAN</Text>
       <Text style={styles.tag}>{t("tagline")}</Text>
+      {host ? (
+        <View style={styles.helloRow}>
+          <Text style={styles.hello}>{t("hello", { name: host.email.split("@")[0] ?? host.email })}</Text>
+          <Pressable onPress={logout} hitSlop={8}>
+            <Text style={styles.logout}>{t("logout")}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       {seated ? (
         <Pressable style={styles.return} onPress={() => router.push("/table")}>
           <Text style={styles.returnTitle}>{t("atTable")}</Text>
           <Text style={styles.returnText}>{t("backToSeat")}</Text>
         </Pressable>
       ) : null}
-      <View style={[styles.felt, seated && styles.feltOff]}>
-        {host ? (
-          <Text style={[styles.signedIn, { textAlign: align }]}>{t("signedInAs", { email: host.email })}</Text>
-        ) : (
-          <>
-            <Text style={[styles.signInHint, { textAlign: align }]}>{t("signInToCreate")}</Text>
-            <Pressable style={[styles.deal, busy && styles.dealBusy]} disabled={busy || seated} onPress={signIn}>
-              <Text style={styles.dealText}>{t("signInGoogle")}</Text>
-            </Pressable>
-          </>
-        )}
-        {host ? (
-          <>
-        <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
-        <TextInput
-          ref={nameInput}
-          style={[styles.input, { textAlign: align }, nameMissing && styles.inputMissing]}
-          value={name}
-          onChangeText={(value) => {
-            setName(value);
-            if (value.trim().length > 0) setNameMissing(false);
-          }}
-          autoCapitalize="words"
-          placeholder={t("enterYourName")}
-          placeholderTextColor="#78716c"
-        />
-        <Text style={[styles.label, { textAlign: align }]}>{t("smallBlind")}</Text>
-        <ChipRow values={BLINDS} selected={smallBlind} minimum={1} onSelect={setSmallBlind} onValidity={setBlindOk} />
-        <Text style={[styles.label, { textAlign: align }]}>{t("buyIn")}</Text>
-        <ChipRow values={BUY_INS} selected={buyIn} minimum={11} onSelect={setBuyIn} onValidity={setBuyInOk} />
-        <Pressable style={[styles.deal, (busy || seated || !blindOk || !buyInOk) && styles.dealBusy]} disabled={busy || seated || !blindOk || !buyInOk} onPress={create}>
-          <Text style={styles.dealText}>{busy ? t("shuffling") : t("dealMeIn")}</Text>
-        </Pressable>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-          </>
-        ) : error ? (
-          <Text style={styles.error}>{error}</Text>
-        ) : null}
-      </View>
+      <Pressable style={[styles.joinCode, styles.createButton]} disabled={busy || seated} onPress={openCreate}>
+        <Ionicons name="add-circle-outline" size={20} color="#f6d36b" />
+        <Text style={styles.joinCodeText}>{t("createTable")}</Text>
+      </Pressable>
+      {creating && !host ? (
+        <View style={styles.felt}>
+          <Text style={[styles.signInHint, { textAlign: align }]}>{t("signInToCreate")}</Text>
+          <Pressable style={[styles.deal, busy && styles.dealBusy]} disabled={busy} onPress={signIn}>
+            <Text style={styles.dealText}>{t("signInGoogle")}</Text>
+          </Pressable>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+        </View>
+      ) : null}
+      {creating && host ? (
+        <View style={[styles.felt, seated && styles.feltOff]}>
+          <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
+          <TextInput
+            ref={nameInput}
+            style={[styles.input, { textAlign: align }, nameMissing && styles.inputMissing]}
+            value={name}
+            onChangeText={(value) => {
+              setName(value);
+              if (value.trim().length > 0) setNameMissing(false);
+            }}
+            autoCapitalize="words"
+            placeholder={t("enterYourName")}
+            placeholderTextColor="#78716c"
+          />
+          <Text style={[styles.label, { textAlign: align }]}>{t("smallBlind")}</Text>
+          <ChipRow values={BLINDS} selected={smallBlind} minimum={1} onSelect={setSmallBlind} onValidity={setBlindOk} />
+          <Text style={[styles.label, { textAlign: align }]}>{t("buyIn")}</Text>
+          <ChipRow values={BUY_INS} selected={buyIn} minimum={11} onSelect={setBuyIn} onValidity={setBuyInOk} />
+          <Pressable style={[styles.deal, (busy || seated || !blindOk || !buyInOk) && styles.dealBusy]} disabled={busy || seated || !blindOk || !buyInOk} onPress={create}>
+            <Text style={styles.dealText}>{busy ? t("shuffling") : t("dealMeIn")}</Text>
+          </Pressable>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+        </View>
+      ) : null}
+      {error && !creating ? <Text style={styles.error}>{error}</Text> : null}
       {seated ? null : (
         <Pressable style={styles.joinCode} onPress={() => router.push("/join")}>
           <Ionicons name="enter-outline" size={20} color="#f6d36b" />
@@ -236,6 +257,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#07110d", paddingHorizontal: 20 },
   mark: { color: "#f6d36b", fontSize: 36, fontWeight: "900", letterSpacing: 4, textAlign: "center" },
   tag: { color: "#d6d3d1", textAlign: "center", marginTop: 8, marginBottom: 22, fontSize: 15 },
+  helloRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 12 },
+  hello: { color: "#fafaf9", fontSize: 20, fontWeight: "800", flex: 1 },
+  logout: { color: "#f6d36b", fontWeight: "800", fontSize: 16 },
   return: { backgroundColor: "#f6d36b", borderRadius: 18, padding: 16, marginBottom: 16 },
   returnTitle: { color: "#1c1917", fontWeight: "900", fontSize: 18 },
   returnText: { color: "#44403c", marginTop: 4 },
@@ -246,6 +270,7 @@ const styles = StyleSheet.create({
     borderColor: "#7c4a1e",
     padding: 18,
     gap: 8,
+    marginTop: 12,
   },
   feltOff: { opacity: 0.45 },
   label: { color: "#f6d36b", fontWeight: "800", letterSpacing: 0.6, marginTop: 6 },
@@ -278,8 +303,8 @@ const styles = StyleSheet.create({
   dealBusy: { opacity: 0.7 },
   dealText: { color: "#1c1917", fontWeight: "900", fontSize: 18, letterSpacing: 0.4 },
   signInHint: { color: "#d6d3d1", fontSize: 15, marginBottom: 4 },
-  signedIn: { color: "#d6d3d1", fontSize: 14, marginBottom: 4 },
-  error: { color: "#fecaca", marginTop: 4 },
+  error: { color: "#fecaca", marginTop: 8 },
+  createButton: { marginTop: 0 },
   joinCode: {
     marginTop: 16,
     flexDirection: "row",

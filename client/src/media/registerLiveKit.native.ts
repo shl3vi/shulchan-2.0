@@ -1,6 +1,6 @@
 import { AudioSession, registerGlobals } from "@livekit/react-native";
 
-const leaveRequest = "Received leave request while trying to (re)connect";
+const ignored = ["Received leave request while trying to (re)connect", "NegotiationError"];
 let consolePatched = false;
 
 export function registerLiveKit() {
@@ -12,7 +12,7 @@ export function registerLiveKit() {
   consolePatched = true;
   const report = console.error.bind(console);
   console.error = (...args: unknown[]) => {
-    if (args.some((arg) => typeof arg === "string" && arg.includes(leaveRequest))) return;
+    if (args.some((arg) => typeof arg === "string" && ignored.some((text) => arg.includes(text)))) return;
     report(...args);
   };
 }
