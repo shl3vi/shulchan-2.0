@@ -6,7 +6,7 @@ import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { API_URL } from "@/game/api";
+import { API_URL, redeemHostCode } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
 import { loadHost, saveHost, type Host } from "@/game/hostStore";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
@@ -135,10 +135,13 @@ export default function HomeScreen() {
       );
       if (result.type !== "success") return;
       const url = new URL(result.url);
-      const token = url.searchParams.get("token");
-      const email = url.searchParams.get("email");
-      if (!token || !email) throw new Error(t("serverUnreachable"));
-      const next = { token, email };
+      const code = url.searchParams.get("code");
+      if (!code) throw new Error(t("serverUnreachable"));
+      const next = await redeemHostCode(code).catch(async (cause: unknown) => {
+        const saved = await loadHost();
+        if (saved) return saved;
+        throw cause;
+      });
       setHost(next);
       await saveHost(next);
     } catch (cause) {

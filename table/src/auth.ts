@@ -3,6 +3,12 @@ import { Router } from "express";
 import { redis } from "./store.js";
 
 const redirectUri = "https://shulchan.win/auth/callback";
+const CODE_SECONDS = 60;
+
+function hostTokenSeconds() {
+  const days = Number(process.env.HOST_TOKEN_DAYS ?? 7);
+  return Math.max(1, Number.isFinite(days) ? days : 7) * 24 * 60 * 60;
+}
 
 function returnUrl(value: string) {
   return value.startsWith("client://") || value.startsWith("exp://") ? value : "";
@@ -41,10 +47,10 @@ authRouter.get("/auth/google", async (req, res) => {
 });
 
 authRouter.get("/auth/callback", async (req, res) => {
-  const code = String(req.query.code ?? "");
+  const googleCode = String(req.query.code ?? "");
   const state = String(req.query.state ?? "");
   const back = returnUrl((await redis.getDel(`oauth:${state}`)) ?? "");
-  if (!code || !back) {
+  if (!googleCode || !back) {
     res.status(400).type("text").send("Sign-in expired. Try again.");
     return;
   }
@@ -52,7 +58,7 @@ authRouter.get("/auth/callback", async (req, res) => {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      code,
+      code: googleCode,
       client_id: clientId(),
       client_secret: clientSecret(),
       redirect_uri: redirectUri,
@@ -71,11 +77,31 @@ authRouter.get("/auth/callback", async (req, res) => {
     return;
   }
   const hostToken = randomBytes(32).toString("hex");
-  await redis.set(`host:${hostToken}`, JSON.stringify({ sub: info.sub, email: info.email }), { EX: 60 * 60 * 24 * 30 });
+  await redis.set(`host:${hostToken}`, JSON.stringify({ sub: info.sub, email: info.email }), { EX: hostTokenSeconds() });
+  const code = randomBytes(32).toString("hex");
+  await redis.set(`oauth-code:${code}`, JSON.stringify({ token: hostToken, email: info.email }), { EX: CODE_SECONDS });
   const done = new URL(back);
-  done.searchParams.set("token", hostToken);
-  done.searchParams.set("email", info.email);
+  done.searchParams.set("code", code);
   res.redirect(done.toString());
+});
+
+authRouter.post("/auth/session", async (req, res) => {
+  const code = String(req.body?.code ?? "");
+  if (!/^[a-f0-9]{64}$/.test(code)) {
+    res.status(400).json({ error: "Sign-in expired. Try again." });
+    return;
+  }
+  const raw = await redis.getDel(`oauth-code:${code}`);
+  if (!raw) {
+    res.status(401).json({ error: "Sign-in expired. Try again." });
+    return;
+  }
+  const session = JSON.parse(raw) as { token?: string; email?: string };
+  if (!session.token || !session.email) {
+    res.status(401).json({ error: "Sign-in expired. Try again." });
+    return;
+  }
+  res.json({ token: session.token, email: session.email });
 });
 
 export async function readHost(authorization: string | undefined) {

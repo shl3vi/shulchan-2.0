@@ -13,6 +13,19 @@ async function post<T>(path: string, body: unknown, headers?: Record<string, str
   return payload;
 }
 
+const pendingCodes = new Map<string, Promise<{ token: string; email: string }>>();
+
+/** The redirect carries a one-time code. Two screens can redeem the same code; only one request is sent. */
+export function redeemHostCode(code: string) {
+  const existing = pendingCodes.get(code);
+  if (existing) return existing;
+  const pending = post<{ token: string; email: string }>("/auth/session", { code }).finally(() => {
+    pendingCodes.delete(code);
+  });
+  pendingCodes.set(code, pending);
+  return pending;
+}
+
 export function createTable(smallBlind: number, buyIn: number, hostToken: string) {
   return post<{ gameId: string; adminSecret: string; password: string }>("/api/games", { smallBlind, buyIn }, {
     authorization: `Bearer ${hostToken}`,

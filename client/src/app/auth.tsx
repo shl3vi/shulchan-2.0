@@ -1,20 +1,25 @@
 import { useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { saveHost } from "@/game/hostStore";
+import { redeemHostCode } from "@/game/api";
+import { loadHost, saveHost } from "@/game/hostStore";
 
 export default function AuthReturn() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ token?: string; email?: string }>();
-  const token = typeof params.token === "string" ? params.token : "";
-  const email = typeof params.email === "string" ? params.email : "";
+  const params = useLocalSearchParams<{ code?: string }>();
+  const code = typeof params.code === "string" ? params.code : "";
 
   useEffect(() => {
-    if (!token || !email) {
+    if (!code) {
       router.replace("/");
       return;
     }
-    void saveHost({ token, email }).then(() => router.replace("/"));
-  }, [email, router, token]);
+    void redeemHostCode(code)
+      .then((host) => saveHost(host))
+      .catch(async () => {
+        if (await loadHost()) return;
+      })
+      .finally(() => router.replace("/"));
+  }, [code, router]);
 
   return null;
 }
