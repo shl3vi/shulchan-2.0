@@ -10,6 +10,11 @@ const MAX_SEATS = 9;
 // No 0/O or 1/I, so a code read aloud or copied by hand still matches.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+function joinLimit() {
+  const value = Number(process.env.JOIN_LIMIT ?? 20);
+  return Number.isInteger(value) && value > 0 ? value : 20;
+}
+
 function tableCode() {
   return Array.from(crypto.getRandomValues(new Uint8Array(6)), (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
 }
@@ -70,6 +75,11 @@ router.post("/:id/join", async (req, res) => {
     return;
   }
   try {
+    const attempt = await withTable(id, async (table) => {
+      table.joinAttempts = (table.joinAttempts ?? 0) + 1;
+      return table.joinAttempts;
+    });
+    if (attempt > joinLimit()) throw new JoinRefused(429, "This table is not taking more players");
     const player = await withTable(id, async (table) => {
       if (!table.password || password !== table.password) throw new JoinRefused(403, "Wrong password");
       const taken = new Set(table.players.map((player) => player.seat));

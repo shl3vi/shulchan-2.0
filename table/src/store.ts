@@ -17,6 +17,7 @@ export type TableRecord = {
   buyIn: number;
   password: string;
   hostEmail?: string;
+  joinAttempts?: number;
   players: SeatPlayer[];
 };
 
