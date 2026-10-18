@@ -110,7 +110,6 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
           gameId: table.gameId,
           playerId: player.id,
           playerSecret: player.secret,
-          password: table.password,
         });
       },
       async join(name, gameId, password) {
@@ -120,7 +119,6 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
           gameId: gameId.trim(),
           playerId: player.id,
           playerSecret: player.secret,
-          password,
         });
       },
       async leave() {

@@ -28,6 +28,7 @@ export type TableSnapshot = {
     isAdmin: boolean;
   } | null;
   buyIn: number;
+  password?: string;
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: EngineView["communityCards"] }[];
 };
@@ -69,6 +70,7 @@ export function snapshot(table: TableRecord, view: EngineView, viewerId?: string
         }
       : null,
     buyIn: table.buyIn,
+    ...(viewer && viewer.id === table.adminId ? { password: table.password } : {}),
     shownCards: view.shownCards ?? [],
     lastWinners: view.lastWinners.flatMap((winner) => {
       const player = bySeat.get(winner.seat);

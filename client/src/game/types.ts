@@ -31,11 +31,11 @@ export type TableSnapshot = {
   } | null;
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: Card[] }[];
+  password?: string;
 };
 
 export type Credentials = {
   gameId: string;
   playerId: string;
   playerSecret: string;
-  password: string;
 };

@@ -104,7 +104,10 @@ export default function TableScreen() {
   }
 
   function shareTable() {
-    const link = `${API_URL}/join?${new URLSearchParams({ game: credentials.gameId, password: credentials.password })}`;
+    const link = `${API_URL}/join?${new URLSearchParams({
+      game: credentials.gameId,
+      ...(state?.password ? { password: state.password } : {}),
+    })}`;
     Share.share({ message: t("shareMessage", { link }) });
   }
 
@@ -159,7 +162,7 @@ export default function TableScreen() {
             <Pressable style={styles.sheet} onPress={() => {}}>
               <Text style={styles.sheetTitle}>{t("tableInfo")}</Text>
               <CopyField label={t("tableId")} value={credentials.gameId} />
-              <CopyField label={t("password")} value={credentials.password} />
+              {state?.password ? <CopyField label={t("password")} value={state.password} /> : null}
               {state ? (
                 <Text style={styles.statsLine}>
                   {t("blindsAndBuyIn", { small: state.smallBlind, big: state.bigBlind, buyIn: state.buyIn })}
