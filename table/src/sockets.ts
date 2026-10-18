@@ -91,11 +91,10 @@ export function attachSockets(io: Server) {
 
     socket.on("rebuy", (body: { amount?: number }) => {
       const amount = Number(body?.amount);
-      if (!Number.isInteger(amount) || amount < 1) {
-        socket.emit("error", { message: "Buy-in must be a positive whole number" });
-        return;
-      }
       return change("Buy-in failed", async (current) => {
+        if (!Number.isInteger(amount) || amount < 1 || amount > current.buyIn) {
+          throw new Error("Buy-in must be a whole number up to the table buy-in");
+        }
         const seated = current.players.find((seat) => seat.id === player.id);
         if (!seated) throw new Error("Player not found");
         await addChips(tableId, player.seat, amount);

@@ -69,9 +69,10 @@ export default function TableScreen() {
 
   function startBuy(direction: -1 | 1) {
     stopBuy();
-    setBuyChips((value) => Math.max(1, value + direction * buyStep));
+    const cap = state?.buyIn ?? buyStep;
+    setBuyChips((value) => Math.min(cap, Math.max(1, value + direction * buyStep)));
     holdStart.current = setTimeout(() => {
-      hold.current = setInterval(() => setBuyChips((value) => Math.max(1, value + direction * buyStep)), 70);
+      hold.current = setInterval(() => setBuyChips((value) => Math.min(cap, Math.max(1, value + direction * buyStep))), 70);
     }, 320);
   }
 
