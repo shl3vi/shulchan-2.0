@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
@@ -215,10 +216,16 @@ export default function HomeScreen() {
         <Text style={styles.joinCodeText}>{t("createTable")}</Text>
       </Pressable>
       {creating && !host ? (
-        <View style={styles.felt}>
+        <View style={styles.signIn}>
           <Text style={[styles.signInHint, { textAlign: align }]}>{t("signInToCreate")}</Text>
-          <Pressable style={[styles.deal, busy && styles.dealBusy]} disabled={busy} onPress={signIn}>
-            <Text style={styles.dealText}>{t("signInGoogle")}</Text>
+          <Pressable
+            style={[styles.google, isRtl() && styles.googleRtl, busy && styles.googleBusy]}
+            disabled={busy}
+            onPress={signIn}
+            accessibilityRole="button"
+          >
+            <Image source={require("../../assets/images/google-g.png")} style={styles.googleG} contentFit="contain" />
+            <Text style={styles.googleText}>{t("signInGoogle")}</Text>
           </Pressable>
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
@@ -309,7 +316,34 @@ const styles = StyleSheet.create({
   deal: { marginTop: 12, backgroundColor: "#f6d36b", borderRadius: 24, paddingVertical: 14, alignItems: "center" },
   dealBusy: { opacity: 0.7 },
   dealText: { color: "#1c1917", fontWeight: "900", fontSize: 18, letterSpacing: 0.4 },
-  signInHint: { color: "#d6d3d1", fontSize: 15, marginBottom: 4 },
+  signIn: {
+    backgroundColor: "#000000",
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
+    padding: 18,
+    gap: 8,
+    marginTop: 12,
+  },
+  google: {
+    marginTop: 8,
+    minHeight: 40,
+    backgroundColor: "#131314",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#8E918F",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  googleRtl: { flexDirection: "row-reverse" },
+  googleBusy: { opacity: 0.7 },
+  googleG: { width: 20, height: 20 },
+  googleText: { color: "#E3E3E3", fontWeight: "500", fontSize: 14 },
+  signInHint: { color: "#E3E3E3", fontSize: 15, marginBottom: 4 },
   error: { color: "#fecaca", marginTop: 8 },
   createButton: { marginTop: 0 },
   joinCode: {
