@@ -8,6 +8,7 @@ export function startTableVideo(
   onTracks: (tracks: Map<string, VideoTrack>) => void,
   onMic: (on: boolean) => void,
   onDown: () => void,
+  desired: { camera: boolean; mic: boolean },
 ) {
   registerLiveKit();
   const room = new Room();
@@ -44,9 +45,11 @@ export function startTableVideo(
   room.on(RoomEvent.TrackSubscribed, sync);
   room.on(RoomEvent.TrackUnsubscribed, sync);
   room.on(RoomEvent.LocalTrackPublished, sync);
+  room.on(RoomEvent.LocalTrackUnpublished, sync);
   room.on(RoomEvent.Disconnected, () => {
     onTracks(new Map());
     onMic(false);
+    if (!stopped) onDown();
   });
 
   void (async () => {
@@ -58,14 +61,13 @@ export function startTableVideo(
         room.disconnect();
         return;
       }
-      await room.localParticipant.setCameraEnabled(true);
-      await room.localParticipant.setMicrophoneEnabled(false);
+      await room.localParticipant.setCameraEnabled(desired.camera);
+      await room.localParticipant.setMicrophoneEnabled(desired.mic);
       if (stopped) {
-        await room.localParticipant.setCameraEnabled(false);
         room.disconnect();
         return;
       }
-      onMic(false);
+      onMic(desired.mic);
       sync();
     } catch {
       shutdown(true);
@@ -75,13 +77,15 @@ export function startTableVideo(
   return {
     disconnect: shutdown,
     setMic(enabled: boolean) {
-      if (stopped) return;
-      void room.localParticipant.setMicrophoneEnabled(enabled).catch(() => shutdown(true));
+      if (stopped) return Promise.resolve();
       onMic(enabled);
+      return room.localParticipant.setMicrophoneEnabled(enabled).catch(() => {
+        onMic(false);
+      });
     },
     setCamera(enabled: boolean) {
-      if (stopped) return;
-      void room.localParticipant.setCameraEnabled(enabled).catch(() => shutdown(true));
+      if (stopped) return Promise.resolve();
+      return room.localParticipant.setCameraEnabled(enabled).then(() => sync());
     },
     mute(identity: string, muted: boolean) {
       room.remoteParticipants.get(identity)?.setVolume(muted ? 0 : 1);

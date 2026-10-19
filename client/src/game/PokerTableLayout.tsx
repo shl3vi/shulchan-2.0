@@ -15,6 +15,7 @@ export type SeatSlot = {
   isYou: boolean;
   winner?: boolean;
   video?: ReactNode;
+  cameraOn?: boolean;
 };
 
 export type PokerAction = "fold" | "check" | "call" | "bet" | "raise";
@@ -181,14 +182,86 @@ function WinnerFrame({ scale, children }: { scale: number; children: ReactNode }
   );
 }
 
+const CURTAIN_FOLDS = ["#800000", "#b30000", "#660000", "#cc0000", "#4d0000"];
+
+function SeatCurtain({ open }: { open: boolean }) {
+  const progress = useRef(new Animated.Value(0)).current;
+  const [width, setWidth] = useState(0);
+  const laidOut = useRef(false);
+
+  useEffect(() => {
+    if (width === 0) return;
+    const to = open ? 1 : 0;
+    if (!laidOut.current) {
+      laidOut.current = true;
+      if (!open) {
+        progress.setValue(0);
+        return;
+      }
+    }
+    Animated.timing(progress, {
+      toValue: to,
+      duration: 1200,
+      easing: Easing.bezier(0.77, 0, 0.175, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [open, progress, width]);
+
+  const half = width / 2;
+  const left = progress.interpolate({ inputRange: [0, 1], outputRange: [0, -half] });
+  const right = progress.interpolate({ inputRange: [0, 1], outputRange: [0, half] });
+
+  return (
+    <View
+      pointerEvents="none"
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 2, overflow: "hidden" }}
+    >
+      <Animated.View style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "50%", flexDirection: "row", transform: [{ translateX: left }] }}>
+        {CURTAIN_FOLDS.map((color) => (
+          <View key={`l-${color}`} style={{ flex: 1, backgroundColor: color }} />
+        ))}
+        <View style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: 3, backgroundColor: "#000", opacity: 0.3 }} />
+      </Animated.View>
+      <Animated.View style={{ position: "absolute", top: 0, bottom: 0, left: "50%", width: "50%", flexDirection: "row", transform: [{ translateX: right }] }}>
+        {CURTAIN_FOLDS.map((color) => (
+          <View key={`r-${color}`} style={{ flex: 1, backgroundColor: color }} />
+        ))}
+        <View style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: 3, backgroundColor: "#000", opacity: 0.3 }} />
+      </Animated.View>
+    </View>
+  );
+}
+
 function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
   const u = (n: number) => n * scale;
   const occupied = player != null;
+  const cameraOn = player?.cameraOn === true;
+  const videoRef = useRef(player?.video);
+  if (player?.video) videoRef.current = player.video;
+  const [showVideo, setShowVideo] = useState(cameraOn);
   const ring = player?.toAct ? "#f6d36b" : occupied ? "#44403c" : "#57534e";
-  const face = player?.video ?? (
-    <Text style={{ color: occupied ? "#fafaf9" : "#78716c", fontSize: u(16), fontWeight: "700" }}>
-      {occupied ? player.name.trim().slice(0, 1).toUpperCase() : "+"}
-    </Text>
+
+  useEffect(() => {
+    if (cameraOn) {
+      setShowVideo(true);
+      return;
+    }
+    const timer = setTimeout(() => setShowVideo(false), 1200);
+    return () => clearTimeout(timer);
+  }, [cameraOn]);
+
+  const face = (
+    <>
+      {occupied && showVideo && videoRef.current ? (
+        videoRef.current
+      ) : (
+        <Text style={{ color: occupied ? "#fafaf9" : "#78716c", fontSize: u(16), fontWeight: "700" }}>
+          {player ? player.name.trim().slice(0, 1).toUpperCase() : "+"}
+        </Text>
+      )}
+      {occupied ? <SeatCurtain open={cameraOn} /> : null}
+    </>
   );
   return (
     <View style={{ width: u(SEAT_W), height: u(SEAT_H), alignItems: "center" }}>

@@ -53,7 +53,6 @@ export default function TableScreen() {
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
   const [info, setInfo] = useState(false);
   const [buying, setBuying] = useState(false);
-  const [cameraAsked, setCameraAsked] = useState(false);
   const [seatId, setSeatId] = useState<string | null>(null);
   const [buyChips, setBuyChips] = useState(0);
   const hold = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -63,7 +62,6 @@ export default function TableScreen() {
   const buyStep = Math.max(1, state?.bigBlind ?? 1);
 
   useEffect(() => {
-    setCameraAsked(false);
     setSeatId(null);
   }, [credentials?.playerId]);
 
@@ -109,6 +107,7 @@ export default function TableScreen() {
       isYou,
       winner: winnerSeats.has(player.seat),
       video: track ? <SeatVideo track={track} /> : undefined,
+      cameraOn: isYou ? video.cameraOn : track != null,
     };
   }
 
@@ -256,31 +255,12 @@ export default function TableScreen() {
             ]}
           />
         </View>
-        {Platform.OS !== "web" && !cameraAsked && !video.live ? (
-          <View style={styles.cameraAsk}>
-            <Text style={styles.cameraAskText}>{t("cameraAsk")}</Text>
-            <View style={styles.cameraAskRow}>
-              <Pressable style={styles.cameraNo} onPress={() => setCameraAsked(true)}>
-                <Text style={styles.cameraNoText}>{t("notNow")}</Text>
-              </Pressable>
-              <Pressable
-                style={styles.cameraYes}
-                onPress={() => {
-                  setCameraAsked(true);
-                  video.start();
-                }}
-              >
-                <Text style={styles.cameraYesText}>{t("turnCameraOn")}</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-        {video.live ? (
+        {Platform.OS !== "web" ? (
           <Pressable style={[styles.cameraToggle, video.cameraOn && styles.cameraToggleOn]} onPress={() => video.setCamera(!video.cameraOn)}>
             <Ionicons name={video.cameraOn ? "videocam" : "videocam-off"} size={22} color={video.cameraOn ? "#1c1917" : "#fafaf9"} />
           </Pressable>
         ) : null}
-        {video.live ? <TalkButton on={video.micOn} onTalk={video.setMic} /> : null}
+        {Platform.OS !== "web" ? <TalkButton on={video.micOn} onTalk={video.setMic} /> : null}
         <Modal visible={seatId != null} transparent animationType="fade" onRequestClose={() => setSeatId(null)}>
           <Pressable style={styles.sheetBackdrop} onPress={() => setSeatId(null)}>
             <Pressable style={styles.sheet} onPress={() => {}}>
@@ -395,25 +375,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   errorText: { color: "#fecaca", flex: 1 },
-  cameraAsk: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 16,
-    zIndex: 9,
-    backgroundColor: "rgba(12,10,9,0.94)",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#44403c",
-    padding: 12,
-    gap: 10,
-  },
-  cameraAskText: { color: "#fafaf9", fontSize: 16, fontWeight: "700" },
-  cameraAskRow: { flexDirection: "row", gap: 8 },
-  cameraNo: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, backgroundColor: "#292524" },
-  cameraNoText: { color: "#fafaf9", fontWeight: "800" },
-  cameraYes: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 12, backgroundColor: "#f6d36b" },
-  cameraYesText: { color: "#1c1917", fontWeight: "800" },
   cameraToggle: {
     position: "absolute",
     right: 76,

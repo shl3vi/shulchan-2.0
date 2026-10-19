@@ -5,8 +5,8 @@ import type { Credentials } from "@/game/types";
 
 type VideoHandle = {
   disconnect: () => void;
-  setMic: (enabled: boolean) => void;
-  setCamera: (enabled: boolean) => void;
+  setMic: (enabled: boolean) => Promise<void>;
+  setCamera: (enabled: boolean) => Promise<void>;
   mute: (identity: string, muted: boolean) => void;
   hide: (identity: string, hidden: boolean) => void;
 };
@@ -21,6 +21,7 @@ export function useTableVideo(credentials: Credentials | null) {
   const handle = useRef<VideoHandle | null>(null);
   const starting = useRef(false);
   const generation = useRef(0);
+  const desired = useRef({ camera: false, mic: false });
   const credentialsRef = useRef(credentials);
   credentialsRef.current = credentials;
 
@@ -40,6 +41,7 @@ export function useTableVideo(credentials: Credentials | null) {
   }, [gameId, playerId, playerSecret]);
 
   function reset() {
+    desired.current = { camera: false, mic: false };
     setTracks(new Map());
     setMicOn(false);
     setCameraOn(false);
@@ -48,7 +50,7 @@ export function useTableVideo(credentials: Credentials | null) {
     setHidden(new Set());
   }
 
-  function start() {
+  function ensure() {
     const current = credentialsRef.current;
     if (Platform.OS === "web" || !current || handle.current || starting.current) return;
     const ticket = generation.current;
@@ -59,10 +61,9 @@ export function useTableVideo(credentials: Credentials | null) {
       const session = mod.startTableVideo(current, setTracks, setMicOn, () => {
         handle.current = null;
         reset();
-      });
+      }, desired.current);
       handle.current = session;
       setLive(true);
-      setCameraOn(true);
     }).catch(() => {
       starting.current = false;
       reset();
@@ -78,15 +79,29 @@ export function useTableVideo(credentials: Credentials | null) {
     live,
     muted,
     hidden,
-    start,
     setMic(enabled: boolean) {
-      if (!handle.current) return;
-      handle.current.setMic(enabled);
+      desired.current.mic = enabled;
+      setMicOn(enabled);
+      if (!handle.current) {
+        if (enabled) ensure();
+        return;
+      }
+      void handle.current.setMic(enabled).then(() => {
+        if (!enabled) return;
+        if (!desired.current.mic) setMicOn(false);
+      });
     },
     setCamera(enabled: boolean) {
-      if (!handle.current) return;
-      handle.current.setCamera(enabled);
+      desired.current.camera = enabled;
       setCameraOn(enabled);
+      if (!handle.current) {
+        if (enabled) ensure();
+        return;
+      }
+      void handle.current.setCamera(enabled).catch(() => {
+        desired.current.camera = false;
+        setCameraOn(false);
+      });
     },
     toggleMute(identity: string) {
       const next = !muted.has(identity);
