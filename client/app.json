@@ -8,12 +8,13 @@
     "scheme": "client",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/AppIcon.icon",
       "infoPlist": {
         "NSCameraUsageDescription": "Show your seat at the table.",
         "NSMicrophoneUsageDescription": "Talk at the table."
       },
-      "bitcode": false
+      "bitcode": false,
+      "bundleIdentifier": "com.anonymous.shulchan"
     },
     "android": {
       "permissions": [
@@ -29,10 +30,8 @@
         "android.permission.BLUETOOTH"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#997000",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.shulchan"
@@ -48,11 +47,13 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#4C3500",
+          "image": "./assets/images/splash.jpg",
+          "resizeMode": "cover",
+          "imageWidth": 288
         }
       ],
+      "./plugins/withSplashBackground",
       [
         "react-native-google-mobile-ads",
         {
