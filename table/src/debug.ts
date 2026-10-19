@@ -220,6 +220,7 @@ export function debugRouter(config: DebugConfig) {
   });
 
   router.get("/:token", (_req, res) => {
+    res.setHeader("cache-control", "no-store");
     res.type("html").send(debugPage());
   });
 
@@ -314,8 +315,8 @@ function debugPage() {
   button.ghost { background: #1c1917cc; color: #fafaf9; border: 1px solid #44403c; }
   button:disabled { opacity: 0.4; cursor: default; }
   input { background: #0c0a09; color: #fafaf9; border: 1px solid #44403c; border-radius: 8px; padding: 6px 8px; width: 72px; }
-  .stage { position: relative; height: min(720px, calc(100vh - 150px)); min-height: 560px; margin-top: 4px; }
-  .rail { position: absolute; left: 18%; right: 18%; top: 16%; bottom: 16%; border-radius: 50%; background: #5c3a1e; box-shadow: 0 16px 40px rgba(0,0,0,.45); }
+  .stage { position: relative; height: calc(100vh - 132px); min-height: 520px; margin-top: 4px; }
+  .rail { position: absolute; left: 8%; right: 8%; top: 8%; bottom: 12%; border-radius: 50%; background: #5c3a1e; box-shadow: 0 16px 40px rgba(0,0,0,.45); }
   .felt { position: absolute; inset: 14px; border-radius: 50%; background: radial-gradient(ellipse at center, #249154 0%, #0e5a32 72%, #083d22 100%); box-shadow: inset 0 0 0 2px rgba(255,255,255,.08); }
   .center { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 2; }
   .board, .holes { display: flex; gap: 4px; }
@@ -360,7 +361,7 @@ function debugPage() {
   const suits = { spades: "♠", hearts: "♥", diamonds: "♦", clubs: "♣" };
   const spots = [0, 40, 80, 120, 160, 200, 240, 280, 320].map((angle) => {
     const rad = angle * Math.PI / 180;
-    return [50 - Math.sin(rad) * 40, 50 + Math.cos(rad) * 36];
+    return [50 - Math.sin(rad) * 40, 48 + Math.cos(rad) * 38];
   });
   const error = document.getElementById("error");
   let state = null;
@@ -405,7 +406,7 @@ function debugPage() {
     rail.append(el("div", "felt"));
     stage.append(rail);
     const center = el("div", "center");
-    center.style.top = "50%";
+    center.style.top = "48%";
     center.append(el("div", "pot", "Pot " + (committed + live)));
     const board = el("div", "board");
     for (let index = 0; index < 5; index += 1) board.append(cardEl(state.communityCards[index]));
@@ -458,7 +459,7 @@ function debugPage() {
       stage.append(seat);
       if (player.betSize > 0) {
         const chip = el("div", "chip", String(player.betSize));
-        place(chip, [spot[0] + (50 - spot[0]) * 0.45, spot[1] + (50 - spot[1]) * 0.45]);
+        place(chip, [spot[0] + (50 - spot[0]) * 0.38, spot[1] + (48 - spot[1]) * 0.38]);
         stage.append(chip);
       }
     });
