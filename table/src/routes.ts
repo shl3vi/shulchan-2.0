@@ -5,6 +5,7 @@ import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
 import { playerName } from "./name.js";
 import { createBody, joinBody, liveKitBody, readSchema } from "./schema.js";
+import { debugConfig } from "./debug.js";
 import { insertTable, publishTable, readTable, redis, tableKey, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
@@ -87,11 +88,13 @@ router.post("/:id/join", async (req, res) => {
     return;
   }
   try {
-    const attempt = await withTable(id, async (table) => {
-      table.joinAttempts = (table.joinAttempts ?? 0) + 1;
-      return table.joinAttempts;
-    });
-    if (attempt > joinLimit()) throw new JoinRefused(429, "This table is not taking more players");
+    if (debugConfig()?.tableId !== id) {
+      const attempt = await withTable(id, async (table) => {
+        table.joinAttempts = (table.joinAttempts ?? 0) + 1;
+        return table.joinAttempts;
+      });
+      if (attempt > joinLimit()) throw new JoinRefused(429, "This table is not taking more players");
+    }
     const player = await withTable(id, async (table) => {
       if (!table.password || password !== table.password) throw new JoinRefused(403, "Wrong password");
       const taken = new Set(table.players.map((player) => player.seat));

@@ -3,6 +3,7 @@ import helmet from "helmet";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { authRouter } from "./auth.js";
+import { debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
 import { allowedOrigins, cors, rateLimit } from "./http.js";
 import { router } from "./routes.js";
 import { attachSockets } from "./sockets.js";
@@ -48,6 +49,12 @@ app.get("/join", (req, res) => {
 </script>`);
 });
 app.use("/api/games", router);
+
+const debug = debugConfig();
+if (debug) {
+  app.use("/dev/dashboard", debugRouter(debug));
+  await ensureDebugTable(debug);
+}
 
 const httpServer = createServer(app);
 const origins = allowedOrigins();
