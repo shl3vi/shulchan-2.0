@@ -6,7 +6,7 @@ Poker table. The table service owns seats and sockets. The poker engine owns the
 npm run dev
 ```
 
-That starts Redis, LiveKit, the poker engine, the table service, and a Cloudflare tunnel. Then, from `client/`:
+That starts Redis, LiveKit, the poker engine, the backgammon engine, the table service, and a Cloudflare tunnel. Then, from `client/`:
 
 ```bash
 npx expo run:android
@@ -20,7 +20,7 @@ LiveKit runs in Docker on this Mac. Phones must be on the same Wi-Fi so the vide
 
 ## Cloud
 
-Railway hosts Redis and one web service (`shulchan-server`) that runs the table and the poker engine together. The engine listens on localhost only and accepts requests carrying a token generated at each boot. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
+Railway hosts Redis, the table service (`shulchan-server`, which also runs the poker engine on localhost), and a separate backgammon engine service. The poker engine accepts requests carrying a token generated at each boot. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
 
 An installable APK, from `client/`:
 

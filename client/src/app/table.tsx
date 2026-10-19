@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AdBanner } from "@/ads/AdBanner";
 import { tableAdAllowed } from "@/ads/placement";
@@ -47,6 +47,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
 
 export default function TableScreen() {
   const router = useRouter();
+  const { kind } = useLocalSearchParams<{ kind?: string }>();
   const insets = useSafeAreaInsets();
   const { credentials, state, error, dismissError, startHand, act, leave, removePlayer, transferAdmin, rebuy } = useGameSession();
   const video = useTableVideo(credentials);
@@ -81,6 +82,20 @@ export default function TableScreen() {
     }, 320);
   }
 
+  if (kind === "backgammon") {
+    return (
+      <View style={styles.screen}>
+        <StatusBar style="light" />
+        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
+          <Ionicons name="home" size={20} color="#fafaf9" />
+        </Pressable>
+        <View style={styles.captionWrap}>
+          <Text style={styles.caption}>backgammon</Text>
+        </View>
+      </View>
+    );
+  }
+
   if (!credentials) {
     return (
       <View style={styles.screen}>
@@ -111,9 +126,10 @@ export default function TableScreen() {
     };
   }
 
+  const gameId = credentials.gameId;
   function shareTable() {
     const link = `${API_URL}/join?${new URLSearchParams({
-      game: credentials.gameId,
+      game: gameId,
       ...(state?.password ? { password: state.password } : {}),
     })}`;
     Share.share({ message: t("shareMessage", { link }) });
@@ -304,6 +320,8 @@ export default function TableScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#07110d", ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
+  captionWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  caption: { color: "#f6d36b", fontSize: 36, fontWeight: "900", letterSpacing: 1 },
   meta: { color: "#d6d3d1", padding: 24 },
   stage: { flex: 1, minHeight: 0 },
   ad: { height: 50, width: "100%", backgroundColor: "#292524", alignItems: "center", overflow: "hidden" },

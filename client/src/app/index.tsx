@@ -119,6 +119,7 @@ export default function HomeScreen() {
   const [nameMissing, setNameMissing] = useState(false);
   const [host, setHost] = useState<Host | null>(null);
   const [creating, setCreating] = useState(false);
+  const [kind, setKind] = useState<"poker" | null>(null);
   const nameInput = useRef<TextInput>(null);
 
   const refreshHost = useCallback(() => {
@@ -156,12 +157,16 @@ export default function HomeScreen() {
   async function logout() {
     setHost(null);
     setCreating(false);
+    setKind(null);
     setError(null);
     await saveHost(null);
   }
 
   function openCreate() {
-    setCreating((open) => !open);
+    setCreating((open) => {
+      if (open) setKind(null);
+      return !open;
+    });
   }
 
   async function create() {
@@ -230,7 +235,20 @@ export default function HomeScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : null}
-      {creating && host ? (
+      {creating && host && kind == null ? (
+        <View style={[styles.kindGrid, isRtl() && styles.kindGridRtl]}>
+          <Pressable
+            style={styles.kindCard}
+            onPress={() => router.push({ pathname: "/table", params: { kind: "backgammon" } })}
+          >
+            <Text style={styles.kindTitle}>{t("backgammonTable")}</Text>
+          </Pressable>
+          <Pressable style={styles.kindCard} onPress={() => setKind("poker")}>
+            <Text style={styles.kindTitle}>{t("pokerTable")}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {creating && host && kind === "poker" ? (
         <View style={[styles.felt, seated && styles.feltOff]}>
           <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
           <TextInput
@@ -346,6 +364,20 @@ const styles = StyleSheet.create({
   signInHint: { color: "#E3E3E3", fontSize: 15, marginBottom: 4 },
   error: { color: "#fecaca", marginTop: 8 },
   createButton: { marginTop: 0 },
+  kindGrid: { flexDirection: "row", gap: 12, marginTop: 12 },
+  kindGridRtl: { flexDirection: "row-reverse" },
+  kindCard: {
+    flex: 1,
+    minHeight: 120,
+    backgroundColor: "#14532d",
+    borderRadius: 24,
+    borderWidth: 3,
+    borderColor: "#7c4a1e",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+  },
+  kindTitle: { color: "#f6d36b", fontWeight: "900", fontSize: 18, textAlign: "center" },
   joinCode: {
     marginTop: 16,
     flexDirection: "row",
