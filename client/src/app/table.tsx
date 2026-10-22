@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -10,14 +10,44 @@ import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
 import { ActionDock, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
-import type { Card } from "@/game/types";
+import type { Card, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
 import { answerDouble, move as playMove, newGame, offerDouble, opponent, roll, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
 import { t } from "@/i18n";
 
-function PlayerCircle({ name, video, nameAbove }: { name: string; video?: ReactNode; nameAbove?: boolean }) {
+function WinnerSparkles() {
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 3600, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [spin]);
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  return (
+    <Animated.View pointerEvents="none" style={[styles.sparkOrbit, { transform: [{ rotate }] }]}>
+      {Array.from({ length: 8 }, (_, index) => {
+        const angle = (index / 8) * Math.PI * 2;
+        return (
+          <Text
+            key={index}
+            style={[
+              styles.spark,
+              { left: 72 + Math.cos(angle) * 64, top: 72 + Math.sin(angle) * 64 },
+            ]}
+          >
+            ✦
+          </Text>
+        );
+      })}
+    </Animated.View>
+  );
+}
+
+function PlayerCircle({ name, video, nameAbove, celebrate }: { name: string; video?: ReactNode; nameAbove?: boolean; celebrate?: boolean }) {
   const label = (
     <Text style={styles.playerName} numberOfLines={1}>
       {name}
@@ -27,7 +57,10 @@ function PlayerCircle({ name, video, nameAbove }: { name: string; video?: ReactN
   return (
     <View style={styles.player}>
       {nameAbove ? label : null}
-      {circle}
+      <View style={styles.circleWrap}>
+        {celebrate ? <WinnerSparkles /> : null}
+        {circle}
+      </View>
       {nameAbove ? null : label}
     </View>
   );
@@ -52,6 +85,7 @@ function BackgammonTable({
   onLeave,
   myColor,
   serverGame,
+  wins,
   emit,
   subscribe,
 }: {
@@ -73,6 +107,7 @@ function BackgammonTable({
   onLeave: () => void;
   myColor: Color | null;
   serverGame?: unknown;
+  wins?: TableSnapshot["backgammonLog"];
   emit: (event: string, body: unknown) => void;
   subscribe: (event: string, handler: (body: unknown) => void) => () => void;
 }) {
@@ -80,6 +115,7 @@ function BackgammonTable({
   const insets = useSafeAreaInsets();
   const [info, setInfo] = useState(false);
   const [rules, setRules] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
   const [seat, setSeat] = useState(false);
   const [game, setGame] = useState<Game>(() => newGame());
   const [selected, setSelected] = useState<number | "bar" | null>(null);
@@ -89,6 +125,8 @@ function BackgammonTable({
   const actor: Color | null = game.phase === "over" ? null : game.phase === "offer" ? opponent(game.turn) : game.turn;
   const iPlay = myColor != null && actor === myColor;
   const actorName = actor == null ? "" : actor === myColor ? youName : otherName;
+  const winnerName = game.winner == null ? "" : game.winner === myColor ? youName : otherName;
+  const won = game.phase === "over" && game.winner != null;
 
   function shareTable() {
     const link = gameId ? `${gameId}${password ? ` · ${password}` : ""}` : "backgammon";
@@ -106,6 +144,13 @@ function BackgammonTable({
     setSelected(null);
     setGame(serverGame as Game);
   }, [serverGame]);
+
+  const recorded = useRef(false);
+  useEffect(() => {
+    if (!won || recorded.current || wins == null || wins.length > 0) return;
+    recorded.current = true;
+    emit("bg", game);
+  }, [won, wins, game, emit]);
 
   useEffect(() => {
     return subscribe("bg", (body) => {
@@ -127,16 +172,16 @@ function BackgammonTable({
       <StatusBar style="light" />
       <View style={styles.stage}>
         <View style={[styles.bgColumn, { paddingTop: insets.top + 52 }]}>
-          <View style={[styles.seatRow, styles.topSeat, actor != null && actor !== myColor && styles.seatOn]}>
+          <View style={[styles.seatRow, styles.topSeat, ((actor != null && actor !== myColor) || (won && game.winner !== myColor)) && styles.seatOn]}>
             <Pressable disabled={!otherId} onPress={() => setSeat(true)}>
-              <PlayerCircle name={otherName} video={topVideo} />
+              <PlayerCircle name={otherName} video={topVideo} celebrate={won && game.winner !== myColor} />
             </Pressable>
           </View>
           <View style={styles.boardAnchor}>
-            <BackgammonBoard game={game} selected={selected} enabled={iPlay} onSelect={setSelected} onMove={onMove} />
-            <View style={styles.diceCup} pointerEvents="none">
+            <BackgammonBoard game={game} selected={selected} enabled={iPlay} onSelect={setSelected} onMove={onMove} onAgain={won ? () => update(newGame()) : undefined} />
+            {won ? null : <View style={styles.diceCup} pointerEvents="none">
               <DiceCup
-                faces={cupFaces}
+                faces={rolling ? cupFaces : game.shown}
                 rolling={rolling}
                 onDone={() => {
                   const next = pendingRoll.current;
@@ -145,8 +190,13 @@ function BackgammonTable({
                   if (next) update(next);
                 }}
               />
-            </View>
-            <View style={styles.tools}>
+            </View>}
+            {won ? (
+              <Text style={styles.winCaption}>
+                {t("bgWon", { name: winnerName, color: t(game.winner === "white" ? "bgLight" : "bgDark"), points: game.score })}
+              </Text>
+            ) : null}
+            {won ? null : <View style={styles.tools}>
             {iPlay && (game.phase === "opening" || game.phase === "roll") ? (
               <Pressable
                 style={styles.tool}
@@ -175,17 +225,11 @@ function BackgammonTable({
                 </Pressable>
               </>
             ) : null}
-            {iPlay && game.phase === "over" ? (
-              <Pressable style={styles.tool} onPress={() => update(newGame())}>
-                <Text style={styles.toolText}>{t("newGame")}</Text>
-              </Pressable>
-            ) : (
-              <Text style={styles.turnLabel}>{actorName ? t("bgTurn", { name: actorName }) : ""}</Text>
-            )}
-            </View>
+            <Text style={styles.turnLabel}>{actorName ? t("bgTurn", { name: actorName }) : ""}</Text>
+            </View>}
           </View>
-          <View style={[styles.seatRow, styles.bottomSeat, actor != null && actor === myColor && styles.seatOn]}>
-            <PlayerCircle name={youName} video={bottomVideo} nameAbove />
+          <View style={[styles.seatRow, styles.bottomSeat, ((actor != null && actor === myColor) || (won && game.winner === myColor)) && styles.seatOn]}>
+            <PlayerCircle name={youName} video={bottomVideo} nameAbove celebrate={won && game.winner === myColor} />
           </View>
         </View>
         <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
@@ -196,6 +240,7 @@ function BackgammonTable({
             items={[
               { label: t("tableInfo"), icon: "info", onPress: () => setInfo(true) },
               { label: t("rules"), icon: "stats", onPress: () => setRules(true) },
+              { label: t("winLog"), icon: "stats", onPress: () => setLogOpen(true) },
               { label: t("shareTable"), icon: "share", onPress: shareTable },
               {
                 label: t("leaveGame"),
@@ -206,6 +251,24 @@ function BackgammonTable({
             ]}
           />
         </View>
+        <Modal visible={logOpen} transparent animationType="fade" onRequestClose={() => setLogOpen(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setLogOpen(false)}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <Text style={styles.sheetTitle}>{t("winLog")}</Text>
+              {(wins ?? []).length === 0 ? <Text style={styles.statsLine}>{t("winLogEmpty")}</Text> : (wins ?? []).map((entry, index) => {
+                const winnerName = entry.winner === "white" ? entry.whiteName : entry.blackName;
+                return (
+                  <Text key={`${index}-${entry.points}`} style={styles.statsLine}>
+                    {`${entry.whiteName} (${t("bgLight")}), ${entry.blackName} (${t("bgDark")}), ${winnerName}, ${entry.points}`}
+                  </Text>
+                );
+              })}
+              <Pressable style={styles.cancel} onPress={() => setLogOpen(false)}>
+                <Text style={styles.cancelText}>{t("cancel")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
         <Modal visible={rules} transparent animationType="fade" onRequestClose={() => setRules(false)}>
           <Pressable style={styles.sheetBackdrop} onPress={() => setRules(false)}>
             <Pressable style={styles.sheet} onPress={() => {}}>
@@ -348,11 +411,12 @@ export default function TableScreen() {
       <BackgammonTable
         topVideo={topTrack ? <SeatVideo track={topTrack} /> : undefined}
         bottomVideo={bottomTrack ? <SeatVideo track={bottomTrack} /> : undefined}
-        youName={you?.name ?? ""}
+        youName={ordered.find((player) => player.id === youId)?.name ?? ""}
         otherName={other?.name ?? ""}
         otherId={other?.id}
         myColor={myColor}
         serverGame={state?.backgammon}
+        wins={state?.backgammonLog}
         emit={emit}
         subscribe={subscribe}
         micOn={video.micOn}
@@ -513,7 +577,9 @@ export default function TableScreen() {
             <Text style={styles.errorText}>
               {error === "Bet size is outside the allowed range" && you?.chipRange
                 ? t("betOutOfRange", { min: you.chipRange.min, max: you.chipRange.max })
-                : error}
+                : error === "At least two players need chips to deal."
+                  ? t("needTwoWithMoney")
+                  : error}
             </Text>
             <Pressable onPress={dismissError} hitSlop={8}>
               <Ionicons name="close" size={18} color="#fecaca" />
@@ -622,6 +688,19 @@ const styles = StyleSheet.create({
   tool: { backgroundColor: "#f6d36b", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8 },
   toolText: { color: "#1c1917", fontWeight: "900" },
   turnLabel: { color: "#f6d36b", fontWeight: "800" },
+  circleWrap: { width: 96, height: 96, alignItems: "center", justifyContent: "center" },
+  sparkOrbit: { position: "absolute", width: 160, height: 160, left: -32, top: -32 },
+  spark: { position: "absolute", color: "#f6d36b", fontSize: 16, fontWeight: "900" },
+  winCaption: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    bottom: -36,
+    color: "#f6d36b",
+    textAlign: "center",
+    fontSize: 18,
+    fontWeight: "800",
+  },
   circle: {
     width: 96,
     height: 96,

@@ -1,8 +1,5 @@
 {
   "mcpServers": {
-    "railway": {
-      "url": "https://mcp.railway.com"
-    },
     "cloudflare-api": {
       "url": "https://mcp.cloudflare.com/mcp"
     }

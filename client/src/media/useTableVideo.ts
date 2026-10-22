@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import type { VideoTrack } from "livekit-client";
 import type { Credentials } from "@/game/types";
+import { allowCapture } from "@/media/capturePermission";
 
 type VideoHandle = {
   disconnect: () => void;
@@ -80,28 +81,41 @@ export function useTableVideo(credentials: Credentials | null) {
     muted,
     hidden,
     setMic(enabled: boolean) {
-      desired.current.mic = enabled;
-      setMicOn(enabled);
-      if (!handle.current) {
-        if (enabled) ensure();
-        return;
-      }
-      void handle.current.setMic(enabled).then(() => {
-        if (!enabled) return;
-        if (!desired.current.mic) setMicOn(false);
-      });
+      void (async () => {
+        if (enabled && !(await allowCapture("microphone"))) enabled = false;
+        desired.current.mic = enabled;
+        setMicOn(enabled);
+        if (!enabled) {
+          void handle.current?.setMic(false);
+          return;
+        }
+        if (!handle.current) {
+          ensure();
+          return;
+        }
+        void handle.current.setMic(true).then(() => {
+          if (!desired.current.mic) setMicOn(false);
+        });
+      })();
     },
     setCamera(enabled: boolean) {
-      desired.current.camera = enabled;
-      setCameraOn(enabled);
-      if (!handle.current) {
-        if (enabled) ensure();
-        return;
-      }
-      void handle.current.setCamera(enabled).catch(() => {
-        desired.current.camera = false;
-        setCameraOn(false);
-      });
+      void (async () => {
+        if (enabled && !(await allowCapture("camera"))) enabled = false;
+        desired.current.camera = enabled;
+        setCameraOn(enabled);
+        if (!enabled) {
+          void handle.current?.setCamera(false);
+          return;
+        }
+        if (!handle.current) {
+          ensure();
+          return;
+        }
+        void handle.current.setCamera(true).catch(() => {
+          desired.current.camera = false;
+          setCameraOn(false);
+        });
+      })();
     },
     toggleMute(identity: string) {
       const next = !muted.has(identity);

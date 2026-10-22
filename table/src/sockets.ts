@@ -2,7 +2,7 @@ import type { Server, Socket } from "socket.io";
 import { actPoker, addChips, readPoker, startPoker } from "./engine.js";
 import { snapshot } from "./snapshot.js";
 import { assignAdmin, dropRemovedPlayers, releaseSeat } from "./players.js";
-import { readBackgammon } from "./backgammon.js";
+import { noteBackgammonWin, readBackgammon } from "./backgammon.js";
 import { actBody, playerBody, readSchema, rebuyBody } from "./schema.js";
 import { publishTable, readTable, subscriber, withTable, type TableRecord } from "./store.js";
 
@@ -126,6 +126,7 @@ export function attachSockets(io: Server) {
       }
       return change("Backgammon move failed", async (current) => {
         if (current.kind !== "backgammon") throw new Error("This table is not backgammon");
+        noteBackgammonWin(current, game);
         current.backgammon = game;
       });
     });

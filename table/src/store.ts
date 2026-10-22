@@ -20,6 +20,7 @@ export type TableRecord = {
   joinAttempts?: number;
   kind?: "poker" | "backgammon";
   backgammon?: unknown;
+  backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
   players: SeatPlayer[];
 };
 

@@ -1,6 +1,7 @@
 import { Room, RoomEvent, Track, type VideoTrack } from "livekit-client";
 import { liveKitToken } from "@/game/api";
 import type { Credentials } from "@/game/types";
+import { allowCapture } from "@/media/capturePermission";
 import { registerLiveKit } from "@/media/registerLiveKit";
 
 export function startTableVideo(
@@ -61,8 +62,12 @@ export function startTableVideo(
         room.disconnect();
         return;
       }
-      await room.localParticipant.setCameraEnabled(desired.camera);
-      await room.localParticipant.setMicrophoneEnabled(desired.mic);
+      if (desired.camera && (await allowCapture("camera"))) {
+        await room.localParticipant.setCameraEnabled(true);
+      }
+      if (desired.mic && (await allowCapture("microphone"))) {
+        await room.localParticipant.setMicrophoneEnabled(true);
+      }
       if (stopped) {
         room.disconnect();
         return;

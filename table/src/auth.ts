@@ -118,5 +118,17 @@ export async function readHost(authorization: string | undefined) {
   const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
   if (!token) return null;
   const raw = await redis.get(`host:${token}`);
-  return raw ? (JSON.parse(raw) as { sub: string; email: string }) : null;
+  if (raw) return JSON.parse(raw) as { sub: string; email: string };
+  // Local dev cannot reach Railway's private Redis. A token that production accepts is remembered here.
+  const upstream = process.env.AUTH_UPSTREAM;
+  if (!upstream) return null;
+  const response = await fetch(`${upstream}/api/games`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: "{}",
+  });
+  if (response.status !== 400) return null;
+  const host = { sub: "upstream", email: "signed-in" };
+  await redis.set(`host:${token}`, JSON.stringify(host), { EX: hostTokenSeconds() });
+  return host;
 }

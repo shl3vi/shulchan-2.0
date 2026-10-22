@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shulchan — monitoring and analysis plan</title>
+<style>
+  :root {
+    --ink: #1c1712;
+    --muted: #5c5348;
+    --line: #e4d8c8;
+    --paper: #f7f1e8;
+    --card: #fffdf9;
+    --felt: #1f4d3a;
+    --felt-soft: #e7f2eb;
+    --amber: #8a5a12;
+    --amber-soft: #f8edd8;
+    --red: #8c2f2f;
+    --red-soft: #f8e8e4;
+    --blue: #1e4a6e;
+    --blue-soft: #e6eef5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 16px/1.5 "Iowan Old Style", Palatino, Georgia, serif;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  header {
+    background: var(--felt);
+    color: #f4efe6;
+    padding: 48px 24px 36px;
+  }
+  header, main { max-width: 980px; margin: 0 auto; }
+  header { max-width: none; }
+  header .wrap, main { max-width: 980px; margin-left: auto; margin-right: auto; }
+  main { padding: 32px 24px 80px; }
+  h1 { font-size: 2.1rem; font-weight: 600; margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 1.45rem; margin: 40px 0 8px; }
+  h3 { font-size: 1.05rem; margin: 28px 0 8px; }
+  p.lead { margin: 0; max-width: 42rem; color: #d9e6de; }
+  .meta { margin-top: 18px; font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; color: #c5d6cc; }
+  nav {
+    display: flex; flex-wrap: wrap; gap: 8px 14px;
+    margin: 28px 0 8px;
+    font: 13px/1.3 ui-sans-serif, system-ui, sans-serif;
+  }
+  nav a { color: #1f4d3a; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    font: 13.5px/1.4 ui-sans-serif, system-ui, sans-serif;
+    margin: 12px 0 8px;
+  }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: #f3ebe1; }
+  code { font: 12.5px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .tag {
+    display: inline-block;
+    font: 11px/1 ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    border-radius: 999px;
+  }
+  .product { background: var(--felt-soft); color: var(--felt); }
+  .ops { background: var(--blue-soft); color: var(--blue); }
+  .sec { background: var(--red-soft); color: var(--red); }
+  .funnel { background: var(--amber-soft); color: var(--amber); }
+  .note {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--felt);
+    padding: 12px 14px;
+    margin: 12px 0;
+  }
+  ul { padding-left: 1.2rem; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Monitoring and analysis</h1>
+    <p class="lead">What Shulchan should record so we can see whether people open tables, sit down, play a hand or a game, stay on video, and where the service fails.</p>
+    <p class="meta">Client (Expo) · table service · poker engine · backgammon engine · LiveKit · Redis · Google host sign-in. No passwords, player secrets, admin secrets, host tokens, or LiveKit tokens in any event or log.</p>
+  </div>
+</header>
+<main>
+<nav>
+  <a href="#questions">Questions</a>
+  <a href="#rules">Rules</a>
+  <a href="#identity">Identity</a>
+  <a href="#events">Product events</a>
+  <a href="#logs">Service logs</a>
+  <a href="#metrics">Metrics</a>
+  <a href="#views">Views</a>
+</nav>
+
+<h2 id="questions">Questions this system answers</h2>
+<ul>
+  <li>How many hosts sign in, open a poker table, or open a backgammon table, and how many guests join with a code and password.</li>
+  <li>Where join fails: wrong password, full table, join limit, missing table, bad name.</li>
+  <li>Whether a seated table actually starts a hand or a backgammon game, and how long a session lasts.</li>
+  <li>Who leaves, who is removed, and whether admin is transferred before the host disappears.</li>
+  <li>Whether video connects, drops, or is unavailable (503) on a given table.</li>
+  <li>Socket rejects, action errors, engine errors, and Redis misses, tied to a table id and a request, without card or dice values that identify a private game.</li>
+</ul>
+
+<h2 id="rules">Rules</h2>
+<div class="note">
+  Product events are for funnels and retention. Service logs are for failures and latency. The same name can appear in both when a user action and a server outcome both matter (join refused, video unavailable).
+</div>
+<ul>
+  <li>Every record has <code>ts</code>, <code>service</code> (<code>client</code>, <code>table</code>, <code>poker</code>, <code>backgammon</code>), and <code>env</code> (<code>local</code> or <code>prod</code>).</li>
+  <li>Table-scoped records include <code>tableId</code> (the 6-character code) and <code>kind</code> (<code>poker</code> or <code>backgammon</code>).</li>
+  <li>Player-scoped records include <code>playerId</code> and <code>seat</code>. Never <code>secret</code>, <code>password</code>, <code>adminSecret</code>, bearer tokens, or LiveKit JWTs.</li>
+  <li>Host records use a stable <code>hostId</code> derived from the Google account, plus a boolean <code>signedIn</code>. Email stays in auth storage; it is not copied into analytics.</li>
+  <li>Client events include <code>platform</code> (<code>ios</code>, <code>android</code>, <code>web</code>), <code>appVersion</code>, and a <code>sessionId</code> created when the app process starts.</li>
+  <li>Server logs include <code>requestId</code> on HTTP and <code>socketId</code> on the <code>/table</code> namespace. Duration is <code>ms</code>.</li>
+  <li>Poker logs may include street, action name, and chip amount. They do not include hole cards. Backgammon logs may include a move count and dice totals, not the full board, unless a debug flag is on for one table.</li>
+  <li>Sample success-path <code>state</code> broadcasts. Always keep errors, joins, leaves, and hand or game boundaries.</li>
+</ul>
+
+<h2 id="identity">Shared fields</h2>
+<table>
+  <thead><tr><th>Field</th><th>Where</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>sessionId</code></td><td>client</td><td>One app launch.</td></tr>
+    <tr><td><code>tableId</code></td><td>both</td><td>Join code. Public to people at the table.</td></tr>
+    <tr><td><code>playerId</code></td><td>both</td><td>Seat identity. Not the secret.</td></tr>
+    <tr><td><code>hostId</code></td><td>both</td><td>Hashed Google subject. Used only after sign-in.</td></tr>
+    <tr><td><code>kind</code></td><td>both</td><td><code>poker</code> or <code>backgammon</code>.</td></tr>
+    <tr><td><code>role</code></td><td>client</td><td><code>admin</code> or <code>player</code>.</td></tr>
+    <tr><td><code>reason</code></td><td>both</td><td>Short stable code, not a free-text message.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="events">Product events</h2>
+<p>Emitted from the client when the person does something, and from the table service when the server is the source of truth. Funnel events are marked.</p>
+
+<h3>App and host</h3>
+<table>
+  <thead><tr><th></th><th>Event</th><th>When</th><th>Fields</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>app_open</code></td><td>Home screen mounts.</td><td><code>sessionId</code>, <code>platform</code>, <code>appVersion</code>, <code>hasSeat</code> (saved credentials exist)</td></tr>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>host_sign_in_started</code></td><td>Google sign-in pressed.</td><td><code>sessionId</code></td></tr>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>host_sign_in_succeeded</code></td><td><code>/auth/session</code> returns a token.</td><td><code>hostId</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>host_sign_in_failed</code></td><td>Redeem fails or is cancelled.</td><td><code>reason</code>: <code>cancelled</code>, <code>network</code>, <code>invalid_code</code>, <code>server</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>host_signed_out</code></td><td>Logout.</td><td><code>hostId</code></td></tr>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>create_opened</code></td><td>Create sheet opens.</td><td><code>kind</code>, <code>hostId</code></td></tr>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>table_created</code></td><td><code>POST /api/games</code> returns 201.</td><td><code>tableId</code>, <code>kind</code>, <code>smallBlind</code>, <code>buyIn</code>, <code>hostId</code>. Server emits this; client does not send blinds twice.</td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>table_create_failed</code></td><td>Create returns 4xx/5xx.</td><td><code>status</code>, <code>reason</code>: <code>unauthorized</code>, <code>invalid_blinds</code>, <code>engine</code>, <code>network</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Join</h3>
+<table>
+  <thead><tr><th></th><th>Event</th><th>When</th><th>Fields</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>join_opened</code></td><td>Join screen opens.</td><td><code>sessionId</code>, <code>prefilled</code> (code arrived from a link)</td></tr>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>join_submitted</code></td><td>Join pressed.</td><td><code>tableId</code>, <code>nameLength</code>. No password.</td></tr>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>player_joined</code></td><td>Join returns 201. Server is source of truth.</td><td><code>tableId</code>, <code>playerId</code>, <code>seat</code>, <code>isAdmin</code>, <code>playerCount</code>, <code>buyIn</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>join_refused</code></td><td>Join returns 4xx.</td><td><code>tableId</code>, <code>status</code>, <code>reason</code>: <code>bad_name</code>, <code>wrong_password</code>, <code>full</code>, <code>join_limit</code>, <code>not_found</code>, <code>invalid</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>table_shared</code></td><td>Share or copy of code or password.</td><td><code>tableId</code>, <code>channel</code>: <code>share_sheet</code>, <code>copy_code</code>, <code>copy_password</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>seat_restored</code></td><td>App reopens onto a saved seat and the table still exists.</td><td><code>tableId</code>, <code>playerId</code>, <code>kind</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>seat_restore_dropped</code></td><td>Saved seat, table 404.</td><td><code>tableId</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Table session</h3>
+<table>
+  <thead><tr><th></th><th>Event</th><th>When</th><th>Fields</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>socket_connected</code></td><td>Socket joins the table room and the first <code>state</code> arrives.</td><td><code>tableId</code>, <code>playerId</code>, <code>kind</code>, <code>role</code>, <code>connectMs</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>socket_rejected</code></td><td>Invalid connection, or kicked because the player is gone.</td><td><code>tableId</code>, <code>reason</code>: <code>invalid_auth</code>, <code>kicked</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>socket_disconnected</code></td><td>Socket closes.</td><td><code>tableId</code>, <code>playerId</code>, <code>cause</code>: <code>client</code>, <code>server</code>, <code>transport</code>, <code>seatedMs</code></td></tr>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>hand_started</code></td><td>Admin <code>start-hand</code> succeeds.</td><td><code>tableId</code>, <code>handId</code>, <code>playerCount</code>, <code>smallBlind</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>hand_action</code></td><td>Poker <code>act</code> accepted.</td><td><code>tableId</code>, <code>handId</code>, <code>playerId</code>, <code>seat</code>, <code>action</code>, <code>amount</code>, <code>street</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>hand_finished</code></td><td>Engine reports the hand over.</td><td><code>tableId</code>, <code>handId</code>, <code>durationMs</code>. No hole cards.</td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>rebuy</code></td><td>Chips added.</td><td><code>tableId</code>, <code>playerId</code>, <code>amount</code>, <code>boughtTotal</code></td></tr>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>bg_game_started</code></td><td>First committed backgammon position after open.</td><td><code>tableId</code>, <code>gameId</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>bg_roll</code></td><td>Dice rolled.</td><td><code>tableId</code>, <code>playerId</code>, <code>dice</code> (two numbers), <code>turn</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>bg_move</code></td><td>A legal move is applied.</td><td><code>tableId</code>, <code>playerId</code>, <code>from</code>, <code>to</code>, <code>color</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>bg_game_finished</code></td><td>A side bears off.</td><td><code>tableId</code>, <code>winnerColor</code>, <code>durationMs</code>, <code>moveCount</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>action_rejected</code></td><td>Socket <code>error</code> after <code>act</code>, <code>start-hand</code>, <code>rebuy</code>, admin action, or invalid <code>bg</code>.</td><td><code>tableId</code>, <code>playerId</code>, <code>op</code>, <code>reason</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>admin_transferred</code></td><td>Admin moves.</td><td><code>tableId</code>, <code>fromPlayerId</code>, <code>toPlayerId</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>player_removed</code></td><td>Admin removes a seat.</td><td><code>tableId</code>, <code>byPlayerId</code>, <code>playerId</code>, <code>seat</code></td></tr>
+    <tr><td><span class="tag funnel">funnel</span></td><td><code>player_left</code></td><td>Leave succeeds, or home is pressed after leave.</td><td><code>tableId</code>, <code>playerId</code>, <code>seatedMs</code>, <code>handsPlayed</code> or <code>movesPlayed</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>table_empty</code></td><td>Last player leaves. Server.</td><td><code>tableId</code>, <code>kind</code>, <code>lifetimeMs</code>, <code>hands</code> or <code>games</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Video and ads</h3>
+<table>
+  <thead><tr><th></th><th>Event</th><th>When</th><th>Fields</th></tr></thead>
+  <tbody>
+    <tr><td><span class="tag product">product</span></td><td><code>video_token_requested</code></td><td>Client calls <code>/livekit</code>.</td><td><code>tableId</code>, <code>playerId</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>video_token_failed</code></td><td>401, 404, or 503.</td><td><code>status</code>, <code>reason</code>: <code>invalid_player</code>, <code>not_found</code>, <code>unavailable</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>video_connected</code></td><td>Room connected.</td><td><code>tableId</code>, <code>playerId</code>, <code>connectMs</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>video_camera_changed</code></td><td>Camera toggled.</td><td><code>enabled</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>video_failed</code></td><td>Publish or subscribe error, or disconnect.</td><td><code>reason</code>, <code>seatedWithVideoMs</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>ad_shown</code></td><td>Banner impression.</td><td><code>placement</code>, <code>platform</code></td></tr>
+    <tr><td><span class="tag product">product</span></td><td><code>ad_failed</code></td><td>Banner load error.</td><td><code>placement</code>, <code>reason</code></td></tr>
+  </tbody>
+</table>
+
+<h2 id="logs">Service logs</h2>
+<p>Structured lines, one JSON object per line. Level is <code>info</code> for expected outcomes, <code>warn</code> for refusals and client errors, <code>error</code> for bugs and dependency failures.</p>
+
+<h3>Table service — HTTP</h3>
+<table>
+  <thead><tr><th>Log</th><th>Level</th><th>When</th><th>Fields</th></tr></thead>
+  <tbody>
+    <tr><td><code>http_request</code></td><td>info</td><td>Every <code>/api</code> and <code>/auth</code> response.</td><td><code>requestId</code>, <code>method</code>, <code>route</code> (template, not raw path secrets), <code>status</code>, <code>ms</code>, <code>tableId</code> if present</td></tr>
+    <tr><td><code>auth_session</code></td><td>info / warn</td><td>Host code redeemed.</td><td><code>ok</code>, <code>hostId</code> on success, <code>reason</code> on failure. No code, no token.</td></tr>
+    <tr><td><code>table_created</code></td><td>info</td><td>Row inserted and poker table created.</td><td><code>tableId</code>, <code>hostId</code>, <code>smallBlind</code>, <code>buyIn</code>, <code>ms</code></td></tr>
+    <tr><td><code>table_create_rolled_back</code></td><td>error</td><td>Engine create failed and the Redis key was deleted.</td><td><code>tableId</code>, <code>error</code></td></tr>
+    <tr><td><code>join_ok</code></td><td>info</td><td>Seat written.</td><td><code>tableId</code>, <code>playerId</code>, <code>seat</code>, <code>playerCount</code>, <code>isAdmin</code>, <code>attempt</code></td></tr>
+    <tr><td><code>join_refused</code></td><td>warn</td><td>400, 403, 404, 429.</td><td><code>tableId</code>, <code>status</code>, <code>reason</code>, <code>attempt</code> when the counter moved</td></tr>
+    <tr><td><code>livekit_token</code></td><td>info / warn</td><td>Token minted or video down.</td><td><code>tableId</code>, <code>playerId</code>, <code>ok</code>, <code>ms</code>. Never the token.</td></tr>
+    <tr><td><code>snapshot_read</code></td><td>info</td><td><code>GET /:id</code>. Sample 1 in 20.</td><td><code>tableId</code>, <code>found</code>, <code>authenticated</code> (viewer headers matched), <code>ms</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Table service — sockets</h3>
+<table>
+  <thead><tr><th>Log</th><th>Level</th><th>When</th><th>Fields</th></tr></thead>
+  <tbody>
+    <tr><td><code>socket_connect</code></td><td>info</td><td>Auth succeeded and the socket joined the room.</td><td><code>socketId</code>, <code>tableId</code>, <code>playerId</code>, <code>seat</code></td></tr>
+    <tr><td><code>socket_rejected</code></td><td>warn</td><td>Missing table or secret mismatch.</td><td><code>socketId</code>, <code>tableId</code>, <code>playerId</code></td></tr>
+    <tr><td><code>socket_kicked</code></td><td>info</td><td>Broadcast saw a viewer no longer seated.</td><td><code>tableId</code>, <code>playerId</code></td></tr>
+    <tr><td><code>socket_event</code></td><td>info</td><td><code>start-hand</code>, <code>leave</code>, <code>transfer-admin</code>, <code>remove-player</code>, <code>rebuy</code>, <code>act</code> accepted.</td><td><code>op</code>, <code>tableId</code>, <code>playerId</code>, <code>ms</code>, plus action, amount, or target player id when relevant</td></tr>
+    <tr><td><code>socket_event_rejected</code></td><td>warn</td><td>Schema fail, not admin, engine throw, buy-in bounds.</td><td><code>op</code>, <code>tableId</code>, <code>playerId</code>, <code>reason</code></td></tr>
+    <tr><td><code>bg_relay</code></td><td>info</td><td><code>bg</code> fan-out. Sample, and always when the payload fails a size or shape check.</td><td><code>tableId</code>, <code>playerId</code>, <code>bytes</code>, <code>accepted</code></td></tr>
+    <tr><td><code>socket_disconnect</code></td><td>info</td><td>Disconnect.</td><td><code>socketId</code>, <code>tableId</code>, <code>playerId</code>, <code>cause</code></td></tr>
+    <tr><td><code>broadcast</code></td><td>info</td><td>Redis <code>tables</code> message applied. Sample.</td><td><code>tableId</code>, <code>recipients</code>, <code>ms</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Engines, Redis, process</h3>
+<table>
+  <thead><tr><th>Log</th><th>Level</th><th>When</th><th>Fields</th></tr></thead>
+  <tbody>
+    <tr><td><code>engine_call</code></td><td>info / error</td><td>Table service calls poker or backgammon.</td><td><code>engine</code>, <code>op</code> (<code>create</code>, <code>seat</code>, <code>unseat</code>, <code>start</code>, <code>act</code>, <code>addChips</code>, <code>read</code>), <code>tableId</code>, <code>ms</code>, <code>ok</code>, <code>status</code></td></tr>
+    <tr><td><code>poker_hand</code></td><td>info</td><td>Hand starts or ends inside the engine.</td><td><code>tableId</code>, <code>handId</code>, <code>phase</code>: <code>start</code> or <code>end</code>, <code>pot</code> at end</td></tr>
+    <tr><td><code>poker_action</code></td><td>info / warn</td><td>Action applied or illegal.</td><td><code>tableId</code>, <code>handId</code>, <code>seat</code>, <code>action</code>, <code>amount</code>, <code>ok</code>, <code>reason</code></td></tr>
+    <tr><td><code>bg_command</code></td><td>info / warn</td><td>Backgammon engine accepts or rejects a roll or move.</td><td><code>tableId</code>, <code>op</code>, <code>ok</code>, <code>reason</code></td></tr>
+    <tr><td><code>redis_op</code></td><td>info / error</td><td>Slow (&gt;50ms) or failed <code>withTable</code>, publish, or subscribe.</td><td><code>op</code>, <code>tableId</code>, <code>ms</code>, <code>error</code></td></tr>
+    <tr><td><code>process</code></td><td>info / error</td><td>Listen, shutdown, unhandled rejection.</td><td><code>service</code>, <code>port</code>, <code>message</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Client logs</h3>
+<p>Shipped only on warn and error, plus a short breadcrumb of the last product events. Kept on device in debug builds.</p>
+<table>
+  <thead><tr><th>Log</th><th>Level</th><th>When</th><th>Fields</th></tr></thead>
+  <tbody>
+    <tr><td><code>api_error</code></td><td>warn</td><td>Non-OK <code>fetch</code> after the product event is recorded.</td><td><code>route</code>, <code>status</code>, <code>ms</code>, <code>sessionId</code></td></tr>
+    <tr><td><code>socket_error</code></td><td>warn</td><td>Connect error or server <code>error</code> payload.</td><td><code>tableId</code>, <code>message</code> (server text, already safe), <code>sessionId</code></td></tr>
+    <tr><td><code>render_error</code></td><td>error</td><td>React error boundary on home, join, or table.</td><td><code>screen</code>, <code>message</code>, <code>appVersion</code></td></tr>
+    <tr><td><code>video_error</code></td><td>warn</td><td>LiveKit exception.</td><td><code>tableId</code>, <code>reason</code></td></tr>
+  </tbody>
+</table>
+
+<h2 id="metrics">Metrics to chart</h2>
+<ul>
+  <li>Funnel, daily: <code>app_open</code> → <code>host_sign_in_succeeded</code> or <code>join_opened</code> → <code>table_created</code> or <code>player_joined</code> → <code>socket_connected</code> → <code>hand_started</code> or <code>bg_roll</code>.</li>
+  <li>Join refusal rate by <code>reason</code>.</li>
+  <li>Tables created that never start a hand or a game within 10 minutes.</li>
+  <li>Median <code>seatedMs</code> and hands or moves per seat.</li>
+  <li>Socket reject rate, action reject rate, engine error rate, Redis p95.</li>
+  <li>Video: token failure rate, connect rate among seated players, median time with camera on.</li>
+  <li>HTTP status counts for <code>POST /api/games</code>, <code>POST /:id/join</code>, <code>POST /:id/livekit</code>.</li>
+</ul>
+
+<h2 id="views">First dashboards</h2>
+<ol>
+  <li><strong>Tonight’s tables.</strong> Open tables, seated players, last event, video on or off, last error.</li>
+  <li><strong>Join health.</strong> Attempts, successes, wrong password, full, rate limit.</li>
+  <li><strong>Play.</strong> Hands started, actions, rebuys, backgammon games finished, empty-table lifetime.</li>
+  <li><strong>Failures.</strong> <code>error</code> logs from table, poker, and backgammon, grouped by <code>op</code> and <code>reason</code>.</li>
+</ol>
+<div class="note">
+  Ship order: table-service HTTP and socket logs first (they already sit on every join and action), then the client funnel events, then engine hand boundaries, then video and ads. Alerts start with engine error rate, join 5xx, and LiveKit 503, not with product counts.
+</div>
+</main>
+</body>
+</html>

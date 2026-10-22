@@ -19,6 +19,7 @@ export type TableSnapshot = {
   buyIn: number;
   kind?: "poker" | "backgammon";
   backgammon?: unknown;
+  backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
   communityCards: Card[];
   pots: { size: number; eligiblePlayers: number[] }[];
   round: "preflop" | "flop" | "turn" | "river" | null;

@@ -199,10 +199,10 @@ export function DiceCup({
     return () => clearInterval(timer);
   }, [rolling, faces]);
 
-  const shown = tumbling || rolling ? pose : [
+  const shown = (tumbling || rolling ? pose : [
     { x: -9, y: -2, rot: 0, face: faces[0] ?? 1 },
     { x: 9, y: 6, rot: 0, face: faces[1] ?? 1 },
-  ];
+  ]).slice(0, faces.length);
 
   return (
     <View style={styles.cupWrap}>
@@ -238,12 +238,14 @@ export function BackgammonBoard({
   enabled,
   onSelect,
   onMove,
+  onAgain,
 }: {
   game: Game;
   selected: number | "bar" | null;
   enabled: boolean;
   onSelect: (from: number | "bar" | null) => void;
   onMove: (move: Move) => void;
+  onAgain?: () => void;
 }) {
   const [boardW, setBoardW] = useState(360);
   const pointW = Math.max(16, (boardW - 40) / 12);
@@ -332,11 +334,11 @@ export function BackgammonBoard({
         <View style={styles.bar} />
         {BOTTOM.slice(6).map((point) => stack(point, true))}
       </View>
-      {game.message ? (
-        <Text style={styles.win}>
-          {game.winner ? `${game.winner === "white" ? t("bgLight") : t("bgDark")} · ${game.score} · ` : ""}
-          {statusText(game.message)}
-        </Text>
+      {game.message && !game.winner ? <Text style={styles.win}>{statusText(game.message)}</Text> : null}
+      {onAgain ? (
+        <Pressable style={styles.again} onPress={onAgain}>
+          <Text style={styles.againText}>{t("bgAgain")}</Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -443,5 +445,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
   },
   win: { color: "#f6d36b", textAlign: "center", fontWeight: "800" },
+  again: {
+    position: "absolute",
+    alignSelf: "center",
+    bottom: 16,
+    backgroundColor: "#f6d36b",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  againText: { color: "#1c1917", fontWeight: "900" },
   hidden: { height: 0, opacity: 0 },
 });

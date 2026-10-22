@@ -262,7 +262,7 @@ export function unseat(doc: EngineDoc, seat: number): EngineDoc {
 export function startHand(doc: EngineDoc): EngineDoc {
   if (doc.hand) throw new Error("Hand already in progress");
   const seated = doc.seats.filter((stack) => stack != null).length + doc.waiting.length;
-  if (seated < 2) throw new Error("Need at least two players");
+  if (seated < 2) throw new Error("At least two players need chips to deal.");
   const seats = doc.seats.slice();
   for (const waiting of doc.waiting) seats[waiting.seat] = waiting.stack;
   const next: EngineDoc = {

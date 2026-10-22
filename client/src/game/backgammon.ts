@@ -261,14 +261,27 @@ function beginTurn(game: Game, color: Color, faces: number[]) {
 export function roll(game: Game): Game {
   const next = clone(game);
   if (next.phase === "opening") {
-    const white = die();
-    const black = die();
-    next.shown = [white, black];
-    if (white === black) {
+    const face = die();
+    const whiteDie = next.shown.length === 1 ? next.shown[0] : null;
+    if (whiteDie == null) {
+      next.shown = [face];
+      next.dice = [];
+      next.turn = opponent(next.turn);
+      next.message = "roll";
+      return next;
+    }
+    if (whiteDie === face) {
+      next.shown = [];
+      next.dice = [];
+      next.turn = "white";
       next.message = "tied";
       return next;
     }
-    beginTurn(next, white > black ? "white" : "black", [white, black]);
+    next.shown = [whiteDie, face];
+    next.dice = [];
+    next.turn = whiteDie > face ? "white" : "black";
+    next.phase = "roll";
+    next.message = "";
     return next;
   }
   if (next.phase !== "roll") return next;

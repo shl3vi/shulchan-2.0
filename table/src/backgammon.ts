@@ -33,6 +33,32 @@ function ints(value: unknown, max: number) {
   return Array.isArray(value) && value.length <= max && value.every((entry) => Number.isInteger(entry) && entry >= 0 && entry <= 6);
 }
 
+export type BackgammonWin = {
+  whiteName: string;
+  blackName: string;
+  winner: "white" | "black";
+  points: number;
+};
+
+/** Records a finished game once, including one already on the table before the log existed. */
+export function noteBackgammonWin(
+  table: { players: { name: string; seat: number }[]; backgammon?: unknown; backgammonLog?: BackgammonWin[] },
+  next: { phase?: unknown; winner?: unknown; score?: unknown },
+) {
+  const previous = table.backgammon as { phase?: unknown; winner?: unknown; score?: unknown } | undefined;
+  const log = table.backgammonLog ?? [];
+  const fresh = next.phase === "over" && previous?.phase !== "over";
+  const source = fresh ? next : previous?.phase === "over" && log.length === 0 ? previous : null;
+  if (!source || (source.winner !== "white" && source.winner !== "black") || !Number.isInteger(source.score)) return;
+  const seated = [...table.players].sort((a, b) => a.seat - b.seat);
+  table.backgammonLog = [...log, {
+    whiteName: seated[0]?.name ?? "",
+    blackName: seated[1]?.name ?? "",
+    winner: source.winner,
+    points: source.score as number,
+  }].slice(-40);
+}
+
 /** Rejects anything that is not a board the client can draw. Rules are not re-checked here. */
 export function readBackgammon(body: unknown) {
   if (!body || typeof body !== "object") return null;
