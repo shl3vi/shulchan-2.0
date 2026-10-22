@@ -3,6 +3,7 @@ import { z } from "zod";
 export const createBody = z.object({
   smallBlind: z.number().int().positive(),
   buyIn: z.number().int().positive(),
+  kind: z.enum(["poker", "backgammon"]).optional(),
 }).strict();
 
 export const joinBody = z.object({

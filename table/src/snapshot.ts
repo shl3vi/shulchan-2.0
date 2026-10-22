@@ -28,6 +28,8 @@ export type TableSnapshot = {
     isAdmin: boolean;
   } | null;
   buyIn: number;
+  kind?: "poker" | "backgammon";
+  backgammon?: unknown;
   password?: string;
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: EngineView["communityCards"] }[];
@@ -70,6 +72,8 @@ export function snapshot(table: TableRecord, view: EngineView, viewerId?: string
         }
       : null,
     buyIn: table.buyIn,
+    kind: table.kind ?? "poker",
+    ...(table.kind === "backgammon" ? { backgammon: table.backgammon } : {}),
     ...(viewer && viewer.id === table.adminId ? { password: table.password } : {}),
     shownCards: view.shownCards ?? [],
     lastWinners: view.lastWinners.flatMap((winner) => {

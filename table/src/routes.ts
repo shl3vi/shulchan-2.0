@@ -4,6 +4,7 @@ import { liveKitToken, VideoUnavailable } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
 import { playerName } from "./name.js";
+import { openingBackgammon } from "./backgammon.js";
 import { createBody, joinBody, liveKitBody, readSchema } from "./schema.js";
 import { debugConfig } from "./debug.js";
 import { insertTable, publishTable, readTable, redis, tableKey, TableNotFound, withTable, type TableRecord } from "./store.js";
@@ -50,6 +51,8 @@ router.post("/", async (req, res) => {
     buyIn,
     password: String(crypto.getRandomValues(new Uint32Array(1))[0]! % 900000 + 100000),
     hostEmail: host.email,
+    kind: body.kind === "backgammon" ? "backgammon" : "poker",
+    ...(body.kind === "backgammon" ? { backgammon: openingBackgammon() } : {}),
     players: [],
   };
   while (!(await insertTable(table))) table.id = tableCode();

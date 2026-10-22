@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -12,7 +12,261 @@ import { useTableVideo } from "@/media/useTableVideo";
 import { ActionDock, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
 import type { Card } from "@/game/types";
 import { API_URL } from "@/game/api";
+import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
+import { answerDouble, move as playMove, newGame, offerDouble, opponent, roll, type Color, type Game, type Move } from "@/game/backgammon";
+import { checkerPlace } from "@/game/diceSound";
 import { t } from "@/i18n";
+
+function PlayerCircle({ name, video, nameAbove }: { name: string; video?: ReactNode; nameAbove?: boolean }) {
+  const label = (
+    <Text style={styles.playerName} numberOfLines={1}>
+      {name}
+    </Text>
+  );
+  const circle = <View style={styles.circle}>{video ?? <Text style={styles.initial}>{name.replace(/\D/g, "").slice(0, 1) || name.slice(0, 1)}</Text>}</View>;
+  return (
+    <View style={styles.player}>
+      {nameAbove ? label : null}
+      {circle}
+      {nameAbove ? null : label}
+    </View>
+  );
+}
+
+function BackgammonTable({
+  topVideo,
+  bottomVideo,
+  youName,
+  otherName,
+  otherId,
+  micOn,
+  cameraOn,
+  setMic,
+  setCamera,
+  otherMuted,
+  otherHidden,
+  onMuteOther,
+  onHideOther,
+  gameId,
+  password,
+  onLeave,
+  myColor,
+  serverGame,
+  emit,
+  subscribe,
+}: {
+  topVideo?: ReactNode;
+  bottomVideo?: ReactNode;
+  youName: string;
+  otherName: string;
+  otherId?: string;
+  micOn: boolean;
+  cameraOn: boolean;
+  setMic: (on: boolean) => void;
+  setCamera: (on: boolean) => void;
+  otherMuted: boolean;
+  otherHidden: boolean;
+  onMuteOther: () => void;
+  onHideOther: () => void;
+  gameId?: string;
+  password?: string;
+  onLeave: () => void;
+  myColor: Color | null;
+  serverGame?: unknown;
+  emit: (event: string, body: unknown) => void;
+  subscribe: (event: string, handler: (body: unknown) => void) => () => void;
+}) {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [info, setInfo] = useState(false);
+  const [rules, setRules] = useState(false);
+  const [seat, setSeat] = useState(false);
+  const [game, setGame] = useState<Game>(() => newGame());
+  const [selected, setSelected] = useState<number | "bar" | null>(null);
+  const [rolling, setRolling] = useState(false);
+  const [cupFaces, setCupFaces] = useState<number[]>([]);
+  const pendingRoll = useRef<Game | null>(null);
+  const actor: Color | null = game.phase === "over" ? null : game.phase === "offer" ? opponent(game.turn) : game.turn;
+  const iPlay = myColor != null && actor === myColor;
+  const actorName = actor == null ? "" : actor === myColor ? youName : otherName;
+
+  function shareTable() {
+    const link = gameId ? `${gameId}${password ? ` · ${password}` : ""}` : "backgammon";
+    Share.share({ message: t("shareMessage", { link }) });
+  }
+
+  function update(next: Game) {
+    setSelected(null);
+    setGame(next);
+    emit("bg", next);
+  }
+
+  useEffect(() => {
+    if (!serverGame || typeof serverGame !== "object") return;
+    setSelected(null);
+    setGame(serverGame as Game);
+  }, [serverGame]);
+
+  useEffect(() => {
+    return subscribe("bg", (body) => {
+      if (!body || typeof body !== "object") return;
+      setSelected(null);
+      setGame(body as Game);
+    });
+  }, [subscribe]);
+
+  function onMove(chosen: Move) {
+    const next = playMove(game, chosen);
+    if (next === game) return;
+    checkerPlace();
+    update(next);
+  }
+
+  return (
+    <View style={styles.screen}>
+      <StatusBar style="light" />
+      <View style={styles.stage}>
+        <View style={[styles.bgColumn, { paddingTop: insets.top + 52 }]}>
+          <View style={[styles.seatRow, styles.topSeat, actor != null && actor !== myColor && styles.seatOn]}>
+            <Pressable disabled={!otherId} onPress={() => setSeat(true)}>
+              <PlayerCircle name={otherName} video={topVideo} />
+            </Pressable>
+          </View>
+          <View style={styles.boardAnchor}>
+            <BackgammonBoard game={game} selected={selected} enabled={iPlay} onSelect={setSelected} onMove={onMove} />
+            <View style={styles.diceCup} pointerEvents="none">
+              <DiceCup
+                faces={cupFaces}
+                rolling={rolling}
+                onDone={() => {
+                  const next = pendingRoll.current;
+                  pendingRoll.current = null;
+                  setRolling(false);
+                  if (next) update(next);
+                }}
+              />
+            </View>
+            <View style={styles.tools}>
+            {iPlay && (game.phase === "opening" || game.phase === "roll") ? (
+              <Pressable
+                style={styles.tool}
+                onPress={() => {
+                  if (rolling) return;
+                  pendingRoll.current = roll(game);
+                  setCupFaces(pendingRoll.current.shown);
+                  setRolling(true);
+                }}
+              >
+                <Text style={styles.toolText}>{t("rollDice")}</Text>
+              </Pressable>
+            ) : null}
+            {iPlay && game.phase === "roll" ? (
+              <Pressable style={styles.tool} onPress={() => update(offerDouble(game))}>
+                <Text style={styles.toolText}>{t("doubleCube")}</Text>
+              </Pressable>
+            ) : null}
+            {iPlay && game.phase === "offer" ? (
+              <>
+                <Pressable style={styles.tool} onPress={() => update(answerDouble(game, true))}>
+                  <Text style={styles.toolText}>{t("takeDouble")}</Text>
+                </Pressable>
+                <Pressable style={styles.tool} onPress={() => update(answerDouble(game, false))}>
+                  <Text style={styles.toolText}>{t("passDouble")}</Text>
+                </Pressable>
+              </>
+            ) : null}
+            {iPlay && game.phase === "over" ? (
+              <Pressable style={styles.tool} onPress={() => update(newGame())}>
+                <Text style={styles.toolText}>{t("newGame")}</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.turnLabel}>{actorName ? t("bgTurn", { name: actorName }) : ""}</Text>
+            )}
+            </View>
+          </View>
+          <View style={[styles.seatRow, styles.bottomSeat, actor != null && actor === myColor && styles.seatOn]}>
+            <PlayerCircle name={youName} video={bottomVideo} nameAbove />
+          </View>
+        </View>
+        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
+          <Ionicons name="home" size={20} color="#fafaf9" />
+        </Pressable>
+        <View style={[styles.menu, { top: insets.top + 8 }]}>
+          <TableMenu
+            items={[
+              { label: t("tableInfo"), icon: "info", onPress: () => setInfo(true) },
+              { label: t("rules"), icon: "stats", onPress: () => setRules(true) },
+              { label: t("shareTable"), icon: "share", onPress: shareTable },
+              {
+                label: t("leaveGame"),
+                icon: "leave",
+                danger: true,
+                onPress: onLeave,
+              },
+            ]}
+          />
+        </View>
+        <Modal visible={rules} transparent animationType="fade" onRequestClose={() => setRules(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setRules(false)}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <Text style={styles.sheetTitle}>{t("rules")}</Text>
+              <Text style={styles.statsLine}>{t("bgRules")}</Text>
+              <Pressable style={styles.cancel} onPress={() => setRules(false)}>
+                <Text style={styles.cancelText}>{t("cancel")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+        <Modal visible={info} transparent animationType="fade" onRequestClose={() => setInfo(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setInfo(false)}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <Text style={styles.sheetTitle}>{t("tableInfo")}</Text>
+              {gameId ? <CopyField label={t("tableId")} value={gameId} /> : <Text style={styles.statsLine}>backgammon</Text>}
+              {password ? <CopyField label={t("password")} value={password} /> : null}
+              <Pressable style={styles.cancel} onPress={shareTable}>
+                <Text style={styles.cancelText}>{t("shareTable")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+        <Modal visible={seat} transparent animationType="fade" onRequestClose={() => setSeat(false)}>
+          <Pressable style={styles.sheetBackdrop} onPress={() => setSeat(false)}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <Text style={styles.sheetTitle}>{otherName}</Text>
+              <Pressable
+                style={styles.cancel}
+                onPress={() => {
+                  onMuteOther();
+                  setSeat(false);
+                }}
+              >
+                <Text style={styles.cancelText}>{otherMuted ? t("unmuteSeat") : t("muteSeat")}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.cancel}
+                onPress={() => {
+                  onHideOther();
+                  setSeat(false);
+                }}
+              >
+                <Text style={styles.cancelText}>{otherHidden ? t("showVideo") : t("hideVideo")}</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+        {Platform.OS !== "web" ? (
+          <Pressable style={[styles.cameraToggle, cameraOn && styles.cameraToggleOn]} onPress={() => setCamera(!cameraOn)}>
+            <Ionicons name={cameraOn ? "videocam" : "videocam-off"} size={22} color={cameraOn ? "#1c1917" : "#fafaf9"} />
+          </Pressable>
+        ) : null}
+        {Platform.OS !== "web" ? <TalkButton on={micOn} onTalk={setMic} /> : null}
+      </View>
+      <View style={{ paddingBottom: insets.bottom, backgroundColor: "#0c0a09" }}>
+        <View style={styles.ad}>{tableAdAllowed(null) ? <AdBanner /> : null}</View>
+      </View>
+    </View>
+  );
+}
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -49,7 +303,7 @@ export default function TableScreen() {
   const router = useRouter();
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const insets = useSafeAreaInsets();
-  const { credentials, state, error, dismissError, startHand, act, leave, removePlayer, transferAdmin, rebuy } = useGameSession();
+  const { credentials, state, error, dismissError, startHand, act, leave, removePlayer, transferAdmin, rebuy, emit, subscribe } = useGameSession();
   const video = useTableVideo(credentials);
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
   const [info, setInfo] = useState(false);
@@ -82,17 +336,43 @@ export default function TableScreen() {
     }, 320);
   }
 
-  if (kind === "backgammon") {
+  if (kind === "backgammon" || state?.kind === "backgammon") {
+    const youId = you?.id;
+    const other = state?.players.find((player) => player.id !== youId);
+    const topTrack = other ? video.tracks.get(other.id) : undefined;
+    const bottomTrack = youId ? video.tracks.get(youId) : undefined;
+    const ordered = [...(state?.players ?? [])].sort((a, b) => a.seat - b.seat);
+    const mineIndex = ordered.findIndex((player) => player.id === youId);
+    const myColor: Color | null = mineIndex === 0 ? "white" : mineIndex === 1 ? "black" : null;
     return (
-      <View style={styles.screen}>
-        <StatusBar style="light" />
-        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
-          <Ionicons name="home" size={20} color="#fafaf9" />
-        </Pressable>
-        <View style={styles.captionWrap}>
-          <Text style={styles.caption}>backgammon</Text>
-        </View>
-      </View>
+      <BackgammonTable
+        topVideo={topTrack ? <SeatVideo track={topTrack} /> : undefined}
+        bottomVideo={bottomTrack ? <SeatVideo track={bottomTrack} /> : undefined}
+        youName={you?.name ?? ""}
+        otherName={other?.name ?? ""}
+        otherId={other?.id}
+        myColor={myColor}
+        serverGame={state?.backgammon}
+        emit={emit}
+        subscribe={subscribe}
+        micOn={video.micOn}
+        cameraOn={video.cameraOn}
+        setMic={video.setMic}
+        setCamera={video.setCamera}
+        otherMuted={other ? video.muted.has(other.id) : false}
+        otherHidden={other ? video.hidden.has(other.id) : false}
+        onMuteOther={() => {
+          if (other) video.toggleMute(other.id);
+        }}
+        onHideOther={() => {
+          if (other) video.toggleHide(other.id);
+        }}
+        gameId={credentials?.gameId}
+        password={state?.password}
+        onLeave={() => {
+          void leave().then(() => router.replace("/"));
+        }}
+      />
     );
   }
 
@@ -309,6 +589,7 @@ export default function TableScreen() {
         chipRange={you?.chipRange ?? null}
         step={state?.bigBlind ?? 1}
         cards={you?.holeCards ?? []}
+        idleText={state?.round == null ? null : t("waitingTurn")}
         onAction={(action, chips) => act(action, chips)}
       />
       <View style={{ paddingBottom: insets.bottom, backgroundColor: "#0c0a09" }}>
@@ -320,10 +601,44 @@ export default function TableScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#07110d", ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
-  captionWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
-  caption: { color: "#f6d36b", fontSize: 36, fontWeight: "900", letterSpacing: 1 },
+  players: { flex: 1, alignItems: "center", justifyContent: "space-between", paddingBottom: 28 },
+  player: { alignItems: "center", gap: 8, maxWidth: 160 },
+  bgColumn: { flex: 1, justifyContent: "flex-start" },
+  seatRow: { alignItems: "center", opacity: 0.55 },
+  topSeat: { marginBottom: 22 },
+  bottomSeat: { marginTop: -28 },
+  seatOn: { opacity: 1 },
+  tools: {
+    position: "absolute",
+    left: 92,
+    right: 8,
+    bottom: -82,
+    height: 78,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 8,
+  },
+  tool: { backgroundColor: "#f6d36b", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8 },
+  toolText: { color: "#1c1917", fontWeight: "900" },
+  turnLabel: { color: "#f6d36b", fontWeight: "800" },
+  circle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "#f6d36b",
+    backgroundColor: "#1c1917",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  initial: { color: "#fafaf9", fontSize: 40, fontWeight: "800" },
+  playerName: { color: "#fafaf9", fontSize: 16, fontWeight: "800" },
   meta: { color: "#d6d3d1", padding: 24 },
   stage: { flex: 1, minHeight: 0 },
+  boardAnchor: { position: "relative", marginBottom: 84 },
+  diceCup: { position: "absolute", left: 6, bottom: -82, zIndex: 4 },
   ad: { height: 50, width: "100%", backgroundColor: "#292524", alignItems: "center", overflow: "hidden" },
   home: {
     position: "absolute",

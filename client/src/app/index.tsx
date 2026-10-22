@@ -119,7 +119,7 @@ export default function HomeScreen() {
   const [nameMissing, setNameMissing] = useState(false);
   const [host, setHost] = useState<Host | null>(null);
   const [creating, setCreating] = useState(false);
-  const [kind, setKind] = useState<"poker" | null>(null);
+  const [kind, setKind] = useState<"poker" | "backgammon" | null>(null);
   const nameInput = useRef<TextInput>(null);
 
   const refreshHost = useCallback(() => {
@@ -169,7 +169,7 @@ export default function HomeScreen() {
     });
   }
 
-  async function create() {
+  async function create(nextKind: "poker" | "backgammon" = "poker") {
     const seatedName = playerName(name);
     if (!seatedName) {
       setNameMissing(true);
@@ -183,8 +183,8 @@ export default function HomeScreen() {
     setBusy(true);
     try {
       if (!host) return;
-      await session.createAndSit(seatedName, smallBlind, buyIn, host.token);
-      router.push("/table");
+      await session.createAndSit(seatedName, smallBlind, buyIn, host.token, nextKind);
+      router.push(nextKind === "backgammon" ? { pathname: "/table", params: { kind: "backgammon" } } : "/table");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("serverUnreachable"));
     } finally {
@@ -239,7 +239,7 @@ export default function HomeScreen() {
         <View style={[styles.kindGrid, isRtl() && styles.kindGridRtl]}>
           <Pressable
             style={styles.kindCard}
-            onPress={() => router.push({ pathname: "/table", params: { kind: "backgammon" } })}
+            onPress={() => setKind("backgammon")}
           >
             <Text style={styles.kindTitle}>{t("backgammonTable")}</Text>
           </Pressable>
@@ -248,7 +248,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       ) : null}
-      {creating && host && kind === "poker" ? (
+      {creating && host && (kind === "poker" || kind === "backgammon") ? (
         <View style={[styles.felt, seated && styles.feltOff]}>
           <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
           <TextInput
@@ -264,11 +264,19 @@ export default function HomeScreen() {
             placeholderTextColor="#78716c"
             maxLength={24}
           />
+          {kind === "poker" ? (
+            <>
           <Text style={[styles.label, { textAlign: align }]}>{t("smallBlind")}</Text>
           <ChipRow values={BLINDS} selected={smallBlind} minimum={1} onSelect={setSmallBlind} onValidity={setBlindOk} />
           <Text style={[styles.label, { textAlign: align }]}>{t("buyIn")}</Text>
           <ChipRow values={BUY_INS} selected={buyIn} minimum={11} onSelect={setBuyIn} onValidity={setBuyInOk} />
-          <Pressable style={[styles.deal, (busy || seated || !blindOk || !buyInOk) && styles.dealBusy]} disabled={busy || seated || !blindOk || !buyInOk} onPress={create}>
+            </>
+          ) : null}
+          <Pressable
+            style={[styles.deal, (busy || seated || (kind === "poker" && (!blindOk || !buyInOk))) && styles.dealBusy]}
+            disabled={busy || seated || (kind === "poker" && (!blindOk || !buyInOk))}
+            onPress={() => void create(kind === "backgammon" ? "backgammon" : "poker")}
+          >
             <Text style={styles.dealText}>{busy ? t("shuffling") : t("dealMeIn")}</Text>
           </Pressable>
           {error ? <Text style={styles.error}>{error}</Text> : null}

@@ -10,7 +10,7 @@ type GameSessionValue = {
   state: TableSnapshot | null;
   error: string | null;
   dismissError: () => void;
-  createAndSit: (name: string, smallBlind: number, buyIn: number, hostToken: string) => Promise<void>;
+  createAndSit: (name: string, smallBlind: number, buyIn: number, hostToken: string, kind?: "poker" | "backgammon") => Promise<void>;
   join: (name: string, gameId: string, password: string) => Promise<void>;
   ready: boolean;
   leave: () => Promise<void>;
@@ -19,6 +19,8 @@ type GameSessionValue = {
   startHand: () => void;
   act: (action: string, amount?: number) => void;
   rebuy: (amount: number) => void;
+  emit: (event: string, body: unknown) => void;
+  subscribe: (event: string, handler: (body: unknown) => void) => () => void;
 };
 
 const GameSessionContext = createContext<GameSessionValue | null>(null);
@@ -102,9 +104,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       ready,
-      async createAndSit(name, smallBlind, buyIn, hostToken) {
+      async createAndSit(name, smallBlind, buyIn, hostToken, kind = "poker") {
         if (credentials) throw new Error(t("alreadyAtTable"));
-        const table = await createTable(smallBlind, buyIn, hostToken);
+        const table = await createTable(smallBlind, buyIn, hostToken, kind);
         const player = await joinTable(table.gameId, name, table.password, table.adminSecret);
         remember({
           gameId: table.gameId,
@@ -144,6 +146,16 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       },
       rebuy(amount) {
         socket?.emit("rebuy", { amount });
+      },
+      emit(event, body) {
+        socket?.emit(event, body);
+      },
+      subscribe(event, handler) {
+        if (!socket) return () => {};
+        socket.on(event, handler);
+        return () => {
+          socket.off(event, handler);
+        };
       },
     }),
     [credentials, error, ready, socket, state],

@@ -2,6 +2,7 @@ import type { Server, Socket } from "socket.io";
 import { actPoker, addChips, readPoker, startPoker } from "./engine.js";
 import { snapshot } from "./snapshot.js";
 import { assignAdmin, dropRemovedPlayers, releaseSeat } from "./players.js";
+import { readBackgammon } from "./backgammon.js";
 import { actBody, playerBody, readSchema, rebuyBody } from "./schema.js";
 import { publishTable, readTable, subscriber, withTable, type TableRecord } from "./store.js";
 
@@ -114,6 +115,18 @@ export function attachSockets(io: Server) {
         if (!seated) throw new Error("Player not found");
         await addChips(tableId, player.seat, amount);
         seated.bought = (seated.bought ?? current.buyIn) + amount;
+      });
+    });
+
+    socket.on("bg", (body: unknown) => {
+      const game = readBackgammon(body);
+      if (!game) {
+        socket.emit("error", { message: "Invalid backgammon position" });
+        return;
+      }
+      return change("Backgammon move failed", async (current) => {
+        if (current.kind !== "backgammon") throw new Error("This table is not backgammon");
+        current.backgammon = game;
       });
     });
 

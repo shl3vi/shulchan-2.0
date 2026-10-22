@@ -574,6 +574,7 @@ export function ActionDock({
   step,
   cards,
   onAction,
+  idleText,
 }: {
   actions: PokerAction[];
   yourTurn: boolean;
@@ -581,6 +582,8 @@ export function ActionDock({
   step: number;
   cards: Card[];
   onAction: (action: PokerAction, amount?: number) => void;
+  /** Shown when it is not your turn. Omitted between hands, when Deal is the next step. */
+  idleText?: string | null;
 }) {
   const [sizing, setSizing] = useState<PokerAction | null>(null);
   const [chips, setChips] = useState(0);
@@ -649,7 +652,7 @@ export function ActionDock({
               ))}
             </View>
           ) : (
-            <Text style={dock.wait}>{t("waitingTurn")}</Text>
+            idleText ? <Text style={dock.wait}>{idleText}</Text> : null
           )}
         </View>
       </View>

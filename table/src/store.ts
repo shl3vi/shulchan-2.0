@@ -18,6 +18,8 @@ export type TableRecord = {
   password: string;
   hostEmail?: string;
   joinAttempts?: number;
+  kind?: "poker" | "backgammon";
+  backgammon?: unknown;
   players: SeatPlayer[];
 };
 

@@ -17,6 +17,8 @@ export type TableSnapshot = {
   smallBlind: number;
   bigBlind: number;
   buyIn: number;
+  kind?: "poker" | "backgammon";
+  backgammon?: unknown;
   communityCards: Card[];
   pots: { size: number; eligiblePlayers: number[] }[];
   round: "preflop" | "flop" | "turn" | "river" | null;
