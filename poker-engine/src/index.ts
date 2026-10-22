@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import express from "express";
 import { createClient, type RedisClientType } from "redis";
+import { connectPostgres, pool, secondsUntil } from "./db.js";
 import { act, addChips, createDoc, present, seatPlayer, startHand, unseat, type ActionName, type EngineDoc } from "./game.js";
 
 const engineToken = process.env.ENGINE_TOKEN;
@@ -10,6 +11,7 @@ const expectedToken = Buffer.from(engineToken);
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 const redis: RedisClientType = createClient({ url: redisUrl });
 await redis.connect();
+await connectPostgres();
 
 const actions = new Set<ActionName>(["fold", "check", "call", "bet", "raise"]);
 const app = express();
@@ -34,11 +36,25 @@ function key(id: string) {
 
 async function read(id: string): Promise<EngineDoc | null> {
   const raw = await redis.get(key(id));
-  return raw ? (JSON.parse(raw) as EngineDoc) : null;
+  if (raw) return JSON.parse(raw) as EngineDoc;
+  const found = await pool.query<{ engine: EngineDoc; expires_at: Date }>(
+    "SELECT engine, expires_at FROM tables WHERE id = $1 AND expires_at > now() AND engine IS NOT NULL",
+    [id],
+  );
+  const row = found.rows[0];
+  if (!row) return null;
+  await redis.set(key(id), JSON.stringify(row.engine), { EX: secondsUntil(row.expires_at) });
+  return row.engine;
 }
 
 async function write(id: string, doc: EngineDoc) {
-  await redis.set(key(id), JSON.stringify(doc));
+  const saved = await pool.query<{ expires_at: Date }>(
+    "UPDATE tables SET engine = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now() RETURNING expires_at",
+    [id, JSON.stringify(doc)],
+  );
+  const row = saved.rows[0];
+  if (!row) throw new Error("Game not found");
+  await redis.set(key(id), JSON.stringify(doc), { EX: secondsUntil(row.expires_at) });
 }
 
 async function locked<T>(id: string, run: () => Promise<T>): Promise<T> {

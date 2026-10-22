@@ -3,6 +3,16 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: shulchan
+      POSTGRES_PASSWORD: shulchan
+      POSTGRES_DB: shulchan
+    ports:
+      - "5432:5432"
+    volumes:
+      - shulchan-pg:/var/lib/postgresql/data
   livekit:
     image: livekit/livekit-server
     command: --config /etc/livekit.yaml
@@ -12,3 +22,6 @@ services:
       - "50000-50010:50000-50010/udp"
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
+
+volumes:
+  shulchan-pg:

@@ -63,7 +63,7 @@ function cloudProject(name) {
 }
 
 const cloud = cloudProject("shulchan");
-const liveKitServices = cloud ? ["redis"] : ["redis", "livekit"];
+const liveKitServices = cloud ? ["redis", "postgres"] : ["redis", "postgres", "livekit"];
 
 await writeFile(
   new URL("../livekit.yaml", import.meta.url),
@@ -81,7 +81,7 @@ keys:
 const docker = spawn("docker", ["compose", "up", "-d", ...liveKitServices], { cwd: root, stdio: "inherit" });
 const dockerCode = await new Promise((resolve) => docker.on("exit", resolve));
 if (dockerCode !== 0) {
-  console.error("Redis did not start. Docker needs to be running.");
+  console.error("Redis or Postgres did not start. Docker needs to be running.");
   process.exit(1);
 }
 

@@ -7,7 +7,7 @@ import { playerName } from "./name.js";
 import { openingBackgammon } from "./backgammon.js";
 import { createBody, joinBody, liveKitBody, readSchema } from "./schema.js";
 import { debugConfig } from "./debug.js";
-import { insertTable, publishTable, readTable, redis, tableKey, TableNotFound, withTable, type TableRecord } from "./store.js";
+import { insertTable, publishTable, readTable, removeTable, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
 const MAX_SEATS = 9;
@@ -59,7 +59,7 @@ router.post("/", async (req, res) => {
   try {
     await createPokerTable(table.id, smallBlind);
   } catch (error) {
-    await redis.del(tableKey(table.id));
+    await removeTable(table.id);
     throw error;
   }
   res.status(201).json({
