@@ -504,26 +504,46 @@ export default function TableScreen() {
           <Pressable style={styles.sheetBackdrop} onPress={() => setSheet(null)}>
             <Pressable style={styles.sheet} onPress={() => {}}>
               <Text style={styles.sheetTitle}>{sheet === "admin" ? t("adminOptions") : t("statistics")}</Text>
-              {(state?.players ?? []).length === 0 ? <Text style={styles.statsLine}>{t("noPlayers")}</Text> : null}
-              {(state?.players ?? []).map((player) => (
-                <View key={player.id} style={styles.statsRow}>
-                  <Text style={styles.statsLine}>
-                    {player.name}
-                    {sheet === "stats" ? ` · ${player.stack} · ${t("putIn", { n: player.bought ?? 0 })}` : ""}
-                  </Text>
-                  {sheet === "admin" && player.id !== you?.id ? (
-                    <View style={styles.statsActions}>
-                      <Pressable onPress={() => transferAdmin(player.id)}>
-                        <Text style={styles.makeAdmin}>{t("makeAdmin")}</Text>
-                      </Pressable>
-                      <Pressable onPress={() => removePlayer(player.id)} hitSlop={8}>
-                        <Ionicons name="trash-outline" size={20} color="#fecaca" />
-                      </Pressable>
+              {sheet === "stats" ? (
+                (state?.players ?? []).length === 0 ? (
+                  <Text style={styles.statsLine}>{t("noPlayers")}</Text>
+                ) : (
+                  <View style={styles.statsTable}>
+                    <View style={[styles.statsRow, styles.statsHead]}>
+                      <Text style={[styles.statsCell, styles.statsHeadText]}>{t("player")}</Text>
+                      <Text style={[styles.statsCell, styles.statsNum, styles.statsHeadText]}>{t("stack")}</Text>
+                      <Text style={[styles.statsCell, styles.statsNum, styles.statsHeadText]}>{t("putInHeader")}</Text>
                     </View>
-                  ) : null}
-                </View>
-              ))}
-              {sheet === "stats" ? <Text style={styles.statsLine}>{t("pot", { n: pot })}</Text> : null}
+                    {(state?.players ?? []).map((player) => (
+                      <View key={player.id} style={styles.statsRow}>
+                        <Text style={styles.statsCell} numberOfLines={1}>{player.name}</Text>
+                        <Text style={[styles.statsCell, styles.statsNum]}>{player.stack}</Text>
+                        <Text style={[styles.statsCell, styles.statsNum]}>{player.bought ?? 0}</Text>
+                      </View>
+                    ))}
+                    <Text style={styles.statsLine}>{t("pot", { n: pot })}</Text>
+                  </View>
+                )
+              ) : (
+                <>
+                  {(state?.players ?? []).length === 0 ? <Text style={styles.statsLine}>{t("noPlayers")}</Text> : null}
+                  {(state?.players ?? []).map((player) => (
+                    <View key={player.id} style={styles.statsRow}>
+                      <Text style={styles.statsLine}>{player.name}</Text>
+                      {player.id !== you?.id ? (
+                        <View style={styles.statsActions}>
+                          <Pressable onPress={() => transferAdmin(player.id)}>
+                            <Text style={styles.makeAdmin}>{t("makeAdmin")}</Text>
+                          </Pressable>
+                          <Pressable onPress={() => removePlayer(player.id)} hitSlop={8}>
+                            <Ionicons name="trash-outline" size={20} color="#fecaca" />
+                          </Pressable>
+                        </View>
+                      ) : null}
+                    </View>
+                  ))}
+                </>
+              )}
               <Pressable style={styles.cancel} onPress={() => setSheet(null)}>
                 <Text style={styles.cancelText}>{t("cancel")}</Text>
               </Pressable>
@@ -751,6 +771,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sheetTitle: { color: "#f6d36b", fontSize: 18, fontWeight: "800" },
+  statsTable: { gap: 6 },
+  statsHead: { borderBottomWidth: 1, borderBottomColor: "#44403c", paddingBottom: 6 },
+  statsCell: { flex: 1, color: "#fafaf9", fontSize: 16 },
+  statsNum: { textAlign: "right", fontVariant: ["tabular-nums"] },
+  statsHeadText: { color: "#a8a29e", fontSize: 13, fontWeight: "700" },
   statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   statsActions: { flexDirection: "row", alignItems: "center", gap: 14 },
   statsLine: { color: "#fafaf9", fontSize: 16, flexShrink: 1 },

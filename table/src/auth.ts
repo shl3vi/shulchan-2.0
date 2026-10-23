@@ -3,7 +3,6 @@ import { Router } from "express";
 import { readSchema, sessionBody } from "./schema.js";
 import { redis } from "./store.js";
 
-const redirectUri = "https://shulchan.win/auth/callback";
 const CODE_SECONDS = 60;
 
 function hostTokenSeconds() {
@@ -31,10 +30,14 @@ function clientSecret() {
   return process.env.GOOGLE_OAUTH_SECRET ?? "";
 }
 
+function redirectUri() {
+  return process.env.GOOGLE_OAUTH_REDIRECT_URI ?? "";
+}
+
 export const authRouter = Router();
 
 authRouter.get("/auth/google", async (req, res) => {
-  if (!clientId() || !clientSecret()) {
+  if (!clientId() || !clientSecret() || !redirectUri()) {
     res.status(503).type("text").send("Google sign-in is not configured");
     return;
   }
@@ -47,7 +50,7 @@ authRouter.get("/auth/google", async (req, res) => {
   await redis.set(`oauth:${state}`, back, { EX: 600 });
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", clientId());
-  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("redirect_uri", redirectUri());
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "openid email");
   url.searchParams.set("state", state);
@@ -70,7 +73,7 @@ authRouter.get("/auth/callback", async (req, res) => {
       code: googleCode,
       client_id: clientId(),
       client_secret: clientSecret(),
-      redirect_uri: redirectUri,
+      redirect_uri: redirectUri(),
       grant_type: "authorization_code",
     }),
   });

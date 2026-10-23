@@ -530,11 +530,26 @@ export function PokerTableLayout({
 }
 
 export function TalkButton({ on, onTalk }: { on: boolean; onTalk: (on: boolean) => void }) {
+  const held = useRef(false);
   return (
     <Pressable
       style={[styles.talk, on && styles.talkOn]}
-      onPressIn={() => onTalk(true)}
-      onPressOut={() => onTalk(false)}
+      delayLongPress={280}
+      onPress={() => {
+        if (held.current) return;
+        onTalk(!on);
+      }}
+      onLongPress={() => {
+        held.current = true;
+        onTalk(true);
+      }}
+      onPressOut={() => {
+        if (!held.current) return;
+        onTalk(false);
+        setTimeout(() => {
+          held.current = false;
+        }, 0);
+      }}
     >
       <MicIcon muted={!on} />
     </Pressable>
