@@ -126,6 +126,9 @@ export function attachSockets(io: Server) {
       }
       return change("Backgammon move failed", async (current) => {
         if (current.kind !== "backgammon") throw new Error("This table is not backgammon");
+        if (current.players.filter((seat) => !seat.pendingRemoval).length < 2) {
+          throw new Error("Waiting for a second player");
+        }
         noteBackgammonWin(current, game);
         current.backgammon = game;
       });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Animated, Easing, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, Animated, Easing, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -13,7 +13,7 @@ import { ActionDock, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } fr
 import type { Card, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
-import { answerDouble, move as playMove, newGame, offerDouble, opponent, roll, type Color, type Game, type Move } from "@/game/backgammon";
+import { answerDouble, move as playMove, newGame, opponent, roll, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
 import { t } from "@/i18n";
 
@@ -48,12 +48,14 @@ function WinnerSparkles() {
 }
 
 function PlayerCircle({ name, video, nameAbove, celebrate }: { name: string; video?: ReactNode; nameAbove?: boolean; celebrate?: boolean }) {
+  const shown = name || t("openSeat");
   const label = (
     <Text style={styles.playerName} numberOfLines={1}>
-      {name}
+      {shown}
     </Text>
   );
-  const circle = <View style={styles.circle}>{video ?? <Text style={styles.initial}>{name.replace(/\D/g, "").slice(0, 1) || name.slice(0, 1)}</Text>}</View>;
+  const initial = name ? name.replace(/\D/g, "").slice(0, 1) || name.slice(0, 1) : "+";
+  const circle = <View style={styles.circle}>{video ?? <Text style={styles.initial}>{initial}</Text>}</View>;
   return (
     <View style={styles.player}>
       {nameAbove ? label : null}
@@ -83,6 +85,7 @@ function BackgammonTable({
   gameId,
   password,
   onLeave,
+  isAdmin,
   myColor,
   serverGame,
   wins,
@@ -105,6 +108,7 @@ function BackgammonTable({
   gameId?: string;
   password?: string;
   onLeave: () => void;
+  isAdmin: boolean;
   myColor: Color | null;
   serverGame?: unknown;
   wins?: TableSnapshot["backgammonLog"];
@@ -122,11 +126,25 @@ function BackgammonTable({
   const [rolling, setRolling] = useState(false);
   const [cupFaces, setCupFaces] = useState<number[]>([]);
   const pendingRoll = useRef<Game | null>(null);
-  const actor: Color | null = game.phase === "over" ? null : game.phase === "offer" ? opponent(game.turn) : game.turn;
-  const iPlay = myColor != null && actor === myColor;
+  const waiting = otherId == null;
+  const actor: Color | null = waiting || game.phase === "over" ? null : game.phase === "offer" ? opponent(game.turn) : game.turn;
+  const iPlay = !waiting && myColor != null && actor === myColor;
   const actorName = actor == null ? "" : actor === myColor ? youName : otherName;
   const winnerName = game.winner == null ? "" : game.winner === myColor ? youName : otherName;
   const won = game.phase === "over" && game.winner != null;
+
+  function restartGame() {
+    const go = () => update(newGame());
+    const inPlay = game.phase === "roll" || game.phase === "move" || game.phase === "offer";
+    if (!inPlay) {
+      go();
+      return;
+    }
+    Alert.alert(t("restartGame"), t("restartSure"), [
+      { text: t("cancel"), style: "cancel" },
+      { text: t("restartYes"), style: "destructive", onPress: go },
+    ]);
+  }
 
   function shareTable() {
     const link = gameId ? `${gameId}${password ? ` · ${password}` : ""}` : "backgammon";
@@ -172,17 +190,27 @@ function BackgammonTable({
       <StatusBar style="light" />
       <View style={styles.stage}>
         <View style={[styles.bgColumn, { paddingTop: insets.top + 52 }]}>
-          <View style={[styles.seatRow, styles.topSeat, ((actor != null && actor !== myColor) || (won && game.winner !== myColor)) && styles.seatOn]}>
+          <View style={[styles.seatRow, ((actor != null && actor !== myColor) || (won && game.winner !== myColor)) && styles.seatOn]}>
             <Pressable disabled={!otherId} onPress={() => setSeat(true)}>
               <PlayerCircle name={otherName} video={topVideo} celebrate={won && game.winner !== myColor} />
             </Pressable>
           </View>
           <View style={styles.boardAnchor}>
-            <BackgammonBoard game={game} selected={selected} enabled={iPlay} onSelect={setSelected} onMove={onMove} onAgain={won ? () => update(newGame()) : undefined} />
-            {won ? null : <View style={styles.diceCup} pointerEvents="none">
+            <BackgammonBoard game={game} selected={selected} enabled={iPlay} bare={waiting} onShare={shareTable} onSelect={setSelected} onMove={onMove} onAgain={won ? () => update(newGame()) : undefined} />
+            {won || waiting ? null : <View style={styles.diceCup}>
               <DiceCup
                 faces={rolling ? cupFaces : game.shown}
                 rolling={rolling}
+                prompt={iPlay && !rolling && (game.phase === "opening" || game.phase === "roll")}
+                onRoll={iPlay && !rolling && (game.phase === "opening" || game.phase === "roll") ? () => {
+                  const next = roll(game);
+                  pendingRoll.current = next;
+                  const openingDie = game.phase === "opening"
+                    ? next.shown.length === 2 ? next.shown[1] : next.dice[0] ?? next.shown[0]
+                    : undefined;
+                  setCupFaces(openingDie != null ? [openingDie] : next.shown);
+                  setRolling(true);
+                } : undefined}
                 onDone={() => {
                   const next = pendingRoll.current;
                   pendingRoll.current = null;
@@ -196,25 +224,7 @@ function BackgammonTable({
                 {t("bgWon", { name: winnerName, color: t(game.winner === "white" ? "bgLight" : "bgDark"), points: game.score })}
               </Text>
             ) : null}
-            {won ? null : <View style={styles.tools}>
-            {iPlay && (game.phase === "opening" || game.phase === "roll") ? (
-              <Pressable
-                style={styles.tool}
-                onPress={() => {
-                  if (rolling) return;
-                  pendingRoll.current = roll(game);
-                  setCupFaces(pendingRoll.current.shown);
-                  setRolling(true);
-                }}
-              >
-                <Text style={styles.toolText}>{t("rollDice")}</Text>
-              </Pressable>
-            ) : null}
-            {iPlay && game.phase === "roll" ? (
-              <Pressable style={styles.tool} onPress={() => update(offerDouble(game))}>
-                <Text style={styles.toolText}>{t("doubleCube")}</Text>
-              </Pressable>
-            ) : null}
+            {won || waiting ? null : <View style={styles.tools}>
             {iPlay && game.phase === "offer" ? (
               <>
                 <Pressable style={styles.tool} onPress={() => update(answerDouble(game, true))}>
@@ -228,7 +238,7 @@ function BackgammonTable({
             <Text style={styles.turnLabel}>{actorName ? t("bgTurn", { name: actorName }) : ""}</Text>
             </View>}
           </View>
-          <View style={[styles.seatRow, styles.bottomSeat, ((actor != null && actor === myColor) || (won && game.winner === myColor)) && styles.seatOn]}>
+          <View style={[styles.seatRow, ((actor != null && actor === myColor) || (won && game.winner === myColor)) && styles.seatOn]}>
             <PlayerCircle name={youName} video={bottomVideo} nameAbove celebrate={won && game.winner === myColor} />
           </View>
         </View>
@@ -241,6 +251,7 @@ function BackgammonTable({
               { label: t("tableInfo"), icon: "info", onPress: () => setInfo(true) },
               { label: t("rules"), icon: "stats", onPress: () => setRules(true) },
               { label: t("winLog"), icon: "stats", onPress: () => setLogOpen(true) },
+              ...(isAdmin ? [{ label: t("restartGame"), icon: "restart" as const, onPress: restartGame }] : []),
               { label: t("shareTable"), icon: "share", onPress: shareTable },
               {
                 label: t("leaveGame"),
@@ -433,6 +444,7 @@ export default function TableScreen() {
         }}
         gameId={credentials?.gameId}
         password={state?.password}
+        isAdmin={state?.you?.isAdmin === true}
         onLeave={() => {
           void leave().then(() => router.replace("/"));
         }}
@@ -689,16 +701,14 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#07110d", ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
   players: { flex: 1, alignItems: "center", justifyContent: "space-between", paddingBottom: 28 },
   player: { alignItems: "center", gap: 8, maxWidth: 160 },
-  bgColumn: { flex: 1, justifyContent: "flex-start" },
+  bgColumn: { flex: 1, justifyContent: "space-between", paddingBottom: 64 },
   seatRow: { alignItems: "center", opacity: 0.55 },
-  topSeat: { marginBottom: 22 },
-  bottomSeat: { marginTop: -28 },
   seatOn: { opacity: 1 },
   tools: {
     position: "absolute",
-    left: 92,
-    right: 8,
-    bottom: -82,
+    left: 8,
+    right: 96,
+    bottom: -64,
     height: 78,
     flexDirection: "row",
     alignItems: "center",
@@ -708,7 +718,7 @@ const styles = StyleSheet.create({
   tool: { backgroundColor: "#f6d36b", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8 },
   toolText: { color: "#1c1917", fontWeight: "900" },
   turnLabel: { color: "#f6d36b", fontWeight: "800" },
-  circleWrap: { width: 96, height: 96, alignItems: "center", justifyContent: "center" },
+  circleWrap: { width: 76, height: 76, alignItems: "center", justifyContent: "center" },
   sparkOrbit: { position: "absolute", width: 160, height: 160, left: -32, top: -32 },
   spark: { position: "absolute", color: "#f6d36b", fontSize: 16, fontWeight: "900" },
   winCaption: {
@@ -722,9 +732,9 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   circle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "#f6d36b",
@@ -736,8 +746,8 @@ const styles = StyleSheet.create({
   playerName: { color: "#fafaf9", fontSize: 16, fontWeight: "800" },
   meta: { color: "#d6d3d1", padding: 24 },
   stage: { flex: 1, minHeight: 0 },
-  boardAnchor: { position: "relative", marginBottom: 84 },
-  diceCup: { position: "absolute", left: 6, bottom: -82, zIndex: 4 },
+  boardAnchor: { position: "relative" },
+  diceCup: { position: "absolute", right: 10, bottom: -94, zIndex: 4 },
   ad: { height: 50, width: "100%", backgroundColor: "#292524", alignItems: "center", overflow: "hidden" },
   home: {
     position: "absolute",

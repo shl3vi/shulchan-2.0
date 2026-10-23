@@ -272,7 +272,7 @@ export function roll(game: Game): Game {
     }
     if (whiteDie === face) {
       next.shown = [];
-      next.dice = [];
+      next.dice = [face];
       next.turn = "white";
       next.message = "tied";
       return next;

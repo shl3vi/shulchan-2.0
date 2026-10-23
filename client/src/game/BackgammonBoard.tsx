@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { stepDice } from "@/game/diceSound";
 import {
   checkers,
@@ -142,14 +142,34 @@ function Checker({ color, size, overlap }: { color: Color; size: number; overlap
 export function DiceCup({
   faces,
   rolling,
+  prompt,
+  onRoll,
   onDone,
 }: {
   faces: number[];
   rolling: boolean;
+  prompt: boolean;
+  onRoll?: () => void;
   onDone: () => void;
 }) {
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
+  const glow = useRef(new Animated.Value(0.35)).current;
+
+  useEffect(() => {
+    if (!prompt) {
+      glow.setValue(0.35);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 1, duration: 650, useNativeDriver: false }),
+        Animated.timing(glow, { toValue: 0.25, duration: 650, useNativeDriver: false }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [prompt, glow]);
   const [tumbling, setTumbling] = useState(false);
   const [pose, setPose] = useState([
     { x: -9, y: -2, rot: -8, face: 1 },
@@ -204,9 +224,14 @@ export function DiceCup({
     { x: 9, y: 6, rot: 0, face: faces[1] ?? 1 },
   ]).slice(0, faces.length);
 
+  const rimColor = glow.interpolate({
+    inputRange: [0.25, 1],
+    outputRange: ["#8a6233", "#ffe7a3"],
+  });
+
   return (
-    <View style={styles.cupWrap}>
-      <View style={styles.cupRim}>
+    <Pressable style={styles.cupWrap} disabled={!onRoll} onPress={onRoll}>
+      <Animated.View style={[styles.cupRim, prompt ? { borderColor: rimColor } : null]}>
         <View style={styles.cupWell}>
           {faces.length === 0 ? null : shown.map((die, index) => (
             <View
@@ -227,8 +252,8 @@ export function DiceCup({
             </View>
           ))}
         </View>
-      </View>
-    </View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -239,6 +264,8 @@ export function BackgammonBoard({
   onSelect,
   onMove,
   onAgain,
+  bare,
+  onShare,
 }: {
   game: Game;
   selected: number | "bar" | null;
@@ -246,6 +273,8 @@ export function BackgammonBoard({
   onSelect: (from: number | "bar" | null) => void;
   onMove: (move: Move) => void;
   onAgain?: () => void;
+  bare?: boolean;
+  onShare?: () => void;
 }) {
   const [boardW, setBoardW] = useState(360);
   const pointW = Math.max(16, (boardW - 40) / 12);
@@ -291,10 +320,12 @@ export function BackgammonBoard({
           <Triangle point={point} up={up} side={side} length={length} tint={tint} />
         </View>
         <View style={[styles.stack, up ? styles.stackUp : styles.stackDown, up ? styles.stackGrowUp : null]} pointerEvents="none">
-          {Array.from({ length: shown }, (_, index) => (
-            <Checker key={index} color={color ?? "white"} size={checker} overlap={index > 0} />
-          ))}
-          {count > 5 ? <Text style={styles.count}>{count}</Text> : null}
+          {bare
+            ? null
+            : Array.from({ length: shown }, (_, index) => (
+                <Checker key={index} color={color ?? "white"} size={checker} overlap={index > 0} />
+              ))}
+          {bare || count <= 5 ? null : <Text style={styles.count}>{count}</Text>}
           {landing ? <Text style={[styles.optionBadge, { color: optionColor(landing.die) }]}>{landing.die}</Text> : null}
         </View>
       </Pressable>
@@ -317,24 +348,33 @@ export function BackgammonBoard({
             if (game.bar[game.turn] > 0 && moves.some((move) => move.from === "bar")) onSelect("bar");
           }}
         >
-          <Text style={styles.barCount}>{game.bar.black || ""}</Text>
-          <Text style={styles.barCount}>{game.bar.white || ""}</Text>
+          {bare ? null : <Text style={styles.barCount}>{game.bar.black || ""}</Text>}
+          {bare ? null : <Text style={styles.barCount}>{game.bar.white || ""}</Text>}
         </Pressable>
         {TOP.slice(6).map((point) => stack(point, false))}
       </View>
-      <View style={styles.cubeRail}>
-        <Text style={styles.cubeLabel}>{t("cube")}</Text>
-        <Text style={styles.cubeValue}>{game.cube}</Text>
-        <Text style={styles.pips}>
-          {pipCount(game, "black")} · {pipCount(game, "white")}
-        </Text>
-      </View>
+      {bare ? (
+        <View style={styles.invite}>
+          <Pressable style={styles.share} onPress={onShare}>
+            <Text style={styles.shareText}>{t("shareTable")}</Text>
+          </Pressable>
+          <Text style={styles.win}>{t("bgWaiting")}</Text>
+        </View>
+      ) : (
+        <View style={styles.cubeRail}>
+          <Text style={styles.cubeLabel}>{t("cube")}</Text>
+          <Text style={styles.cubeValue}>{game.cube}</Text>
+          <Text style={styles.pips}>
+            {pipCount(game, "black")} · {pipCount(game, "white")}
+          </Text>
+        </View>
+      )}
       <View style={[styles.half, { minHeight: length + 8 }]}>
         {BOTTOM.slice(0, 6).map((point) => stack(point, true))}
         <View style={styles.bar} />
         {BOTTOM.slice(6).map((point) => stack(point, true))}
       </View>
-      {game.message && !game.winner ? <Text style={styles.win}>{statusText(game.message)}</Text> : null}
+      {!bare && game.message && !game.winner ? <Text style={styles.win}>{statusText(game.message)}</Text> : null}
       {onAgain ? (
         <Pressable style={styles.again} onPress={onAgain}>
           <Text style={styles.againText}>{t("bgAgain")}</Text>
@@ -419,6 +459,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   trayCount: { color: "#fafaf9", fontSize: 11, fontWeight: "800" },
+  invite: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 6 },
+  share: { backgroundColor: "#f6d36b", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 8 },
+  shareText: { color: "#1c1917", fontWeight: "900" },
   cubeRail: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   cubeLabel: { color: "#f6d36b", fontSize: 11, fontWeight: "700" },
   cubeValue: {
