@@ -1,6 +1,8 @@
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import { GameSessionProvider, useGameSession } from "@/game/GameSession";
+import { loadLocale, subscribeLocale, locale } from "@/i18n";
 
 export default function RootLayout() {
   return (
@@ -12,9 +14,14 @@ export default function RootLayout() {
 
 function Shell() {
   const { ready } = useGameSession();
+  const [langReady, setLangReady] = useState(false);
+  useSyncExternalStore(subscribeLocale, locale, locale);
+  useEffect(() => {
+    void loadLocale().finally(() => setLangReady(true));
+  }, []);
   // Keep the native splash image visible until the seat check finishes.
   // A painted view here would cover that image with another color.
-  if (!ready) return <View style={styles.hold} />;
+  if (!ready || !langReady) return <View style={styles.hold} />;
   return <AppStack />;
 }
 

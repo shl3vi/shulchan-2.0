@@ -11,7 +11,7 @@ const catalogs = {
     moreThan: "More than {n}",
     yourAmount: "Your amount",
     signInGoogle: "Sign in with Google",
-    signInToCreate: "Sign in to open a table. Anyone can join.",
+    signInToCreate: "Opening a table needs a sign-in. Joining a friend’s table doesn’t.",
     signedInAs: "Signed in as {email}",
     hello: "Hello, {name}",
     logout: "Log out",
@@ -61,7 +61,7 @@ const catalogs = {
     couldNotJoin: "Could not join",
     joinTable: "JOIN A TABLE",
     joinWithCode: "Enter the table ID and password.",
-    joinWithId: "Join with table ID",
+    joinWithId: "Join a table",
     tableId: "Table ID",
     password: "Password",
     tableInfo: "Table info",
@@ -123,7 +123,7 @@ const catalogs = {
     moreThan: "יותר מ-{n}",
     yourAmount: "סכום לבחירה",
     signInGoogle: "כניסה עם Google",
-    signInToCreate: "נכנסים כדי לפתוח שולחן. כולם יכולים להצטרף.",
+    signInToCreate: "כדי לפתוח שולחן חדש צריך להתחבר. כדי להצטרף לשולחן קיים אין צורך בהתחברות.",
     signedInAs: "מחוברים בתור {email}",
     hello: "שלום, {name}",
     logout: "יציאה",
@@ -173,7 +173,7 @@ const catalogs = {
     couldNotJoin: "אי אפשר להצטרף",
     joinTable: "הצטרפות לשולחן",
     joinWithCode: "הכניסו מזהה שולחן וסיסמה.",
-    joinWithId: "הצטרפות עם מזהה שולחן",
+    joinWithId: "הצטרפות לשולחן",
     tableId: "מזהה שולחן",
     password: "סיסמה",
     tableInfo: "פרטי השולחן",
@@ -227,18 +227,156 @@ const catalogs = {
     muteSeat: "השתקה",
     unmuteSeat: "ביטול השתקה",
   },
+  es: {
+    enterYourName: "cómo te ve la mesa",
+    yourName: "Tu nombre",
+    smallBlind: "Ciega pequeña",
+    buyIn: "Entrada",
+    moreThan: "Más de {n}",
+    yourAmount: "Tu cantidad",
+    signInGoogle: "Entrar con Google",
+    signInToCreate: "Para abrir una mesa nueva tienes que iniciar sesión. No hace falta iniciar sesión para unirte a una mesa existente.",
+    signedInAs: "Sesión iniciada como {email}",
+    hello: "Hola, {name}",
+    logout: "Salir",
+    createTable: "Abrir una mesa nueva",
+    backgammonTable: "Mesa de backgammon",
+    pokerTable: "Mesa de póker",
+    rollDice: "Tirar",
+    tapToRoll: "Toca para tirar",
+    doubleCube: "Doblar",
+    takeDouble: "Aceptar",
+    passDouble: "Pasar",
+    newGame: "Partida nueva",
+    bgAgain: "Otra partida",
+    winLog: "Historial",
+    winLogEmpty: "Todavía no hay partidas terminadas.",
+    rules: "Reglas",
+    bgTurn: "Turno de {name}",
+    bgWaiting: "Esperando a un rival",
+    restartGame: "Reiniciar partida",
+    restartSure: "Hay una partida en curso. ¿Empezar de nuevo?",
+    restartYes: "Reiniciar",
+    bgWon: "{name} ({color}) ganó — {points} puntos",
+    bgLight: "Claras",
+    bgDark: "Oscuras",
+    cube: "cubo",
+    bgMsgRoll: "Tira para ver quién empieza.",
+    bgMsgGame: "Partida.",
+    bgMsgGammon: "Gammon.",
+    bgMsgBackgammon: "Backgammon.",
+    bgMsgNoMove: "No hay jugada legal.",
+    bgMsgTied: "Dados iguales. Tira otra vez.",
+    bgMsgOffered: "Doblar ofrecido.",
+    bgMsgDeclined: "Doblar rechazado.",
+    bgRules: "Las claras se mueven hacia abajo a la derecha. Las oscuras se mueven hacia arriba a la derecha. Tira los dos dados. Debes usar ambos si puedes, y el más alto si solo puedes usar uno. Un doble son cuatro movimientos. Una ficha sola se come y va a la barra. Las fichas de la barra entran primero. Solo se saca desde tu casa. El cubo dobla la apuesta. Un gammon la dobla otra vez y un backgammon la triplica.",
+    dealMeIn: "Reparte",
+    shuffling: "Barajando…",
+    tagline: "Abre una mesa. Manda el enlace. Juega.",
+    atTable: "Estás en una mesa",
+    backToSeat: "Toca para volver a tu sitio",
+    serverUnreachable: "No se pudo contactar con el servidor",
+    wholeNumber: "Escribe un número entero de al menos {n}",
+    nameLength: "Usa de 1 a 24 caracteres",
+    invited: "TE INVITARON",
+    takeASeat: "Siéntate.",
+    sitDown: "Sentarse",
+    sittingDown: "Sentándote…",
+    couldNotJoin: "No se pudo entrar",
+    joinTable: "UNIRSE A UNA MESA",
+    joinWithCode: "Escribe el ID de la mesa y la contraseña.",
+    joinWithId: "Unirse a una mesa",
+    tableId: "ID de la mesa",
+    password: "Contraseña",
+    tableInfo: "Datos de la mesa",
+    copy: "Copiar",
+    copied: "Copiado",
+    blindsAndBuyIn: "Ciegas {small}/{big} · Entrada {buyIn}",
+    statistics: "Estadísticas",
+    player: "Jugador",
+    stack: "Fichas",
+    putInHeader: "Puso",
+    adminOptions: "Opciones de admin",
+    cancel: "Cancelar",
+    shareTable: "Compartir mesa",
+    leaveGame: "Salir de la partida",
+    shareMessage: "Siéntate en mi mesa de Shulchan.\n{link}",
+    sitFirst: "Siéntate primero desde la pantalla de inicio.",
+    noPlayers: "No hay jugadores",
+    remove: "Quitar",
+    makeAdmin: "Hacer admin",
+    pot: "Bote {n}",
+    waiting: "Esperando",
+    openSeat: "Libre",
+    amount: "cantidad",
+    waitingTurn: "Esperando tu turno",
+    leftTable: "Ya no estás en esta mesa",
+    alreadyAtTable: "Ya estás en una mesa",
+    preflop: "Pre-flop",
+    flop: "Flop",
+    turn: "Turn",
+    river: "River",
+    fold: "no voy",
+    check: "paso",
+    call: "veo",
+    bet: "apuesto",
+    raise: "subo",
+    deal: "Repartir",
+    allIn: "all in",
+    minBet: "mín",
+    halfPot: "½ bote",
+    potBet: "bote",
+    maxBet: "máx",
+    buyMore: "Comprar fichas",
+    putIn: "puso {n}",
+    betOutOfRange: "La apuesta debe estar entre {min} y {max}",
+    needTwoWithMoney: "Hacen falta al menos dos jugadores con fichas para repartir.",
+    cameraAsk: "¿Mostrar tu cámara en esta mesa?",
+    turnCameraOn: "Encender cámara",
+    notNow: "Ahora no",
+    hideVideo: "Ocultar vídeo",
+    showVideo: "Mostrar vídeo",
+    muteSeat: "Silenciar",
+    unmuteSeat: "Activar sonido",
+  },
 } as const;
 
 export type Locale = keyof typeof catalogs;
 export type MessageKey = keyof typeof catalogs.en;
 
-function deviceLanguage(): string {
-  return (Intl.DateTimeFormat().resolvedOptions().locale || "en").toLowerCase();
-}
+export const LOCALES: Locale[] = ["en", "he", "es"];
+
+export const LOCALE_LABEL: Record<Locale, string> = {
+  en: "English",
+  he: "עברית",
+  es: "Español",
+};
+
+let chosen: Locale = "en";
+const listeners = new Set<() => void>();
 
 export function locale(): Locale {
-  const code = deviceLanguage().split(/[-_]/)[0] ?? "en";
-  return code in catalogs ? (code as Locale) : "en";
+  return chosen;
+}
+
+export function subscribeLocale(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export async function loadLocale() {
+  chosen = "en";
+}
+
+export async function setLocale(next: Locale) {
+  chosen = next;
+  listeners.forEach((listener) => listener());
+  try {
+    const { default: AsyncStorage } = await import("@react-native-async-storage/async-storage");
+    await AsyncStorage.setItem("shulchan.locale", next);
+  } catch {
+    // The choice still applies for this run.
+  }
 }
 
 const rtl = new Set<Locale>(["he"]);

@@ -119,8 +119,19 @@ export default function HomeScreen() {
   const [nameMissing, setNameMissing] = useState(false);
   const [host, setHost] = useState<Host | null>(null);
   const [creating, setCreating] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [kind, setKind] = useState<"poker" | "backgammon" | null>(null);
+  const [joinGame, setJoinGame] = useState("");
+  const [joinPassword, setJoinPassword] = useState("");
+  const [joinName, setJoinName] = useState("");
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [joinBusy, setJoinBusy] = useState(false);
   const nameInput = useRef<TextInput>(null);
+
+  function normalizeCode(code: string) {
+    const trimmed = code.trim();
+    return trimmed.includes("-") ? trimmed : trimmed.toUpperCase();
+  }
 
   const refreshHost = useCallback(() => {
     void loadHost().then(setHost);
@@ -163,10 +174,29 @@ export default function HomeScreen() {
   }
 
   function openCreate() {
+    setJoining(false);
     setCreating((open) => {
       if (open) setKind(null);
       return !open;
     });
+  }
+
+  async function sit() {
+    const seatedName = playerName(joinName);
+    if (!seatedName || joinGame.trim().length === 0 || joinPassword.trim().length === 0) {
+      setJoinError(t("nameLength"));
+      return;
+    }
+    setJoinError(null);
+    setJoinBusy(true);
+    try {
+      await session.join(seatedName, normalizeCode(joinGame), joinPassword.trim());
+      router.push("/table");
+    } catch (cause) {
+      setJoinError(cause instanceof Error ? cause.message : t("couldNotJoin"));
+    } finally {
+      setJoinBusy(false);
+    }
   }
 
   async function create(nextKind: "poker" | "backgammon" = "poker") {
@@ -284,11 +314,59 @@ export default function HomeScreen() {
       ) : null}
       {error && !creating ? <Text style={styles.error}>{error}</Text> : null}
       {seated ? null : (
-        <Pressable style={styles.joinCode} onPress={() => router.push("/join")}>
+        <Pressable
+          style={styles.joinCode}
+          onPress={() => {
+            setCreating(false);
+            setKind(null);
+            setJoining((open) => !open);
+          }}
+        >
           <Ionicons name="enter-outline" size={20} color="#f6d36b" />
           <Text style={styles.joinCodeText}>{t("joinWithId")}</Text>
         </Pressable>
       )}
+      {joining && !seated ? (
+        <View style={styles.felt}>
+          <Text style={[styles.label, { textAlign: align }]}>{t("tableId")}</Text>
+          <TextInput
+            style={[styles.input, styles.code]}
+            value={joinGame}
+            onChangeText={setJoinGame}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            placeholder="K7P2QX"
+            placeholderTextColor="#78716c"
+          />
+          <Text style={[styles.label, { textAlign: align }]}>{t("password")}</Text>
+          <TextInput
+            style={[styles.input, styles.code]}
+            value={joinPassword}
+            onChangeText={setJoinPassword}
+            keyboardType="number-pad"
+            placeholder="123456"
+            placeholderTextColor="#78716c"
+          />
+          <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
+          <TextInput
+            style={[styles.input, { textAlign: align }]}
+            value={joinName}
+            onChangeText={setJoinName}
+            autoCapitalize="words"
+            placeholder={t("enterYourName")}
+            placeholderTextColor="#78716c"
+            maxLength={24}
+          />
+          <Pressable
+            style={[styles.deal, joinBusy && styles.dealBusy]}
+            disabled={joinBusy}
+            onPress={() => void sit()}
+          >
+            <Text style={styles.dealText}>{joinBusy ? t("sittingDown") : t("sitDown")}</Text>
+          </Pressable>
+          {joinError ? <Text style={styles.error}>{joinError}</Text> : null}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -304,10 +382,10 @@ const styles = StyleSheet.create({
   returnTitle: { color: "#1c1917", fontWeight: "900", fontSize: 18 },
   returnText: { color: "#44403c", marginTop: 4 },
   felt: {
-    backgroundColor: "#14532d",
+    backgroundColor: "#1c1917",
     borderRadius: 28,
-    borderWidth: 3,
-    borderColor: "#7c4a1e",
+    borderWidth: 1,
+    borderColor: "#44403c",
     padding: 18,
     gap: 8,
     marginTop: 12,
@@ -315,11 +393,11 @@ const styles = StyleSheet.create({
   feltOff: { opacity: 0.45 },
   label: { color: "#f6d36b", fontWeight: "800", letterSpacing: 0.6, marginTop: 6 },
   input: {
-    backgroundColor: "#052e16",
+    backgroundColor: "#0c0a09",
     color: "white",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#166534",
+    borderColor: "#44403c",
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
@@ -329,10 +407,10 @@ const styles = StyleSheet.create({
   chips: { flexDirection: "row", gap: 8 },
   chip: {
     flex: 1,
-    backgroundColor: "#052e16",
+    backgroundColor: "#0c0a09",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#166534",
+    borderColor: "#44403c",
     paddingVertical: 10,
     alignItems: "center",
   },
@@ -343,10 +421,10 @@ const styles = StyleSheet.create({
   dealBusy: { opacity: 0.7 },
   dealText: { color: "#1c1917", fontWeight: "900", fontSize: 18, letterSpacing: 0.4 },
   signIn: {
-    backgroundColor: "#000000",
+    backgroundColor: "#1c1917",
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: "#2a2a2a",
+    borderColor: "#44403c",
     padding: 18,
     gap: 8,
     marginTop: 12,
@@ -377,10 +455,10 @@ const styles = StyleSheet.create({
   kindCard: {
     flex: 1,
     minHeight: 120,
-    backgroundColor: "#14532d",
+    backgroundColor: "#1c1917",
     borderRadius: 24,
-    borderWidth: 3,
-    borderColor: "#7c4a1e",
+    borderWidth: 1,
+    borderColor: "#44403c",
     alignItems: "center",
     justifyContent: "center",
     padding: 16,
@@ -398,4 +476,5 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   joinCodeText: { color: "#f6d36b", fontWeight: "900", fontSize: 17, letterSpacing: 0.4 },
+  code: { textAlign: "center", letterSpacing: 4, fontSize: 20, fontWeight: "800" },
 });
