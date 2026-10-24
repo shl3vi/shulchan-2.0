@@ -4,7 +4,6 @@ import { stepDice } from "@/game/diceSound";
 import {
   checkers,
   legalMoves,
-  pipCount,
   type Color,
   type Game,
   type Move,
@@ -98,7 +97,7 @@ function PipDie({ value, size = 22 }: { value: number; size?: number }) {
   );
 }
 
-function Checker({ color, size, overlap }: { color: Color; size: number; overlap: boolean }) {
+function Checker({ color, size, overlap, up }: { color: Color; size: number; overlap: boolean; up?: boolean }) {
   const light = color === "white";
   return (
     <View
@@ -109,7 +108,8 @@ function Checker({ color, size, overlap }: { color: Color; size: number; overlap
           width: size,
           height: size,
           borderRadius: size / 2,
-          marginTop: overlap ? -size * 0.34 : 2,
+          marginTop: up ? 0 : overlap ? -size * 0.34 : 2,
+          marginBottom: up && overlap ? -size * 0.34 : 0,
         },
       ]}
     >
@@ -233,7 +233,9 @@ export function DiceCup({
     <Pressable style={styles.cupWrap} disabled={!onRoll} onPress={onRoll}>
       <Animated.View style={[styles.cupRim, prompt ? { borderColor: rimColor } : null]}>
         <View style={styles.cupWell}>
-          {faces.length === 0 ? null : shown.map((die, index) => (
+          {prompt && !tumbling ? (
+            <Animated.Text style={[styles.rollPrompt, { opacity: glow }]}>{t("tapToRoll")}</Animated.Text>
+          ) : faces.length === 0 ? null : shown.map((die, index) => (
             <View
               key={index}
               style={[
@@ -259,6 +261,7 @@ export function DiceCup({
 
 export function BackgammonBoard({
   game,
+  perspective,
   selected,
   enabled,
   onSelect,
@@ -268,6 +271,7 @@ export function BackgammonBoard({
   onShare,
 }: {
   game: Game;
+  perspective?: Color | null;
   selected: number | "bar" | null;
   enabled: boolean;
   onSelect: (from: number | "bar" | null) => void;
@@ -305,6 +309,19 @@ export function BackgammonBoard({
     if (checkers(game, point, game.turn) > 0 && moves.some((move) => move.from === point)) onSelect(point);
   }
 
+  function barStack(color: Color, count: number) {
+    if (count <= 0) return null;
+    const size = Math.min(checker, 14);
+    const shown = Math.min(count, 4);
+    return (
+      <View style={styles.barStack}>
+        {Array.from({ length: shown }, (_, index) => (
+          <Checker key={index} color={color} size={size} overlap={index > 0} />
+        ))}
+      </View>
+    );
+  }
+
   function stack(point: number, up: boolean) {
     const white = checkers(game, point, "white");
     const black = checkers(game, point, "black");
@@ -323,7 +340,7 @@ export function BackgammonBoard({
           {bare
             ? null
             : Array.from({ length: shown }, (_, index) => (
-                <Checker key={index} color={color ?? "white"} size={checker} overlap={index > 0} />
+                <Checker key={index} color={color ?? "white"} size={checker} overlap={index > 0} up={up} />
               ))}
           {bare || count <= 5 ? null : <Text style={styles.count}>{count}</Text>}
           {landing ? <Text style={[styles.optionBadge, { color: optionColor(landing.die) }]}>{landing.die}</Text> : null}
@@ -333,13 +350,20 @@ export function BackgammonBoard({
   }
 
   const barHot = enabled && (selected === "bar" || (game.bar[game.turn] > 0 && moves.some((move) => move.from === "bar")));
+  // Black sits opposite white, so a half-turn puts their home (19–24) on the near side.
+  const flipped = perspective === "black";
+  const topPoints = flipped ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : TOP;
+  const bottomPoints = flipped ? [24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13] : BOTTOM;
+  const farBar: Color = flipped ? "white" : "black";
+  const nearBar: Color = flipped ? "black" : "white";
 
   return (
+    <View style={styles.frame}>
     <View style={styles.board} onLayout={(event) => setBoardW(event.nativeEvent.layout.width)}>
       <View style={[styles.half, { minHeight: length + 8 }]}>
-        {TOP.slice(0, 6).map((point) => stack(point, false))}
+        {topPoints.slice(0, 6).map((point) => stack(point, false))}
         <Pressable
-          style={[styles.bar, barHot && styles.chosen]}
+          style={[styles.bar, styles.barCenter, barHot && selected === "bar" && styles.chosen]}
           onPress={() => {
             if (selected === "bar") {
               onSelect(null);
@@ -348,48 +372,40 @@ export function BackgammonBoard({
             if (game.bar[game.turn] > 0 && moves.some((move) => move.from === "bar")) onSelect("bar");
           }}
         >
-          {bare ? null : <Text style={styles.barCount}>{game.bar.black || ""}</Text>}
-          {bare ? null : <Text style={styles.barCount}>{game.bar.white || ""}</Text>}
+          {bare ? null : barStack(farBar, game.bar[farBar])}
+          {bare ? null : barStack(nearBar, game.bar[nearBar])}
         </Pressable>
-        {TOP.slice(6).map((point) => stack(point, false))}
+        {topPoints.slice(6).map((point) => stack(point, false))}
       </View>
       {bare ? (
         <View style={styles.invite}>
           <Pressable style={styles.share} onPress={onShare}>
             <Text style={styles.shareText}>{t("shareTable")}</Text>
           </Pressable>
-          <Text style={styles.win}>{t("bgWaiting")}</Text>
+          <Text style={styles.caption}>{t("bgWaiting")}</Text>
         </View>
-      ) : (
-        <View style={styles.cubeRail}>
-          <Text style={styles.cubeLabel}>{t("cube")}</Text>
-          <Text style={styles.cubeValue}>{game.cube}</Text>
-          <Text style={styles.pips}>
-            {pipCount(game, "black")} · {pipCount(game, "white")}
-          </Text>
-        </View>
-      )}
+      ) : null}
       <View style={[styles.half, { minHeight: length + 8 }]}>
-        {BOTTOM.slice(0, 6).map((point) => stack(point, true))}
+        {bottomPoints.slice(0, 6).map((point) => stack(point, true))}
         <View style={styles.bar} />
-        {BOTTOM.slice(6).map((point) => stack(point, true))}
+        {bottomPoints.slice(6).map((point) => stack(point, true))}
       </View>
-      {!bare && game.message && !game.winner ? <Text style={styles.win}>{statusText(game.message)}</Text> : null}
       {onAgain ? (
         <Pressable style={styles.again} onPress={onAgain}>
           <Text style={styles.againText}>{t("bgAgain")}</Text>
         </Pressable>
       ) : null}
     </View>
+    {!bare && game.message && !game.winner ? <Text style={styles.caption}>{statusText(game.message)}</Text> : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  frame: { width: "100%", maxWidth: 520, alignSelf: "center", gap: 10 },
   board: {
     alignSelf: "center",
     width: "100%",
-    maxWidth: 520,
-    marginHorizontal: 8,
     backgroundColor: "#5c3317",
     borderRadius: 12,
     borderWidth: 3,
@@ -405,19 +421,19 @@ const styles = StyleSheet.create({
   stackUp: { bottom: 0 },
   stackDown: { top: 0 },
   stackGrowUp: { flexDirection: "column-reverse" },
-  stackGrowUp: { flexDirection: "column-reverse" },
   checker: { borderWidth: 1 },
   white: { backgroundColor: "#f5f0e6", borderColor: "#d6d3d1" },
   black: { backgroundColor: "#1c1917", borderColor: "#f6d36b" },
   count: { color: "#f6d36b", fontSize: 10, fontWeight: "900" },
+  barCenter: { justifyContent: "center", gap: 2 },
   bar: {
-    width: 28,
-    marginHorizontal: 2,
-    borderRadius: 6,
+    width: 16,
+    marginHorizontal: 5,
+    borderRadius: 3,
     backgroundColor: "#3f2412",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   cupWrap: { width: 78, height: 78, alignItems: "center", justifyContent: "center" },
   cupRim: {
@@ -430,6 +446,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  rollPrompt: { color: "#f6d36b", fontSize: 11, fontWeight: "900", textAlign: "center", lineHeight: 13 },
+  barStack: { alignItems: "center" },
   cupWell: {
     width: 52,
     height: 52,
@@ -462,6 +480,17 @@ const styles = StyleSheet.create({
   invite: { alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 6 },
   share: { backgroundColor: "#f6d36b", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 8 },
   shareText: { color: "#1c1917", fontWeight: "900" },
+  hitRail: {
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 8,
+  },
+  hitSide: { flex: 1, alignItems: "center", justifyContent: "center" },
+  hitRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 2 },
   cubeRail: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   cubeLabel: { color: "#f6d36b", fontSize: 11, fontWeight: "700" },
   cubeValue: {
@@ -487,7 +516,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingHorizontal: 3,
   },
-  win: { color: "#f6d36b", textAlign: "center", fontWeight: "800" },
+  caption: { color: "#f6d36b", textAlign: "center", fontWeight: "800", marginHorizontal: 8 },
   again: {
     position: "absolute",
     alignSelf: "center",

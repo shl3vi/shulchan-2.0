@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Animated, Easing, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -47,7 +48,19 @@ function WinnerSparkles() {
   );
 }
 
-function PlayerCircle({ name, video, nameAbove, celebrate }: { name: string; video?: ReactNode; nameAbove?: boolean; celebrate?: boolean }) {
+function PlayerCircle({
+  name,
+  video,
+  nameAbove,
+  celebrate,
+  attention,
+}: {
+  name: string;
+  video?: ReactNode;
+  nameAbove?: boolean;
+  celebrate?: boolean;
+  attention?: "roll" | "play" | null;
+}) {
   const shown = name || t("openSeat");
   const label = (
     <Text style={styles.playerName} numberOfLines={1}>
@@ -55,7 +68,11 @@ function PlayerCircle({ name, video, nameAbove, celebrate }: { name: string; vid
     </Text>
   );
   const initial = name ? name.replace(/\D/g, "").slice(0, 1) || name.slice(0, 1) : "+";
-  const circle = <View style={styles.circle}>{video ?? <Text style={styles.initial}>{initial}</Text>}</View>;
+  const circle = (
+    <View style={[styles.circle, attention ? styles.circleLit : null]}>
+      {video ?? <Text style={styles.initial}>{initial}</Text>}
+    </View>
+  );
   return (
     <View style={styles.player}>
       {nameAbove ? label : null}
@@ -128,8 +145,19 @@ function BackgammonTable({
   const pendingRoll = useRef<Game | null>(null);
   const waiting = otherId == null;
   const actor: Color | null = waiting || game.phase === "over" ? null : game.phase === "offer" ? opponent(game.turn) : game.turn;
+  const gameRef = useRef(game);
+  gameRef.current = game;
+  const seenGame = useRef("");
+
+  useEffect(() => {
+    const live = !waiting && game.phase !== "over";
+    if (!live) return;
+    void activateKeepAwakeAsync("backgammon");
+    return () => {
+      void deactivateKeepAwake("backgammon");
+    };
+  }, [waiting, game.phase]);
   const iPlay = !waiting && myColor != null && actor === myColor;
-  const actorName = actor == null ? "" : actor === myColor ? youName : otherName;
   const winnerName = game.winner == null ? "" : game.winner === myColor ? youName : otherName;
   const won = game.phase === "over" && game.winner != null;
 
@@ -147,20 +175,55 @@ function BackgammonTable({
   }
 
   function shareTable() {
-    const link = gameId ? `${gameId}${password ? ` · ${password}` : ""}` : "backgammon";
+    const link = gameId
+      ? `${API_URL}/join?${new URLSearchParams({ game: gameId, ...(password ? { password } : {}) })}`
+      : "backgammon";
     Share.share({ message: t("shareMessage", { link }) });
   }
 
-  function update(next: Game) {
+  function gameKey(next: Game) {
+    return JSON.stringify({
+      points: next.points,
+      bar: next.bar,
+      off: next.off,
+      shown: next.shown,
+      dice: next.dice,
+      phase: next.phase,
+      turn: next.turn,
+      winner: next.winner,
+    });
+  }
+
+  function adopt(next: Game, remote: boolean) {
+    const key = gameKey(next);
+    if (key === seenGame.current) return;
+    const prev = gameRef.current;
+    const first = seenGame.current === "";
+    seenGame.current = key;
     setSelected(null);
     setGame(next);
+    if (!remote || first) return;
+    const rolled = next.shown.length > 0 && next.shown.join(",") !== prev.shown.join(",");
+    const moved =
+      JSON.stringify(prev.points) !== JSON.stringify(next.points)
+      || JSON.stringify(prev.bar) !== JSON.stringify(next.bar)
+      || JSON.stringify(prev.off) !== JSON.stringify(next.off);
+    if (rolled && !rolling) {
+      pendingRoll.current = null;
+      setCupFaces(next.shown.slice());
+      setRolling(true);
+    }
+    if (moved) checkerPlace();
+  }
+
+  function update(next: Game) {
+    adopt(next, false);
     emit("bg", next);
   }
 
   useEffect(() => {
     if (!serverGame || typeof serverGame !== "object") return;
-    setSelected(null);
-    setGame(serverGame as Game);
+    adopt(serverGame as Game, true);
   }, [serverGame]);
 
   const recorded = useRef(false);
@@ -170,11 +233,13 @@ function BackgammonTable({
     emit("bg", game);
   }, [won, wins, game, emit]);
 
+  const adoptRef = useRef(adopt);
+  adoptRef.current = adopt;
+
   useEffect(() => {
     return subscribe("bg", (body) => {
       if (!body || typeof body !== "object") return;
-      setSelected(null);
-      setGame(body as Game);
+      adoptRef.current(body as Game, true);
     });
   }, [subscribe]);
 
@@ -185,6 +250,15 @@ function BackgammonTable({
     update(next);
   }
 
+  function seatAttention(actorColor: Color | null, mine: Color | null, self: boolean): "roll" | "play" | null {
+    if (waiting || won || actorColor == null || mine == null) return null;
+    const active = self ? actorColor === mine : actorColor !== mine;
+    if (!active) return null;
+    if (game.phase === "roll" || game.phase === "opening") return "roll";
+    if (game.phase === "move") return "play";
+    return null;
+  }
+
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
@@ -192,11 +266,16 @@ function BackgammonTable({
         <View style={[styles.bgColumn, { paddingTop: insets.top + 52 }]}>
           <View style={[styles.seatRow, ((actor != null && actor !== myColor) || (won && game.winner !== myColor)) && styles.seatOn]}>
             <Pressable disabled={!otherId} onPress={() => setSeat(true)}>
-              <PlayerCircle name={otherName} video={topVideo} celebrate={won && game.winner !== myColor} />
+              <PlayerCircle
+                name={otherName}
+                video={topVideo}
+                celebrate={won && game.winner !== myColor}
+                attention={seatAttention(actor, myColor, false)}
+              />
             </Pressable>
           </View>
           <View style={styles.boardAnchor}>
-            <BackgammonBoard game={game} selected={selected} enabled={iPlay} bare={waiting} onShare={shareTable} onSelect={setSelected} onMove={onMove} onAgain={won ? () => update(newGame()) : undefined} />
+            <BackgammonBoard game={game} perspective={myColor} selected={selected} enabled={iPlay} bare={waiting} onShare={shareTable} onSelect={setSelected} onMove={onMove} onAgain={won ? () => update(newGame()) : undefined} />
             {won || waiting ? null : <View style={styles.diceCup}>
               <DiceCup
                 faces={rolling ? cupFaces : game.shown}
@@ -224,22 +303,23 @@ function BackgammonTable({
                 {t("bgWon", { name: winnerName, color: t(game.winner === "white" ? "bgLight" : "bgDark"), points: game.score })}
               </Text>
             ) : null}
-            {won || waiting ? null : <View style={styles.tools}>
-            {iPlay && game.phase === "offer" ? (
-              <>
-                <Pressable style={styles.tool} onPress={() => update(answerDouble(game, true))}>
-                  <Text style={styles.toolText}>{t("takeDouble")}</Text>
-                </Pressable>
-                <Pressable style={styles.tool} onPress={() => update(answerDouble(game, false))}>
-                  <Text style={styles.toolText}>{t("passDouble")}</Text>
-                </Pressable>
-              </>
-            ) : null}
-            <Text style={styles.turnLabel}>{actorName ? t("bgTurn", { name: actorName }) : ""}</Text>
+            {won || waiting || !iPlay || game.phase !== "offer" ? null : <View style={styles.tools}>
+              <Pressable style={styles.tool} onPress={() => update(answerDouble(game, true))}>
+                <Text style={styles.toolText}>{t("takeDouble")}</Text>
+              </Pressable>
+              <Pressable style={styles.tool} onPress={() => update(answerDouble(game, false))}>
+                <Text style={styles.toolText}>{t("passDouble")}</Text>
+              </Pressable>
             </View>}
           </View>
           <View style={[styles.seatRow, ((actor != null && actor === myColor) || (won && game.winner === myColor)) && styles.seatOn]}>
-            <PlayerCircle name={youName} video={bottomVideo} nameAbove celebrate={won && game.winner === myColor} />
+            <PlayerCircle
+              name={youName}
+              video={bottomVideo}
+              nameAbove
+              celebrate={won && game.winner === myColor}
+              attention={seatAttention(actor, myColor, true)}
+            />
           </View>
         </View>
         <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
@@ -394,6 +474,16 @@ export default function TableScreen() {
     setSeatId(null);
   }, [credentials?.playerId]);
 
+  useEffect(() => {
+    const backgammon = kind === "backgammon" || state?.kind === "backgammon";
+    const live = !backgammon && state?.round != null;
+    if (!live) return;
+    void activateKeepAwakeAsync("poker");
+    return () => {
+      void deactivateKeepAwake("poker");
+    };
+  }, [kind, state?.kind, state?.round]);
+
   function stopBuy() {
     if (holdStart.current) clearTimeout(holdStart.current);
     if (hold.current) clearInterval(hold.current);
@@ -410,7 +500,29 @@ export default function TableScreen() {
     }, 320);
   }
 
-  if (kind === "backgammon" || state?.kind === "backgammon") {
+  if (!credentials) {
+    return (
+      <View style={styles.screen}>
+        <StatusBar style="light" />
+        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
+          <Ionicons name="home" size={20} color="#fafaf9" />
+        </Pressable>
+        <Text style={styles.meta}>{t("sitFirst")}</Text>
+      </View>
+    );
+  }
+
+  const resolvedKind = kind === "backgammon" || state?.kind === "backgammon" ? "backgammon" : state ? "poker" : null;
+  if (resolvedKind == null) {
+    return (
+      <View style={styles.screen}>
+        <StatusBar style="light" />
+        <Text style={styles.meta}>{t("sittingDown")}</Text>
+      </View>
+    );
+  }
+
+  if (resolvedKind === "backgammon") {
     const youId = you?.id;
     const other = state?.players.find((player) => player.id !== youId);
     const topTrack = other ? video.tracks.get(other.id) : undefined;
@@ -449,18 +561,6 @@ export default function TableScreen() {
           void leave().then(() => router.replace("/"));
         }}
       />
-    );
-  }
-
-  if (!credentials) {
-    return (
-      <View style={styles.screen}>
-        <StatusBar style="light" />
-        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
-          <Ionicons name="home" size={20} color="#fafaf9" />
-        </Pressable>
-        <Text style={styles.meta}>{t("sitFirst")}</Text>
-      </View>
     );
   }
 
@@ -718,8 +818,8 @@ const styles = StyleSheet.create({
   tool: { backgroundColor: "#f6d36b", borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8 },
   toolText: { color: "#1c1917", fontWeight: "900" },
   turnLabel: { color: "#f6d36b", fontWeight: "800" },
-  circleWrap: { width: 76, height: 76, alignItems: "center", justifyContent: "center" },
-  sparkOrbit: { position: "absolute", width: 160, height: 160, left: -32, top: -32 },
+  circleWrap: { width: 92, height: 92, alignItems: "center", justifyContent: "center" },
+  sparkOrbit: { position: "absolute", width: 160, height: 160, left: -34, top: -34 },
   spark: { position: "absolute", color: "#f6d36b", fontSize: 16, fontWeight: "900" },
   winCaption: {
     position: "absolute",
@@ -731,10 +831,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800",
   },
+  circleLit: { borderWidth: 4, borderColor: "#86efac" },
   circle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 92,
+    height: 92,
+    borderRadius: 46,
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "#f6d36b",
