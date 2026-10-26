@@ -1,3 +1,5 @@
+import * as Crypto from "expo-crypto";
+
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://shulchan.win";
 
 async function post<T>(path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
@@ -14,12 +16,27 @@ async function post<T>(path: string, body: unknown, headers?: Record<string, str
 }
 
 const pendingCodes = new Map<string, Promise<{ token: string; email: string }>>();
+let signInVerifier: string | null = null;
+
+/** Another app can catch the redirect, so the code only redeems together with this verifier, which never leaves the phone until then. */
+export async function signInUrl(back: string) {
+  const bytes = Crypto.getRandomBytes(32);
+  const verifier = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier, {
+    encoding: Crypto.CryptoEncoding.BASE64,
+  });
+  const challenge = digest.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  signInVerifier = verifier;
+  return `${API_URL}/auth/google?${new URLSearchParams({ return: back, challenge })}`;
+}
 
 /** The redirect carries a one-time code. Two screens can redeem the same code; only one request is sent. */
 export function redeemHostCode(code: string) {
   const existing = pendingCodes.get(code);
   if (existing) return existing;
-  const pending = post<{ token: string; email: string }>("/auth/session", { code }).finally(() => {
+  const verifier = signInVerifier;
+  if (!verifier) return Promise.reject(new Error("Sign-in expired. Try again."));
+  const pending = post<{ token: string; email: string }>("/auth/session", { code, verifier }).finally(() => {
     pendingCodes.delete(code);
   });
   pendingCodes.set(code, pending);
@@ -36,11 +53,13 @@ export function joinTable(gameId: string, name: string, password: string, adminS
   return post<{ id: string; secret: string }>(`/api/games/${gameId}/join`, { name, password, adminSecret });
 }
 
-/** True when this server still has the table. A failed request leaves the seat alone. */
-export async function tableExists(gameId: string): Promise<boolean> {
+/** True when this seat is still at the table. A failed request leaves the seat alone. */
+export async function tableExists(gameId: string, playerId: string, secret: string): Promise<boolean> {
   try {
-    const response = await fetch(`${API_URL}/api/games/${encodeURIComponent(gameId)}`);
-    if (response.status === 404) return false;
+    const response = await fetch(`${API_URL}/api/games/${encodeURIComponent(gameId)}`, {
+      headers: { "x-player-id": playerId, "x-player-secret": secret },
+    });
+    if (response.status === 404 || response.status === 401) return false;
     return true;
   } catch {
     return true;

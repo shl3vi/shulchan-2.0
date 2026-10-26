@@ -7,7 +7,7 @@ import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { API_URL, redeemHostCode } from "@/game/api";
+import { redeemHostCode, signInUrl } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
 import { loadHost, saveHost, type Host } from "@/game/hostStore";
 import { playerName } from "@/game/name";
@@ -143,10 +143,7 @@ export default function HomeScreen() {
     setBusy(true);
     try {
       const back = Linking.createURL("auth");
-      const result = await WebBrowser.openAuthSessionAsync(
-        `${API_URL}/auth/google?return=${encodeURIComponent(back)}`,
-        back,
-      );
+      const result = await WebBrowser.openAuthSessionAsync(await signInUrl(back), back);
       if (result.type !== "success") return;
       const url = new URL(result.url);
       const code = url.searchParams.get("code");

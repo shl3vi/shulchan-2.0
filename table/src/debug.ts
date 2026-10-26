@@ -3,8 +3,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { actPoker, addChips, createPokerTable, readPoker, seatPoker, startPoker, type ActionName } from "./engine.js";
 import { playerName } from "./name.js";
-import { assignAdmin, dropRemovedPlayers, releaseSeat } from "./players.js";
-import { readSchema } from "./schema.js";
+import { assignAdmin, dropRemovedPlayers, releaseSeat, tablePassword } from "./players.js";
+import { chipAmount, MAX_CHIPS, readSchema } from "./schema.js";
 import { snapshot } from "./snapshot.js";
 import { openTable } from "./events/ledger.js";
 import { insertTable, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
@@ -13,10 +13,10 @@ const MAX_SEATS = 9;
 
 const addBody = z.object({ name: z.string() }).strict();
 const playerBody = z.object({ playerId: z.string().min(1) }).strict();
-const rebuyBody = z.object({ playerId: z.string().min(1), amount: z.number() }).strict();
+const rebuyBody = z.object({ playerId: z.string().min(1), amount: chipAmount }).strict();
 const actBody = z.object({
   action: z.enum(["fold", "check", "call", "bet", "raise"]),
-  amount: z.number().optional(),
+  amount: chipAmount.optional(),
 }).strict();
 
 export type DebugConfig = {
@@ -49,15 +49,11 @@ function loadDebugConfig(): DebugConfig | null {
     return null;
   }
   const password = process.env.DEBUG_TABLE_PASSWORD?.trim() || null;
-  if (password !== null && password.length > 32) {
-    console.error("Debug table is off. DEBUG_TABLE_PASSWORD is too long.");
+  if (password !== null && !/^\d{6}$/.test(password)) {
+    console.error("Debug table is off. DEBUG_TABLE_PASSWORD must be six digits.");
     return null;
   }
   return { tableId, dashboardId, smallBlind, buyIn, password };
-}
-
-function tablePassword() {
-  return String(crypto.getRandomValues(new Uint32Array(1))[0]! % 900000 + 100000);
 }
 
 export async function ensureDebugTable(config: DebugConfig) {
@@ -141,7 +137,6 @@ async function resetTable(config: DebugConfig) {
     table.players = [];
     delete table.adminId;
     delete table.adminSecret;
-    table.joinAttempts = 0;
   });
   await publishTable(config.tableId);
 }
@@ -189,6 +184,9 @@ async function rebuy(config: DebugConfig, playerId: string, amount: number) {
 }
 
 async function act(config: DebugConfig, action: ActionName, amount?: number) {
+  if ((action === "bet" || action === "raise") && (amount == null || !Number.isInteger(amount) || amount < 1 || amount > MAX_CHIPS)) {
+    throw new Error("Bet size is outside the allowed range");
+  }
   const table = await readTable(config.tableId);
   if (!table) throw new TableNotFound();
   const view = await readPoker(config.tableId);

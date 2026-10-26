@@ -14,7 +14,7 @@ import { ActionDock, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } fr
 import type { Card, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
-import { answerDouble, move as playMove, newGame, opponent, roll, type Color, type Game, type Move } from "@/game/backgammon";
+import { move as playMove, newGame, opponent, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
 import { t } from "@/i18n";
 
@@ -107,7 +107,6 @@ function BackgammonTable({
   serverGame,
   wins,
   emit,
-  subscribe,
 }: {
   topVideo?: ReactNode;
   bottomVideo?: ReactNode;
@@ -130,7 +129,6 @@ function BackgammonTable({
   serverGame?: unknown;
   wins?: TableSnapshot["backgammonLog"];
   emit: (event: string, body: unknown) => void;
-  subscribe: (event: string, handler: (body: unknown) => void) => () => void;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -142,7 +140,7 @@ function BackgammonTable({
   const [selected, setSelected] = useState<number | "bar" | null>(null);
   const [rolling, setRolling] = useState(false);
   const [cupFaces, setCupFaces] = useState<number[]>([]);
-  const pendingRoll = useRef<Game | null>(null);
+  const [rollSent, setRollSent] = useState(false);
   const waiting = otherId == null;
   const actor: Color | null = waiting || game.phase === "over" ? null : game.phase === "offer" ? opponent(game.turn) : game.turn;
   const gameRef = useRef(game);
@@ -162,7 +160,7 @@ function BackgammonTable({
   const won = game.phase === "over" && game.winner != null;
 
   function restartGame() {
-    const go = () => update(newGame());
+    const go = () => send({ type: "restart" });
     const inPlay = game.phase === "roll" || game.phase === "move" || game.phase === "offer";
     if (!inPlay) {
       go();
@@ -191,10 +189,17 @@ function BackgammonTable({
       phase: next.phase,
       turn: next.turn,
       winner: next.winner,
+      cube: next.cube,
+      cubeOwner: next.cubeOwner,
+      score: next.score,
+      message: next.message,
+      rolls: next.rolls ?? 0,
     });
   }
 
   function adopt(next: Game, remote: boolean) {
+    // Any board from the server, even an unchanged one after a refused roll, answers the pending roll.
+    setRollSent(false);
     const key = gameKey(next);
     if (key === seenGame.current) return;
     const prev = gameRef.current;
@@ -203,22 +208,20 @@ function BackgammonTable({
     setSelected(null);
     setGame(next);
     if (!remote || first) return;
-    const rolled = next.shown.length > 0 && next.shown.join(",") !== prev.shown.join(",");
+    const rolled = (next.rolls ?? 0) !== (prev.rolls ?? 0) && (next.lastRoll?.length ?? 0) > 0;
     const moved =
       JSON.stringify(prev.points) !== JSON.stringify(next.points)
       || JSON.stringify(prev.bar) !== JSON.stringify(next.bar)
       || JSON.stringify(prev.off) !== JSON.stringify(next.off);
     if (rolled && !rolling) {
-      pendingRoll.current = null;
-      setCupFaces(next.shown.slice());
+      setCupFaces(next.lastRoll!.slice());
       setRolling(true);
     }
     if (moved) checkerPlace();
   }
 
-  function update(next: Game) {
-    adopt(next, false);
-    emit("bg", next);
+  function send(action: BackgammonAction) {
+    emit("bg", action);
   }
 
   useEffect(() => {
@@ -226,28 +229,12 @@ function BackgammonTable({
     adopt(serverGame as Game, true);
   }, [serverGame]);
 
-  const recorded = useRef(false);
-  useEffect(() => {
-    if (!won || recorded.current || wins == null || wins.length > 0) return;
-    recorded.current = true;
-    emit("bg", game);
-  }, [won, wins, game, emit]);
-
-  const adoptRef = useRef(adopt);
-  adoptRef.current = adopt;
-
-  useEffect(() => {
-    return subscribe("bg", (body) => {
-      if (!body || typeof body !== "object") return;
-      adoptRef.current(body as Game, true);
-    });
-  }, [subscribe]);
-
   function onMove(chosen: Move) {
     const next = playMove(game, chosen);
     if (next === game) return;
     checkerPlace();
-    update(next);
+    adopt(next, false);
+    send({ type: "move", ...chosen });
   }
 
   function seatAttention(actorColor: Color | null, mine: Color | null, self: boolean): "roll" | "play" | null {
@@ -275,27 +262,17 @@ function BackgammonTable({
             </Pressable>
           </View>
           <View style={styles.boardAnchor}>
-            <BackgammonBoard game={game} perspective={myColor} selected={selected} enabled={iPlay} bare={waiting} onShare={shareTable} onSelect={setSelected} onMove={onMove} onAgain={won ? () => update(newGame()) : undefined} />
+            <BackgammonBoard game={game} perspective={myColor} selected={selected} enabled={iPlay} bare={waiting} onShare={shareTable} onSelect={setSelected} onMove={onMove} onAgain={won ? () => send({ type: "restart" }) : undefined} />
             {won || waiting ? null : <View style={styles.diceCup}>
               <DiceCup
                 faces={rolling ? cupFaces : game.shown}
                 rolling={rolling}
-                prompt={iPlay && !rolling && (game.phase === "opening" || game.phase === "roll")}
-                onRoll={iPlay && !rolling && (game.phase === "opening" || game.phase === "roll") ? () => {
-                  const next = roll(game);
-                  pendingRoll.current = next;
-                  const openingDie = game.phase === "opening"
-                    ? next.shown.length === 2 ? next.shown[1] : next.dice[0] ?? next.shown[0]
-                    : undefined;
-                  setCupFaces(openingDie != null ? [openingDie] : next.shown);
-                  setRolling(true);
+                prompt={iPlay && !rolling && !rollSent && (game.phase === "opening" || game.phase === "roll")}
+                onRoll={iPlay && !rolling && !rollSent && (game.phase === "opening" || game.phase === "roll") ? () => {
+                  setRollSent(true);
+                  send({ type: "roll" });
                 } : undefined}
-                onDone={() => {
-                  const next = pendingRoll.current;
-                  pendingRoll.current = null;
-                  setRolling(false);
-                  if (next) update(next);
-                }}
+                onDone={() => setRolling(false)}
               />
             </View>}
             {won ? (
@@ -304,10 +281,10 @@ function BackgammonTable({
               </Text>
             ) : null}
             {won || waiting || !iPlay || game.phase !== "offer" ? null : <View style={styles.tools}>
-              <Pressable style={styles.tool} onPress={() => update(answerDouble(game, true))}>
+              <Pressable style={styles.tool} onPress={() => send({ type: "answer", accept: true })}>
                 <Text style={styles.toolText}>{t("takeDouble")}</Text>
               </Pressable>
-              <Pressable style={styles.tool} onPress={() => update(answerDouble(game, false))}>
+              <Pressable style={styles.tool} onPress={() => send({ type: "answer", accept: false })}>
                 <Text style={styles.toolText}>{t("passDouble")}</Text>
               </Pressable>
             </View>}
@@ -457,7 +434,7 @@ export default function TableScreen() {
   const router = useRouter();
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const insets = useSafeAreaInsets();
-  const { credentials, state, error, dismissError, startHand, act, leave, removePlayer, transferAdmin, rebuy, emit, subscribe } = useGameSession();
+  const { credentials, state, error, dismissError, startHand, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
   const video = useTableVideo(credentials);
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
   const [info, setInfo] = useState(false);
@@ -541,7 +518,6 @@ export default function TableScreen() {
         serverGame={state?.backgammon}
         wins={state?.backgammonLog}
         emit={emit}
-        subscribe={subscribe}
         micOn={video.micOn}
         cameraOn={video.cameraOn}
         setMic={video.setMic}

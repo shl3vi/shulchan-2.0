@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 import { createPokerTable, readPoker, seatPoker, unseatPoker } from "./engine.js";
 import { liveKitToken, VideoUnavailable } from "./livekit.js";
@@ -6,21 +7,16 @@ import { readHost } from "./auth.js";
 import { playerName } from "./name.js";
 import { openingBackgammon } from "./backgammon.js";
 import { createBody, joinBody, liveKitBody, readSchema } from "./schema.js";
-import { debugConfig } from "./debug.js";
 import { openTable, noteJoinRefused, notePlayers, noteVideo } from "./events/ledger.js";
 import { reportError, reportCaught } from "./events/report.js";
-import { seatedCount } from "./players.js";
+import { seatedCount, tablePassword } from "./players.js";
+import { clearPasswordFailures, noteWrongPassword, passwordRetryAfter } from "./password.js";
 import { insertTable, publishTable, readTable, removeTable, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
 const MAX_SEATS = 9;
 // No 0/O or 1/I, so a code read aloud or copied by hand still matches.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function joinLimit() {
-  const value = Number(process.env.JOIN_LIMIT ?? 20);
-  return Number.isInteger(value) && value > 0 ? value : 20;
-}
 
 function tableCode() {
   return Array.from(crypto.getRandomValues(new Uint8Array(6)), (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
@@ -56,10 +52,10 @@ router.post("/", async (req, res) => {
     adminSecret: crypto.randomUUID(),
     smallBlind,
     buyIn,
-    password: String(crypto.getRandomValues(new Uint32Array(1))[0]! % 900000 + 100000),
+    password: tablePassword(),
     hostEmail: host.email,
     kind: body.kind === "backgammon" ? "backgammon" : "poker",
-    ...(body.kind === "backgammon" ? { backgammon: openingBackgammon() } : {}),
+    ...(body.kind === "backgammon" ? { backgammon: await openingBackgammon() } : {}),
     players: [],
   };
   try {
@@ -84,7 +80,7 @@ router.post("/", async (req, res) => {
 });
 
 class JoinRefused extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly retryAfter = 0) {
     super(message);
   }
 }
@@ -100,19 +96,15 @@ router.post("/:id/join", async (req, res) => {
   const name = playerName(body.name);
   const password = body.password;
   const adminSecret = body.adminSecret ?? "";
+  const ip = req.ip ?? "unknown";
   if (!name) {
     await noteJoinRefused(id);
     res.status(400).json({ error: "Name must be 1 to 24 characters" });
     return;
   }
   try {
-    if (debugConfig()?.tableId !== id) {
-      const attempt = await withTable(id, async (table) => {
-        table.joinAttempts = (table.joinAttempts ?? 0) + 1;
-        return table.joinAttempts;
-      });
-      if (attempt > joinLimit()) throw new JoinRefused(429, "This table is not taking more players");
-    }
+    const retry = await passwordRetryAfter(id, ip).catch(() => 0);
+    if (retry > 0) throw new JoinRefused(429, "Too many password attempts", retry);
     const joined = await withTable(id, async (table) => {
       if (!table.password || password !== table.password) throw new JoinRefused(403, "Wrong password");
       const taken = new Set(table.players.map((player) => player.seat));
@@ -131,10 +123,21 @@ router.post("/:id/join", async (req, res) => {
     });
     await publishTable(id);
     await notePlayers(id, joined.seated);
+    await clearPasswordFailures(id, ip).catch(() => undefined);
     res.status(201).json({ id: joined.player.id, secret: joined.player.secret });
   } catch (error) {
+    if (error instanceof JoinRefused && error.message === "Wrong password") {
+      const retry = await noteWrongPassword(id, ip).catch(() => 0);
+      if (retry > 0) {
+        await noteJoinRefused(id);
+        res.setHeader("Retry-After", String(retry));
+        res.status(429).json({ error: "Too many password attempts" });
+        return;
+      }
+    }
     if (error instanceof JoinRefused) await noteJoinRefused(id);
     else reportCaught(id, error, "join");
+    if (error instanceof JoinRefused && error.retryAfter > 0) res.setHeader("Retry-After", String(error.retryAfter));
     const status = error instanceof TableNotFound ? 404 : error instanceof JoinRefused ? error.status : 400;
     res.status(status).json({ error: error instanceof Error ? error.message : "Join failed" });
   }
@@ -171,14 +174,47 @@ router.post("/:id/livekit", async (req, res) => {
   }
 });
 
+function sameSecret(given: string, expected: string) {
+  const left = Buffer.from(given);
+  const right = Buffer.from(expected);
+  return left.length === right.length && left.length > 0 && timingSafeEqual(left, right);
+}
+
 router.get("/:id", async (req, res) => {
-  const table = await readTable(String(req.params.id));
+  const id = String(req.params.id);
+  if (id.length > 64) {
+    res.status(404).json({ error: "Game not found" });
+    return;
+  }
+  const ip = req.ip ?? "unknown";
+  const retry = await passwordRetryAfter(id, ip).catch(() => 0);
+  if (retry > 0) {
+    res.setHeader("Retry-After", String(retry));
+    res.status(429).json({ error: "Too many password attempts" });
+    return;
+  }
+  const table = await readTable(id);
   if (!table) {
     res.status(404).json({ error: "Game not found" });
     return;
   }
   const playerId = req.get("x-player-id") ?? "";
   const secret = req.get("x-player-secret") ?? "";
-  const viewer = table.players.find((player) => player.id === playerId && player.secret === secret);
+  const viewer = table.players.find((player) => sameSecret(playerId, player.id) && sameSecret(secret, player.secret));
+  const password = req.get("x-table-password") ?? "";
+  if (!viewer && !sameSecret(password, table.password)) {
+    if (password) {
+      const wait = await noteWrongPassword(id, ip).catch(() => 0);
+      if (wait > 0) {
+        res.setHeader("Retry-After", String(wait));
+        res.status(429).json({ error: "Too many password attempts" });
+        return;
+      }
+      res.status(401).json({ error: "Wrong password" });
+      return;
+    }
+    res.status(401).json({ error: "Sign in to this table" });
+    return;
+  }
   res.json(snapshot(table, await readPoker(table.id), viewer?.id));
 });

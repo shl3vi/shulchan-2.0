@@ -19,8 +19,8 @@ export type EngineView = {
   shownCards: { seat: number; cards: Card[] }[];
 };
 
-async function post<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${engineUrl}${path}`, {
+export async function enginePost<T>(base: string, path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${base}${path}`, {
     method: "POST",
     headers: { ...engineHeaders, "content-type": "application/json" },
     body: JSON.stringify(body ?? {}),
@@ -28,6 +28,10 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   const payload = (await response.json()) as T & { error?: string };
   if (!response.ok) throw new Error(payload.error ?? "Poker engine failed");
   return payload;
+}
+
+function post<T>(path: string, body?: unknown): Promise<T> {
+  return enginePost<T>(engineUrl, path, body);
 }
 
 export function createPokerTable(tableId: string, smallBlind: number) {

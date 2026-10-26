@@ -24,8 +24,10 @@ process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
 start("poker-engine", { ...process.env, PORT: "4001", ENGINE_TOKEN: engineToken });
+start("backgammon-engine", { ...process.env, PORT: "4002", ENGINE_TOKEN: engineToken });
 start("table", {
   ...process.env,
   POKER_ENGINE_URL: "http://127.0.0.1:4001",
+  BACKGAMMON_ENGINE_URL: "http://127.0.0.1:4002",
   ENGINE_TOKEN: engineToken,
 });

@@ -1,6 +1,10 @@
 import { readPoker, unseatPoker } from "./engine.js";
 import type { TableRecord } from "./store.js";
 
+export function tablePassword() {
+  return String(crypto.getRandomValues(new Uint32Array(1))[0]! % 900000 + 100000);
+}
+
 export function seatedCount(table: TableRecord) {
   return table.players.filter((player) => !player.pendingRemoval).length;
 }

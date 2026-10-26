@@ -2,7 +2,7 @@ import express from "express";
 import helmet from "helmet";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { authRouter } from "./auth.js";
+import { APP_SCHEME, authRouter } from "./auth.js";
 import { debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
 import { allowedOrigins, cors, rateLimit } from "./http.js";
 import { router } from "./routes.js";
@@ -21,8 +21,8 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 app.use(cors);
-app.use(express.json());
 app.use(rateLimit);
+app.use(express.json({ limit: "8kb" }));
 app.use(authRouter);
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
@@ -31,8 +31,8 @@ app.get("/join", (req, res) => {
   const game = String(req.query.game ?? "");
   const password = String(req.query.password ?? "");
   const query = new URLSearchParams({ game, password }).toString();
-  const appUrl = `client://join?${query}`;
-  const intentUrl = `intent://join?${query}#Intent;scheme=client;package=com.anonymous.shulchan;end`;
+  const appUrl = `${APP_SCHEME}://join?${query}`;
+  const intentUrl = `intent://join?${query}#Intent;scheme=${APP_SCHEME};package=com.anonymous.shulchan;end`;
   res.type("html").send(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Join the table</title>

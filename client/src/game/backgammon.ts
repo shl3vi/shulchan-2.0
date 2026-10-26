@@ -21,16 +21,22 @@ export type Game = {
   winner: Color | null;
   score: number;
   message: string;
+  rolls?: number;
+  lastRoll?: number[];
 };
+
+/** What a player asks the server to do. The server rolls the dice and checks the rules. */
+export type BackgammonAction =
+  | { type: "roll" }
+  | { type: "move"; from: number | "bar"; to: number | "off"; die: number }
+  | { type: "double" }
+  | { type: "answer"; accept: boolean }
+  | { type: "restart" };
 
 const other: Record<Color, Color> = { white: "black", black: "white" };
 
 export function opponent(color: Color) {
   return other[color];
-}
-
-function die() {
-  return 1 + Math.floor(Math.random() * 6);
 }
 
 function empty(): Pick<Game, "points" | "bar" | "off"> {
@@ -243,54 +249,7 @@ function finishIfWon(game: Game) {
   game.message = multiplier === 1 ? "game" : multiplier === 2 ? "gammon" : "backgammon";
 }
 
-function beginTurn(game: Game, color: Color, faces: number[]) {
-  game.turn = color;
-  game.shown = faces.slice();
-  game.dice = faces[0] === faces[1] ? [faces[0]!, faces[0]!, faces[0]!, faces[0]!] : faces.slice();
-  game.phase = "move";
-  if (legalMoves(game).length === 0) {
-    game.phase = "roll";
-    game.turn = opponent(color);
-    game.dice = [];
-    game.message = "no_move";
-    return;
-  }
-  game.message = "";
-}
-
-export function roll(game: Game): Game {
-  const next = clone(game);
-  if (next.phase === "opening") {
-    const face = die();
-    const whiteDie = next.shown.length === 1 ? next.shown[0] : null;
-    if (whiteDie == null) {
-      next.shown = [face];
-      next.dice = [];
-      next.turn = opponent(next.turn);
-      next.message = "roll";
-      return next;
-    }
-    if (whiteDie === face) {
-      next.shown = [];
-      next.dice = [face];
-      next.turn = "white";
-      next.message = "tied";
-      return next;
-    }
-    next.shown = [whiteDie, face];
-    next.dice = [];
-    next.turn = whiteDie > face ? "white" : "black";
-    next.phase = "roll";
-    next.message = "";
-    return next;
-  }
-  if (next.phase !== "roll") return next;
-  const first = die();
-  const second = die();
-  beginTurn(next, next.turn, [first, second]);
-  return next;
-}
-
+/** A local preview of a move so the checker lands at once. The server's board replaces it. */
 export function move(game: Game, chosen: Move): Game {
   const allowed = legalMoves(game).some((entry) => entry.from === chosen.from && entry.to === chosen.to && entry.die === chosen.die);
   if (!allowed) return game;
@@ -304,33 +263,6 @@ export function move(game: Game, chosen: Move): Game {
     next.dice = [];
     next.message = "";
   }
-  return next;
-}
-
-export function offerDouble(game: Game): Game {
-  if (game.phase !== "roll") return game;
-  if (game.cubeOwner !== "center" && game.cubeOwner !== game.turn) return game;
-  if (game.cube >= 64) return game;
-  const next = clone(game);
-  next.phase = "offer";
-  next.message = "offered";
-  return next;
-}
-
-export function answerDouble(game: Game, accept: boolean): Game {
-  if (game.phase !== "offer") return game;
-  const next = clone(game);
-  if (!accept) {
-    next.phase = "over";
-    next.winner = next.turn;
-    next.score = next.cube;
-    next.message = "declined";
-    return next;
-  }
-  next.cube *= 2;
-  next.cubeOwner = opponent(next.turn);
-  next.phase = "roll";
-  next.message = "";
   return next;
 }
 

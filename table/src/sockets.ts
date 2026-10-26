@@ -3,9 +3,12 @@ import { actPoker, addChips, readPoker, startPoker } from "./engine.js";
 import { snapshot } from "./snapshot.js";
 import { noteBackgammon, notePlayers, notePoker } from "./events/ledger.js";
 import { reportCaught, reportError } from "./events/report.js";
-import { assignAdmin, dropRemovedPlayers, releaseSeat, seatedCount } from "./players.js";
-import { noteBackgammonWin, readBackgammon } from "./backgammon.js";
-import { actBody, playerBody, readSchema, rebuyBody } from "./schema.js";
+import { assignAdmin, dropRemovedPlayers, releaseSeat, seatedCount, tablePassword } from "./players.js";
+import { noteBackgammonWin, playBackgammon } from "./backgammon.js";
+import { debugConfig } from "./debug.js";
+import { allowSocketEvent } from "./http.js";
+import { removeFromRoom } from "./livekit.js";
+import { actBody, backgammonBody, MAX_CHIPS, playerBody, readSchema, rebuyBody } from "./schema.js";
 import { publishTable, readTable, subscriber, withTable, type TableRecord } from "./store.js";
 
 async function broadcast(io: Server, tableId: string) {
@@ -67,11 +70,36 @@ export function attachSockets(io: Server) {
       }
     }
 
+    async function resync() {
+      const current = await readTable(tableId);
+      if (current) socket.emit("state", snapshot(current, await readPoker(tableId), playerId));
+    }
+
     function requireAdmin(current: TableRecord) {
       if (player!.id !== current.adminId) throw new Error("Not the table admin");
     }
 
-    socket.on("start-hand", () => {
+    const onEvent = (event: string, handler: (body: unknown) => void) => {
+      socket.on(event, (body: unknown) => {
+        void allowSocketEvent(player.id).then((allowed) => {
+          if (!allowed) {
+            socket.emit("error", { message: "Too many requests" });
+            return;
+          }
+          handler(body);
+        }).catch((error) => {
+          reportCaught(tableId, error, event, kind);
+          handler(body);
+        });
+      });
+    };
+
+    function betAmount(action: string, amount: number | undefined) {
+      if (action !== "bet" && action !== "raise") return true;
+      return amount != null && Number.isInteger(amount) && amount >= 1 && amount <= MAX_CHIPS;
+    }
+
+    onEvent("start-hand", () => {
       void change("Cannot start", async (current) => {
         requireAdmin(current);
         const view = await startPoker(tableId);
@@ -84,7 +112,7 @@ export function attachSockets(io: Server) {
       });
     });
 
-    socket.on("leave", () => {
+    onEvent("leave", () => {
       void change("Cannot leave", async (current) => {
         await releaseSeat(current, player.id);
         return seatedCount(current);
@@ -94,7 +122,7 @@ export function attachSockets(io: Server) {
       });
     });
 
-    socket.on("transfer-admin", (body: unknown) => {
+    onEvent("transfer-admin", (body: unknown) => {
       const parsed = readSchema(playerBody, body);
       if (!parsed) {
         reportError({ area: "validation", route: "transfer-admin", tableId, kind });
@@ -109,7 +137,7 @@ export function attachSockets(io: Server) {
       });
     });
 
-    socket.on("remove-player", (body: unknown) => {
+    onEvent("remove-player", (body: unknown) => {
       const parsed = readSchema(playerBody, body);
       if (!parsed) {
         reportError({ area: "validation", route: "remove-player", tableId, kind });
@@ -119,14 +147,19 @@ export function attachSockets(io: Server) {
       return change("Cannot remove player", async (current) => {
         requireAdmin(current);
         await releaseSeat(current, parsed.playerId);
+        // The removed player still knows the old password, so it must not let them back in.
+        if (debugConfig()?.tableId !== tableId) current.password = tablePassword();
         return seatedCount(current);
       }).then(async (seated) => {
         if (seated === undefined) return;
         await notePlayers(tableId, seated);
+        await removeFromRoom(tableId, parsed.playerId).catch((error: unknown) => {
+          reportCaught(tableId, error, "livekit-remove", kind);
+        });
       });
     });
 
-    socket.on("rebuy", (body: unknown) => {
+    onEvent("rebuy", (body: unknown) => {
       const parsed = readSchema(rebuyBody, body);
       if (!parsed) {
         reportError({ area: "validation", route: "rebuy", tableId, kind });
@@ -145,11 +178,11 @@ export function attachSockets(io: Server) {
       });
     });
 
-    socket.on("bg", (body: unknown) => {
-      const game = readBackgammon(body);
-      if (!game) {
+    onEvent("bg", (body: unknown) => {
+      const action = readSchema(backgammonBody, body);
+      if (!action) {
         reportError({ area: "validation", route: "bg", tableId, kind });
-        socket.emit("error", { message: "Invalid backgammon position" });
+        socket.emit("error", { message: "Invalid backgammon move" });
         return;
       }
       return change("Backgammon move failed", async (current) => {
@@ -159,20 +192,25 @@ export function attachSockets(io: Server) {
         }
         const previous = current.backgammon as { phase?: unknown; turn?: unknown } | undefined;
         const before = current.backgammonLog?.length ?? 0;
+        const game = (await playBackgammon(current, player.id, action)) as { phase?: unknown; turn?: unknown };
         noteBackgammonWin(current, game);
         current.backgammon = game;
-        return { previous: previous ?? null, games: (current.backgammonLog?.length ?? 0) - before };
+        return { previous: previous ?? null, game, games: (current.backgammonLog?.length ?? 0) - before };
       }).then(async (mark) => {
-        if (!mark) return;
-        await noteBackgammon(tableId, mark.previous, game, mark.games);
+        // A refused move leaves this phone showing its own guess, so send it the real board.
+        if (!mark) {
+          await resync();
+          return;
+        }
+        await noteBackgammon(tableId, mark.previous, mark.game, mark.games);
       });
     });
 
-    socket.on("act", (body: unknown) => {
+    onEvent("act", (body: unknown) => {
       const parsed = readSchema(actBody, body);
-      if (!parsed) {
+      if (!parsed || !betAmount(parsed.action, parsed.amount)) {
         reportError({ area: "validation", route: "act", tableId, kind });
-        socket.emit("error", { message: "Unknown action" });
+        socket.emit("error", { message: parsed ? "Bet size is outside the allowed range" : "Unknown action" });
         return;
       }
       return change("Action failed", async (current) => {

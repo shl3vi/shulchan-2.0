@@ -36,7 +36,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     let live = true;
     loadSeat().then(async (saved) => {
       if (!live) return;
-      if (saved && !(await tableExists(saved.gameId))) {
+      if (saved && !(await tableExists(saved.gameId, saved.playerId, saved.playerSecret))) {
         if (!live) return;
         setCredentials((current) => {
           if (current) return current;

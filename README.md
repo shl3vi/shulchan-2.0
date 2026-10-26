@@ -20,7 +20,7 @@ LiveKit runs in Docker on this Mac. Phones must be on the same Wi-Fi so the vide
 
 ## Cloud
 
-Railway hosts Redis, the table service (`shulchan-server`, which also runs the poker engine on localhost), and a separate backgammon engine service. The poker engine accepts requests carrying a token generated at each boot. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
+Railway hosts Redis, Postgres, and the table service (`shulchan-server`, which also runs the poker and backgammon engines on localhost). Both engines accept requests carrying a token generated at each boot. The backgammon engine rolls the dice and checks every move, so a phone only sends what the player wants to do. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
 
 An installable APK, from `client/`:
 
