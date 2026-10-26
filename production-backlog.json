@@ -2,7 +2,7 @@
   {
     "isdone": true,
     "name": "Make the poker engine private",
-    "description": "The engine now listens on 127.0.0.1 only, inside the same Render service as the table, and rejects every route except /health without a per-boot token. render.yaml now matches the single service Render actually runs."
+    "description": "The engine now listens on 127.0.0.1 only, inside the same Railway service as the table, and rejects every route except /health without a per-boot token."
   },
   {
     "isdone": true,
@@ -38,11 +38,6 @@
     "isdone": false,
     "name": "Ad placement rules",
     "description": "Ads must never appear during a hand, over a seat's video, or while it is your turn, and no ad reward may give chips or a table advantage. Allow ads only in the lobby, after leaving a table, and on the end-of-game summary, with a remote kill switch."
-  },
-  {
-    "isdone": false,
-    "name": "Postgres setup on Render free",
-    "description": "Add a Render free Postgres for testing, accessed through plain SQL with Drizzle migrations and a single DATABASE_URL, so it moves to Neon, Supabase, RDS, or Cloud SQL unchanged. Render free databases expire after 30 days, so upgrade or move before real users arrive."
   },
   {
     "isdone": false,

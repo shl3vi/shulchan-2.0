@@ -1,7 +1,9 @@
 import type { Server, Socket } from "socket.io";
 import { actPoker, addChips, readPoker, startPoker } from "./engine.js";
 import { snapshot } from "./snapshot.js";
-import { assignAdmin, dropRemovedPlayers, releaseSeat } from "./players.js";
+import { noteBackgammon, notePlayers, notePoker } from "./events/ledger.js";
+import { reportCaught, reportError } from "./events/report.js";
+import { assignAdmin, dropRemovedPlayers, releaseSeat, seatedCount } from "./players.js";
 import { noteBackgammonWin, readBackgammon } from "./backgammon.js";
 import { actBody, playerBody, readSchema, rebuyBody } from "./schema.js";
 import { publishTable, readTable, subscriber, withTable, type TableRecord } from "./store.js";
@@ -39,20 +41,29 @@ export function attachSockets(io: Server) {
     const table = await readTable(tableId);
     const player = table?.players.find((seat) => seat.id === playerId && seat.secret === playerSecret);
     if (!table || !player) {
+      reportError({
+        area: "auth",
+        route: "socket",
+        ...(table ? { tableId, kind: table.kind ?? "poker" } : {}),
+      });
       socket.emit("error", { message: "Invalid connection" });
       socket.disconnect(true);
       return;
     }
+    const kind = table.kind ?? "poker";
 
     socket.join(tableId);
     socket.emit("state", snapshot(table, await readPoker(tableId), playerId));
 
-    async function change(fallback: string, run: (current: TableRecord) => Promise<void>) {
+    async function change<T>(fallback: string, run: (current: TableRecord) => Promise<T>) {
       try {
-        await withTable(tableId, run);
+        const result = await withTable(tableId, run);
         await publishTable(tableId);
+        return result;
       } catch (error) {
+        reportCaught(tableId, error, "socket", kind);
         socket.emit("error", { message: error instanceof Error ? error.message : fallback });
+        return undefined;
       }
     }
 
@@ -60,23 +71,33 @@ export function attachSockets(io: Server) {
       if (player!.id !== current.adminId) throw new Error("Not the table admin");
     }
 
-    socket.on("start-hand", () =>
-      change("Cannot start", async (current) => {
+    socket.on("start-hand", () => {
+      void change("Cannot start", async (current) => {
         requireAdmin(current);
-        await startPoker(tableId);
+        const view = await startPoker(tableId);
         await dropRemovedPlayers(current);
-      }),
-    );
+        return { round: view.round, seated: seatedCount(current) };
+      }).then(async (mark) => {
+        if (!mark) return;
+        await notePoker(tableId, mark.round);
+        await notePlayers(tableId, mark.seated);
+      });
+    });
 
-    socket.on("leave", () =>
-      change("Cannot leave", async (current) => {
+    socket.on("leave", () => {
+      void change("Cannot leave", async (current) => {
         await releaseSeat(current, player.id);
-      }),
-    );
+        return seatedCount(current);
+      }).then(async (seated) => {
+        if (seated === undefined) return;
+        await notePlayers(tableId, seated);
+      });
+    });
 
     socket.on("transfer-admin", (body: unknown) => {
       const parsed = readSchema(playerBody, body);
       if (!parsed) {
+        reportError({ area: "validation", route: "transfer-admin", tableId, kind });
         socket.emit("error", { message: "Invalid request" });
         return;
       }
@@ -91,18 +112,24 @@ export function attachSockets(io: Server) {
     socket.on("remove-player", (body: unknown) => {
       const parsed = readSchema(playerBody, body);
       if (!parsed) {
+        reportError({ area: "validation", route: "remove-player", tableId, kind });
         socket.emit("error", { message: "Invalid request" });
         return;
       }
       return change("Cannot remove player", async (current) => {
         requireAdmin(current);
         await releaseSeat(current, parsed.playerId);
+        return seatedCount(current);
+      }).then(async (seated) => {
+        if (seated === undefined) return;
+        await notePlayers(tableId, seated);
       });
     });
 
     socket.on("rebuy", (body: unknown) => {
       const parsed = readSchema(rebuyBody, body);
       if (!parsed) {
+        reportError({ area: "validation", route: "rebuy", tableId, kind });
         socket.emit("error", { message: "Invalid request" });
         return;
       }
@@ -121,28 +148,41 @@ export function attachSockets(io: Server) {
     socket.on("bg", (body: unknown) => {
       const game = readBackgammon(body);
       if (!game) {
+        reportError({ area: "validation", route: "bg", tableId, kind });
         socket.emit("error", { message: "Invalid backgammon position" });
         return;
       }
       return change("Backgammon move failed", async (current) => {
         if (current.kind !== "backgammon") throw new Error("This table is not backgammon");
-        if (current.players.filter((seat) => !seat.pendingRemoval).length < 2) {
+        if (seatedCount(current) < 2) {
           throw new Error("Waiting for a second player");
         }
+        const previous = current.backgammon as { phase?: unknown; turn?: unknown } | undefined;
+        const before = current.backgammonLog?.length ?? 0;
         noteBackgammonWin(current, game);
         current.backgammon = game;
+        return { previous: previous ?? null, games: (current.backgammonLog?.length ?? 0) - before };
+      }).then(async (mark) => {
+        if (!mark) return;
+        await noteBackgammon(tableId, mark.previous, game, mark.games);
       });
     });
 
     socket.on("act", (body: unknown) => {
       const parsed = readSchema(actBody, body);
       if (!parsed) {
+        reportError({ area: "validation", route: "act", tableId, kind });
         socket.emit("error", { message: "Unknown action" });
         return;
       }
       return change("Action failed", async (current) => {
-        await actPoker(tableId, player.seat, parsed.action, parsed.amount);
+        const view = await actPoker(tableId, player.seat, parsed.action, parsed.amount);
         await dropRemovedPlayers(current);
+        return { round: view.round, seated: seatedCount(current) };
+      }).then(async (mark) => {
+        if (!mark) return;
+        await notePoker(tableId, mark.round);
+        await notePlayers(tableId, mark.seated);
       });
     });
   });

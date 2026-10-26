@@ -7,8 +7,10 @@ import { debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
 import { allowedOrigins, cors, rateLimit } from "./http.js";
 import { router } from "./routes.js";
 import { attachSockets } from "./sockets.js";
+import { installAnalytics, startAnalytics, stopAnalytics } from "./events/install.js";
 import { connectRedis } from "./store.js";
 
+installAnalytics();
 await connectRedis();
 
 const app = express();
@@ -64,4 +66,9 @@ attachSockets(io);
 const port = Number(process.env.PORT ?? 4000);
 httpServer.listen(port, "0.0.0.0", () => {
   console.log(`Table service listening on http://localhost:${port}`);
+  startAnalytics();
+});
+
+process.once("SIGTERM", () => {
+  void stopAnalytics().finally(() => process.exit(0));
 });

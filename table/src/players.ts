@@ -1,6 +1,10 @@
 import { readPoker, unseatPoker } from "./engine.js";
 import type { TableRecord } from "./store.js";
 
+export function seatedCount(table: TableRecord) {
+  return table.players.filter((player) => !player.pendingRemoval).length;
+}
+
 export async function dropRemovedPlayers(table: TableRecord) {
   const view = await readPoker(table.id);
   const live = new Set(view.seats.map((seat) => seat.seat));

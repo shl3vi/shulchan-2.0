@@ -6,6 +6,7 @@ import { playerName } from "./name.js";
 import { assignAdmin, dropRemovedPlayers, releaseSeat } from "./players.js";
 import { readSchema } from "./schema.js";
 import { snapshot } from "./snapshot.js";
+import { openTable } from "./events/ledger.js";
 import { insertTable, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 const MAX_SEATS = 9;
@@ -71,7 +72,10 @@ export async function ensureDebugTable(config: DebugConfig) {
           password: config.password ?? tablePassword(),
           players: [],
         };
-        if (await insertTable(table)) await createPokerTable(table.id, table.smallBlind);
+        if (await insertTable(table)) {
+          await createPokerTable(table.id, table.smallBlind);
+          await openTable(table.id, "poker");
+        }
       }
       const table = await readTable(config.tableId);
       if (!table) throw new Error("Debug table missing");

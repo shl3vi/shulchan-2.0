@@ -62,6 +62,10 @@
   .tag { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
   .tag.err { color: var(--red); border-color: #5a2e2c; }
   .tag.sum { color: var(--green); border-color: #2c4a38; }
+  .tag.device { color: var(--gold); border-color: #5c4d28; }
+  .tag.server { color: var(--green); border-color: #2c4a38; }
+  .legend { display: flex; gap: 16px; margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
   svg { width: 100%; height: auto; display: block; }
   .diagram { background: #101714; border: 1px solid var(--line); border-radius: 12px; padding: 12px; overflow-x: auto; }
   ul { margin: 8px 0; padding-left: 18px; color: var(--muted); }
@@ -82,247 +86,212 @@
 <body>
 <header>
   <h1>Shulchan event bus</h1>
-  <p class="lead">One in-process bus on the table server. Every table mutation, socket failure, and finished hand or match is published as a named event. A session ledger folds those events into a summary when the table ends or expires.</p>
+  <p class="lead">The phone sends HTTP and Socket.IO. Our server keeps a private tally of the table and sends PostHog three events: how the table went, when something failed, and a heartbeat that proves the process is up.</p>
 </header>
 <main>
 
 <section>
   <h2>Where it sits</h2>
-  <p class="muted">Socket.IO stays the live channel to phones. The bus is a second, append-only record of what already happened. Publishers call <code>bus.publish</code> after a successful write, or in the existing <code>catch</code> that today only does <code>socket.emit("error")</code>. Subscribers never write table state.</p>
+  <p class="muted">The device talks to our server the way it does today. It never calls PostHog. Each successful write updates the ledger on our server. A failed call sends <code>error</code>. The summary is sent when the table ends, including when the TTL sweep removes it with no phone connected.</p>
+  <div class="legend"><span><i class="swatch" style="background:#e4c36a"></i>Device — the phone</span><span><i class="swatch" style="background:#7dcea0"></i>Our server — table service</span><span><i class="swatch" style="background:#8eb6d9"></i>PostHog — outside both</span></div>
   <div class="diagram" style="margin-top:16px">
-    <svg viewBox="0 0 980 280" role="img" aria-label="Publishers feed the bus, which fans out to the ledger, log, and future sinks">
+    <svg viewBox="0 0 980 460" role="img" aria-label="The phone sends HTTP and sockets to our server. Only our server publishes to the bus and PostHog.">
       <defs>
         <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 1.2 L 9 5 L 0 8.8 z" fill="#e4c36a"/>
         </marker>
+        <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1.2 L 9 5 L 0 8.8 z" fill="#7dcea0"/>
+        </marker>
+        <marker id="arrB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 1.2 L 9 5 L 0 8.8 z" fill="#8eb6d9"/>
+        </marker>
       </defs>
-      <rect x="20" y="24" width="200" height="52" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="120" y="46" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">HTTP routes</text>
-      <text x="120" y="64" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">create · join · video</text>
-      <rect x="20" y="100" width="200" height="52" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="120" y="122" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">Socket handlers</text>
-      <text x="120" y="140" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">act · bg · rebuy · leave</text>
-      <rect x="20" y="176" width="200" height="52" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="120" y="198" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">Store expiry</text>
-      <text x="120" y="216" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">TTL sweep</text>
-      <line x1="220" y1="50" x2="360" y2="128" stroke="#e4c36a" stroke-width="1.4" marker-end="url(#arr)"/>
-      <line x1="220" y1="126" x2="360" y2="140" stroke="#e4c36a" stroke-width="1.4" marker-end="url(#arr)"/>
-      <line x1="220" y1="202" x2="360" y2="152" stroke="#e4c36a" stroke-width="1.4" marker-end="url(#arr)"/>
-      <rect x="370" y="96" width="220" height="88" rx="10" fill="#1c2822" stroke="#e4c36a"/>
-      <text x="480" y="132" text-anchor="middle" fill="#e4c36a" font-size="18" font-family="Georgia, serif">EventBus</text>
-      <text x="480" y="154" text-anchor="middle" fill="#93a89c" font-size="12" font-family="ui-monospace, monospace">publish(name, ctx)</text>
-      <line x1="590" y1="118" x2="720" y2="48" stroke="#7dcea0" stroke-width="1.4" marker-end="url(#arr)"/>
-      <line x1="590" y1="140" x2="720" y2="140" stroke="#8eb6d9" stroke-width="1.4" marker-end="url(#arr)"/>
-      <line x1="590" y1="162" x2="720" y2="220" stroke="#e07a72" stroke-width="1.4" marker-end="url(#arr)"/>
-      <rect x="730" y="20" width="230" height="56" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="845" y="44" text-anchor="middle" fill="#7dcea0" font-size="14" font-family="Georgia, serif">SessionLedger</text>
-      <text x="845" y="62" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">folds into summary</text>
-      <rect x="730" y="112" width="230" height="56" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="845" y="136" text-anchor="middle" fill="#8eb6d9" font-size="14" font-family="Georgia, serif">Structured log</text>
-      <text x="845" y="154" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">one JSON line</text>
-      <rect x="730" y="192" width="230" height="56" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="845" y="216" text-anchor="middle" fill="#e07a72" font-size="14" font-family="Georgia, serif">Error sink</text>
-      <text x="845" y="234" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">error.* only</text>
+      <rect x="16" y="16" width="250" height="300" rx="12" fill="#1a1812" stroke="#e4c36a"/>
+      <text x="141" y="44" text-anchor="middle" fill="#e4c36a" font-size="13" font-family="ui-monospace, monospace" letter-spacing="0.12em">DEVICE</text>
+      <text x="141" y="64" text-anchor="middle" fill="#93a89c" font-size="13" font-family="Georgia, serif">Phone app</text>
+      <rect x="36" y="88" width="210" height="56" rx="8" fill="#141c18" stroke="#5c4d28"/>
+      <text x="141" y="112" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">Player taps</text>
+      <text x="141" y="130" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">deal · act · move · leave</text>
+      <rect x="36" y="160" width="210" height="64" rx="8" fill="#141c18" stroke="#5c4d28"/>
+      <text x="141" y="184" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">HTTP and Socket.IO</text>
+      <text x="141" y="204" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">create · join · video · act</text>
+      <text x="141" y="248" text-anchor="middle" fill="#93a89c" font-size="12" font-family="Georgia, serif">No PostHog SDK</text>
+      <text x="141" y="268" text-anchor="middle" fill="#93a89c" font-size="12" font-family="Georgia, serif">No event bus</text>
+      <line x1="266" y1="192" x2="318" y2="192" stroke="#e4c36a" stroke-width="1.6" marker-end="url(#arr)"/>
+      <text x="292" y="180" text-anchor="middle" fill="#e4c36a" font-size="10" font-family="ui-monospace, monospace">request</text>
+      <rect x="328" y="16" width="470" height="428" rx="12" fill="#121a16" stroke="#7dcea0"/>
+      <text x="563" y="44" text-anchor="middle" fill="#7dcea0" font-size="13" font-family="ui-monospace, monospace" letter-spacing="0.12em">OUR SERVER</text>
+      <text x="563" y="64" text-anchor="middle" fill="#93a89c" font-size="13" font-family="Georgia, serif">Table service</text>
+      <rect x="348" y="84" width="200" height="52" rx="8" fill="#141c18" stroke="#2a3a32"/>
+      <text x="448" y="106" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">HTTP routes</text>
+      <text x="448" y="124" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">from the device</text>
+      <rect x="348" y="148" width="200" height="52" rx="8" fill="#141c18" stroke="#2a3a32"/>
+      <text x="448" y="170" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">Socket handlers</text>
+      <text x="448" y="188" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">from the device</text>
+      <rect x="348" y="220" width="200" height="52" rx="8" fill="#141c18" stroke="#7dcea0"/>
+      <text x="448" y="242" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">TTL sweep</text>
+      <text x="448" y="260" text-anchor="middle" fill="#7dcea0" font-size="11" font-family="ui-monospace, monospace">server only</text>
+      <line x1="548" y1="110" x2="600" y2="168" stroke="#7dcea0" stroke-width="1.4" marker-end="url(#arrG)"/>
+      <line x1="548" y1="174" x2="600" y2="186" stroke="#7dcea0" stroke-width="1.4" marker-end="url(#arrG)"/>
+      <line x1="548" y1="246" x2="600" y2="204" stroke="#7dcea0" stroke-width="1.4" marker-end="url(#arrG)"/>
+      <rect x="608" y="148" width="170" height="72" rx="10" fill="#1c2822" stroke="#e4c36a"/>
+      <text x="693" y="178" text-anchor="middle" fill="#e4c36a" font-size="16" font-family="Georgia, serif">Event bus</text>
+      <text x="693" y="198" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">publish(name)</text>
+      <rect x="348" y="310" width="200" height="64" rx="8" fill="#141c18" stroke="#2a3a32"/>
+      <text x="448" y="336" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">Session ledger</text>
+      <text x="448" y="356" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">session.summary</text>
+      <rect x="578" y="310" width="200" height="64" rx="8" fill="#141c18" stroke="#2a3a32"/>
+      <text x="678" y="336" text-anchor="middle" fill="#e7efe9" font-size="14" font-family="Georgia, serif">posthog.ts</text>
+      <text x="678" y="356" text-anchor="middle" fill="#93a89c" font-size="11" font-family="ui-monospace, monospace">only outbound writer</text>
+      <path d="M693 220 V310" stroke="#7dcea0" stroke-width="1.4" marker-end="url(#arrG)"/>
+      <path d="M548 342 H578" stroke="#7dcea0" stroke-width="1.4" marker-end="url(#arrG)"/>
+      <line x1="798" y1="342" x2="848" y2="342" stroke="#8eb6d9" stroke-width="1.6" marker-end="url(#arrB)"/>
+      <rect x="856" y="292" width="108" height="100" rx="10" fill="#141c18" stroke="#8eb6d9"/>
+      <text x="910" y="336" text-anchor="middle" fill="#8eb6d9" font-size="14" font-family="Georgia, serif">PostHog</text>
+      <text x="910" y="358" text-anchor="middle" fill="#93a89c" font-size="11" font-family="Georgia, serif">not on</text>
+      <text x="910" y="374" text-anchor="middle" fill="#93a89c" font-size="11" font-family="Georgia, serif">the device</text>
     </svg>
   </div>
 </section>
 
 <section>
+  <h2>Three events</h2>
+  <div class="grid three">
+    <div class="card"><strong>session.summary</strong><span>Once, when the table closes or expires. This is the product event: did people sit, play, and use video, or did the table sit empty?</span></div>
+    <div class="card"><strong>error</strong><span>When a request or a dependency fails. One name. <code>area</code> says auth, validation, forbidden, action, store, video, or subscriber.</span></div>
+    <div class="card"><strong>server.heartbeat</strong><span>Every 5 minutes from our server. <code>redisOk</code> and <code>postgresOk</code>. Quiet play is normal. A missing heartbeat means the process is down.</span></div>
+  </div>
+  <p class="muted">Folds, checks, streets, turns, joins, leaves, rebuys, sockets, and admin changes update a Redis tally only. They are not PostHog events. The tally is not part of the table record, and it is deleted after the summary is sent. Redis keeps it across a restart so a deploy does not wipe an open table.</p>
+</section>
+
+<section>
   <h2>Envelope</h2>
-  <p class="muted">Every event uses the same shape. <code>name</code> is the catalog key. <code>tableId</code> is the join code. Secrets, passwords, and LiveKit tokens never appear in <code>data</code>.</p>
+  <p class="muted"><code>tableId</code> is omitted on the heartbeat. Chip stacks, pots, blinds, scores, seat indexes, cards, dice, passwords, and LiveKit tokens are never properties.</p>
   <pre>{
   "id": "01J…",
-  "name": "poker.hand.ended",
+  "name": "session.summary",
   "at": "2026-10-23T10:04:11.221Z",
   "tableId": "K7M2PQ",
   "kind": "poker",
-  "actorId": "seat-player-id",
-  "data": { "hand": 14, "pot": 840, "winners": [{ "seat": 2, "amount": 840 }] }
+  "data": {
+    "durationMs": 4980000,
+    "peakPlayers": 6,
+    "games": 42,
+    "rounds": 58,
+    "joinRefusals": 2,
+    "errors": 1,
+    "videoUsed": true,
+    "endReason": "closed"
+  }
 }</pre>
 </section>
 
 <section>
   <h2>Module</h2>
   <div class="grid three">
-    <div class="card"><strong>table/src/events/bus.ts</strong><span>Tiny typed pub/sub. <code>publish</code> is sync and never throws into the game path. A subscriber exception is itself published as <code>error.subscriber</code> once, then dropped.</span></div>
-    <div class="card"><strong>table/src/events/names.ts</strong><span>Const catalog below. Call sites import names so a typo fails the build.</span></div>
-    <div class="card"><strong>table/src/events/ledger.ts</strong><span>In-memory map keyed by table id. Updated on each event. Flushed as <code>session.summary</code> on close or expiry, then deleted.</span></div>
+    <div class="card"><strong>table/src/events/bus.ts</strong><span>Tiny typed pub/sub. <code>publish</code> never throws into the game path. A subscriber exception is one <code>error</code> with <code>area: "subscriber"</code>, then dropped.</span></div>
+    <div class="card"><strong>table/src/events/ledger.ts</strong><span>Redis tally per table, separate from the table record. Not sent anywhere until close or expiry, then deleted.</span></div>
+    <div class="card"><strong>table/src/events/posthog.ts</strong><span>Sends only <code>session.summary</code>, <code>error</code>, and <code>server.heartbeat</code>. If <code>POSTHOG_API_KEY</code> is unset, it does nothing.</span></div>
   </div>
   <h3>Rules</h3>
   <ul>
-    <li>Publish after the table write succeeds, from the same <code>change()</code> wrapper in <code>sockets.ts</code> and the route handlers in <code>routes.ts</code>.</li>
-    <li>One event per fact. A raise is <code>poker.action</code>. If that raise also closes the street, a second event <code>poker.street</code> follows. Hand end is <code>poker.hand.ended</code>.</li>
-    <li>The client does not emit bus events. The server is the source of truth, including backgammon, where the client owns the rules and the server stores the board.</li>
-    <li>The ledger is derived. It is not stored on <code>TableRecord</code> and it is not broadcast on the <code>state</code> socket.</li>
+    <li>The ledger updates inside the existing <code>change()</code> wrapper and the route handlers. PostHog is not called from there.</li>
+    <li>The device does not send these events. A hand is counted once, on our server, inside the summary.</li>
+    <li><code>games</code> is poker hands dealt, or backgammon matches finished. <code>rounds</code> is betting streets, or completed backgammon turns.</li>
+    <li><code>endReason</code> is <code>closed</code> when the last player leaves, or <code>expired</code> when the five-hour TTL sweep removes the table.</li>
   </ul>
 </section>
 
 <section>
-  <h2>Session summary</h2>
-  <p class="muted">Emitted once as <code>session.summary</code> when the last player leaves, the host closes the table, or the TTL sweep removes it. Peak players is the high-water mark of seated players, not the count at the end.</p>
-  <div class="diagram">
-    <svg viewBox="0 0 980 200" role="img" aria-label="Events accumulate until session.summary">
-      <rect x="16" y="70" width="130" height="48" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="81" y="98" text-anchor="middle" fill="#e7efe9" font-size="12" font-family="ui-monospace, monospace">table.created</text>
-      <rect x="170" y="70" width="130" height="48" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="235" y="92" text-anchor="middle" fill="#e7efe9" font-size="12" font-family="ui-monospace, monospace">table.joined</text>
-      <text x="235" y="108" text-anchor="middle" fill="#93a89c" font-size="11" font-family="Georgia, serif">× seats</text>
-      <rect x="324" y="70" width="150" height="48" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="399" y="92" text-anchor="middle" fill="#e7efe9" font-size="12" font-family="ui-monospace, monospace">hands / matches</text>
-      <text x="399" y="108" text-anchor="middle" fill="#93a89c" font-size="11" font-family="Georgia, serif">ended events</text>
-      <rect x="498" y="70" width="130" height="48" rx="8" fill="#141c18" stroke="#5a2e2c"/>
-      <text x="563" y="98" text-anchor="middle" fill="#e07a72" font-size="12" font-family="ui-monospace, monospace">error.*</text>
-      <rect x="652" y="70" width="140" height="48" rx="8" fill="#141c18" stroke="#2a3a32"/>
-      <text x="722" y="98" text-anchor="middle" fill="#e7efe9" font-size="12" font-family="ui-monospace, monospace">table.expired</text>
-      <rect x="816" y="58" width="148" height="72" rx="8" fill="#1c2822" stroke="#7dcea0"/>
-      <text x="890" y="90" text-anchor="middle" fill="#7dcea0" font-size="13" font-family="ui-monospace, monospace">session</text>
-      <text x="890" y="108" text-anchor="middle" fill="#7dcea0" font-size="13" font-family="ui-monospace, monospace">.summary</text>
-      <path d="M146 94 H170 M300 94 H324 M474 94 H498 M628 94 H652 M792 94 H816" stroke="#e4c36a" stroke-width="1.4" fill="none"/>
-    </svg>
+  <h2>PostHog</h2>
+  <p class="muted"><code>posthog-node</code> on the table service only. <code>POSTHOG_HOST</code> defaults to the US ingest host. The game path never waits on PostHog. <code>posthog.shutdown()</code> on SIGTERM flushes the last summary.</p>
+  <div class="grid two">
+    <div class="card"><strong>distinct_id</strong><span><code>table:{tableId}</code> for a summary. <code>server</code> for the heartbeat and for an error that has no table.</span></div>
+    <div class="card"><strong>Dedupe</strong><span><code>$insert_id</code> is the envelope id, so a flush retry does not double-count a summary.</span></div>
   </div>
+  <h3>error</h3>
   <pre>{
-  "name": "session.summary",
+  "name": "error",
   "tableId": "K7M2PQ",
-  "kind": "poker",
-  "data": {
-    "durationMs": 4980000,
-    "peakPlayers": 6,
-    "joins": 8,
-    "leaves": 7,
-    "hands": 42,
-    "streets": { "flop": 31, "turn": 18, "river": 9 },
-    "showdowns": 9,
-    "rebuys": 3,
-    "chipsRebought": 1500,
-    "errors": 4,
-    "endReason": "expired"
-  }
+  "data": { "area": "store", "op": "read" }
 }</pre>
-  <p class="muted">Backgammon uses the same event. <code>hands</code> is omitted. <code>matches</code> is the count of <code>backgammon.match.ended</code>, and <code>points</code> is the sum of cube scores. <code>rounds</code> on a backgammon summary is the number of completed turns (a roll plus the moves that followed), which is what “amount of rounds” means for that game. For poker, rounds are betting streets inside hands, counted on <code>poker.street</code>.</p>
-</section>
-
-<section>
-  <h2>Catalog</h2>
-
-  <h3>Table</h3>
-  <table>
-    <thead><tr><th>Name</th><th>When</th><th>Data</th></tr></thead>
-    <tbody>
-      <tr><td class="name">table.created</td><td>POST / after insert and poker engine create</td><td>kind, smallBlind, buyIn, host present as boolean</td></tr>
-      <tr><td class="name">table.joined</td><td>Seat taken</td><td>seat, playerCount, isAdmin</td></tr>
-      <tr><td class="name">table.join_refused</td><td>Bad password, full table, join limit, bad name</td><td>reason, status</td></tr>
-      <tr><td class="name">table.left</td><td>Player leave</td><td>seat, playerCount, pendingRemoval</td></tr>
-      <tr><td class="name">table.player_removed</td><td>Admin remove</td><td>seat, byAdmin</td></tr>
-      <tr><td class="name">table.admin_transferred</td><td>transfer-admin</td><td>fromSeat, toSeat</td></tr>
-      <tr><td class="name">table.expired</td><td>TTL sweep deletes the record</td><td>ageMs</td></tr>
-      <tr><td class="name">table.closed</td><td>Last occupied seat released</td><td>playerCount: 0</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Poker</h3>
-  <table>
-    <thead><tr><th>Name</th><th>When</th><th>Data</th></tr></thead>
-    <tbody>
-      <tr><td class="name">poker.hand.started</td><td>Admin start-hand succeeds</td><td>hand, playerCount, smallBlind, bigBlind</td></tr>
-      <tr><td class="name">poker.action</td><td>fold, check, call, bet, raise</td><td>hand, seat, action, amount, street</td></tr>
-      <tr><td class="name">poker.street</td><td>Betting round advances to flop, turn, or river</td><td>hand, street, pot</td></tr>
-      <tr><td class="name">poker.hand.ended</td><td>Pots paid, before the next waiting state</td><td>hand, pot, boardCount, winners[{seat, amount}], showed</td></tr>
-      <tr><td class="name">poker.rebuy</td><td>rebuy succeeds</td><td>seat, amount, stackAfter, boughtTotal</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Backgammon</h3>
-  <table>
-    <thead><tr><th>Name</th><th>When</th><th>Data</th></tr></thead>
-    <tbody>
-      <tr><td class="name">backgammon.opened</td><td>First stored board on a new table</td><td>cube</td></tr>
-      <tr><td class="name">backgammon.turn</td><td>Phase returns to roll for the other color</td><td>turn, cube, movesThisTurn</td></tr>
-      <tr><td class="name">backgammon.cube</td><td>Cube value changes</td><td>cube, owner</td></tr>
-      <tr><td class="name">backgammon.match.ended</td><td><code>noteBackgammonWin</code> appends the log</td><td>winnerColor, points, cube, whiteSeat, blackSeat</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Connection and video</h3>
-  <table>
-    <thead><tr><th>Name</th><th>When</th><th>Data</th></tr></thead>
-    <tbody>
-      <tr><td class="name">socket.connected</td><td>Auth succeeds and the socket joins the room</td><td>seat</td></tr>
-      <tr><td class="name">socket.disconnected</td><td>Socket close</td><td>seat, voluntary</td></tr>
-      <tr><td class="name">socket.kicked</td><td>Broadcast finds the player missing</td><td>reason: "not_seated"</td></tr>
-      <tr><td class="name">video.token_issued</td><td>LiveKit token route succeeds</td><td>seat</td></tr>
-      <tr><td class="name">video.unavailable</td><td><code>VideoUnavailable</code></td><td>reason</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Errors</h3>
-  <table>
-    <thead><tr><th>Name</th><th>When</th><th>Data</th></tr></thead>
-    <tbody>
-      <tr><td class="name">error.auth</td><td>Create without Google, bad socket auth</td><td>route, status</td></tr>
-      <tr><td class="name">error.validation</td><td>Zod reject, bad blinds, bad backgammon body</td><td>route, message</td></tr>
-      <tr><td class="name">error.forbidden</td><td>Not admin, wrong game kind</td><td>action, message</td></tr>
-      <tr><td class="name">error.action</td><td><code>change()</code> catch: illegal poker act, buy-in, leave</td><td>action, message</td></tr>
-      <tr><td class="name">error.store</td><td>Redis or Postgres failure around a table write</td><td>op, message</td></tr>
-      <tr><td class="name">error.subscriber</td><td>A bus listener threw</td><td>listener, message</td></tr>
-    </tbody>
-  </table>
-
-  <h3>Summaries <span class="tag sum">derived</span></h3>
-  <table>
-    <thead><tr><th>Name</th><th>When</th><th>Data</th></tr></thead>
-    <tbody>
-      <tr><td class="name">poker.hand.summary</td><td>Immediately after <code>poker.hand.ended</code></td><td>hand, durationMs, playersDealt, streetsReached, pot, winnerSeats, voluntaryFolds</td></tr>
-      <tr><td class="name">backgammon.match.summary</td><td>Immediately after <code>backgammon.match.ended</code></td><td>points, turns, cubeDoubles, durationMs</td></tr>
-      <tr><td class="name">session.summary</td><td>Table closed or expired</td><td>peakPlayers, joins, hands or matches, rounds, rebuys, errors, durationMs, endReason</td></tr>
-    </tbody>
-  </table>
-</section>
-
-<section>
-  <h2>Poker hand, as events</h2>
-  <div class="diagram">
-    <svg viewBox="0 0 980 120" role="img" aria-label="Sequence of a poker hand">
-      <g font-family="ui-monospace, monospace" font-size="11" fill="#e7efe9">
-        <rect x="8" y="36" width="148" height="44" rx="8" fill="#141c18" stroke="#2a3a32"/>
-        <text x="82" y="62" text-anchor="middle">poker.hand.started</text>
-        <rect x="176" y="36" width="120" height="44" rx="8" fill="#141c18" stroke="#2a3a32"/>
-        <text x="236" y="62" text-anchor="middle">poker.action</text>
-        <rect x="316" y="36" width="120" height="44" rx="8" fill="#141c18" stroke="#2a3a32"/>
-        <text x="376" y="56" text-anchor="middle">poker.street</text>
-        <text x="376" y="70" text-anchor="middle" fill="#93a89c">flop</text>
-        <rect x="456" y="36" width="120" height="44" rx="8" fill="#141c18" stroke="#2a3a32"/>
-        <text x="516" y="62" text-anchor="middle">poker.action</text>
-        <rect x="596" y="36" width="120" height="44" rx="8" fill="#141c18" stroke="#2a3a32"/>
-        <text x="656" y="56" text-anchor="middle">poker.street</text>
-        <text x="656" y="70" text-anchor="middle" fill="#93a89c">turn · river</text>
-        <rect x="736" y="36" width="140" height="44" rx="8" fill="#141c18" stroke="#2a3a32"/>
-        <text x="806" y="62" text-anchor="middle">poker.hand.ended</text>
-        <rect x="896" y="28" width="76" height="60" rx="8" fill="#1c2822" stroke="#7dcea0"/>
-        <text x="934" y="54" text-anchor="middle" fill="#7dcea0">hand</text>
-        <text x="934" y="68" text-anchor="middle" fill="#7dcea0">summary</text>
-      </g>
-    </svg>
-  </div>
+  <p class="muted"><code>area</code> is <code>auth</code>, <code>validation</code>, <code>forbidden</code>, <code>action</code>, <code>store</code>, <code>video</code>, or <code>subscriber</code>. <code>op</code> or <code>route</code> is set when it helps. The message text is not sent. The same failure also increments <code>errors</code> on that table's summary.</p>
 </section>
 
 <section>
   <h2>What the ledger counts</h2>
+  <p class="muted">These numbers are computed on our server from the game as it is played. Only the finished summary is sent.</p>
   <div class="grid two">
-    <div class="card"><strong>peakPlayers</strong><span>Max of <code>playerCount</code> on <code>table.joined</code>.</span></div>
-    <div class="card"><strong>rounds</strong><span>Poker: count of <code>poker.street</code>. Backgammon: count of <code>backgammon.turn</code>.</span></div>
-    <div class="card"><strong>hands / matches</strong><span>Count of the matching <code>*.ended</code> event.</span></div>
-    <div class="card"><strong>errors</strong><span>Count of <code>error.*</code> for this table, with the last five messages kept for the summary.</span></div>
-    <div class="card"><strong>rebuys</strong><span>Count and chip sum from <code>poker.rebuy</code>.</span></div>
-    <div class="card"><strong>endReason</strong><span><code>closed</code> from <code>table.closed</code>, or <code>expired</code> from <code>table.expired</code>.</span></div>
+    <div class="card"><strong>peakPlayers</strong><span>High-water mark of people seated.</span></div>
+    <div class="card"><strong>games</strong><span>Poker hands dealt, or backgammon matches finished.</span></div>
+    <div class="card"><strong>rounds</strong><span>Betting streets, or completed backgammon turns.</span></div>
+    <div class="card"><strong>joinRefusals</strong><span>Bad password, full table, join limit, or a rejected name.</span></div>
+    <div class="card"><strong>errors</strong><span>Failures charged to this table.</span></div>
+    <div class="card"><strong>videoUsed</strong><span>True once any LiveKit token for this table succeeds.</span></div>
+    <div class="card"><strong>endReason</strong><span><code>closed</code> or <code>expired</code>.</span></div>
+    <div class="card"><strong>durationMs</strong><span>From table create until the summary.</span></div>
   </div>
 </section>
 
 <section>
-  <h2>Out of the first cut</h2>
+  <h2>Graphs</h2>
+  <p class="muted">One board. A week where summaries grow, <code>games</code> per table rises, and <code>error</code> stays near zero is the product improving.</p>
+  <table>
+    <thead><tr><th>Graph</th><th>From</th></tr></thead>
+    <tbody>
+      <tr><td>Tables played</td><td class="name">session.summary</td></tr>
+      <tr><td>Poker vs backgammon</td><td>Split summaries by <code>kind</code></td></tr>
+      <tr><td>People per table</td><td>Average <code>peakPlayers</code></td></tr>
+      <tr><td>Games and rounds per table</td><td>Average <code>games</code> and <code>rounds</code></td></tr>
+      <tr><td>Tables that never started</td><td>Share of summaries with <code>games</code> = 0</td></tr>
+      <tr><td>How long a table lasts</td><td>Average <code>durationMs</code></td></tr>
+      <tr><td>Closed vs left to expire</td><td><code>endReason</code></td></tr>
+      <tr><td>Video used</td><td>Share where <code>videoUsed</code> is true</td></tr>
+      <tr><td>Could not sit down</td><td>Sum of <code>joinRefusals</code></td></tr>
+      <tr><td>Failures</td><td class="name">error</td></tr>
+      <tr><td>Process up</td><td class="name">server.heartbeat</td></tr>
+      <tr><td>Redis or Postgres down</td><td>Heartbeats where <code>redisOk</code> or <code>postgresOk</code> is false</td></tr>
+    </tbody>
+  </table>
+  <p class="muted">Alert when heartbeat count over 15 minutes is zero. Alert when <code>error</code> with <code>area: "store"</code> is above zero.</p>
+</section>
+
+<section>
+  <h2>How many events</h2>
+  <p class="muted">A poker night is one <code>session.summary</code>, plus an <code>error</code> only if something failed. The heartbeat is about 8,600 events a month at one every 5 minutes, whether or not anyone plays.</p>
+  <table>
+    <thead><tr><th>Situation</th><th>Events</th></tr></thead>
+    <tbody>
+      <tr><td>One poker night, any number of hands</td><td>1 summary</td></tr>
+      <tr><td>Eight nights in a month</td><td>8 summaries, plus about 8,600 heartbeats</td></tr>
+      <tr><td>A month with nobody playing</td><td>About 8,600 heartbeats and no summaries</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>When the server is off</h2>
+  <p class="muted">A dead process cannot send an event. <code>GET /health</code> today returns ok without checking Redis or Postgres. Boot already waits on Redis, so a dead Redis at start means the process never listens.</p>
+  <table>
+    <thead><tr><th>What broke</th><th>What you see</th></tr></thead>
+    <tbody>
+      <tr><td>Nobody is playing</td><td>Heartbeats continue. Summaries stay at zero.</td></tr>
+      <tr><td>Process crashed, or the host is down</td><td>No heartbeat for 15 minutes. An outside probe of <code>GET /health</code> fails. The probe still fails if PostHog itself is unreachable.</td></tr>
+      <tr><td>Deploy or restart</td><td>One missed heartbeat, then they resume.</td></tr>
+      <tr><td>Redis or Postgres dies after boot</td><td>Heartbeats continue with that flag false. Writes emit <code>error</code> with <code>area: "store"</code>. <code>/health</code> can still return ok.</td></tr>
+      <tr><td>A handler bug</td><td><code>error</code> climbs, split by <code>area</code>, while heartbeats stay green.</td></tr>
+      <tr><td>PostHog ingest is down</td><td>The game keeps running. Heartbeats go empty while <code>/health</code> stays green.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Left out on purpose</h2>
   <ul>
-    <li>No client SDK and no replay socket. Summaries are server logs until a host screen asks for them.</li>
-    <li>No per-card hole cards and no dice faces. Those are game secrets or noise. The summary keeps counts and winners.</li>
-    <li>Redis streams can replace the in-memory ledger later without renaming events. The bus interface stays <code>publish</code> / <code>subscribe</code>.</li>
+    <li>Per-action, per-hand, per-turn, per-join, and per-socket events. The summary already answers whether the table was used.</li>
+    <li>Chip stacks, pots, blinds, scores, seats, cards, and dice.</li>
+    <li>A PostHog SDK on the phone, session replay, and autocapture.</li>
   </ul>
 </section>
 

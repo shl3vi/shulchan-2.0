@@ -7,6 +7,9 @@ import { playerName } from "./name.js";
 import { openingBackgammon } from "./backgammon.js";
 import { createBody, joinBody, liveKitBody, readSchema } from "./schema.js";
 import { debugConfig } from "./debug.js";
+import { openTable, noteJoinRefused, notePlayers, noteVideo } from "./events/ledger.js";
+import { reportError, reportCaught } from "./events/report.js";
+import { seatedCount } from "./players.js";
 import { insertTable, publishTable, readTable, removeTable, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
@@ -26,21 +29,25 @@ function tableCode() {
 router.post("/", async (req, res) => {
   const host = await readHost(req.get("authorization"));
   if (!host) {
+    reportError({ area: "auth", route: "create" });
     res.status(401).json({ error: "Sign in with Google to open a table" });
     return;
   }
   const body = readSchema(createBody, req.body);
   if (!body) {
+    reportError({ area: "validation", route: "create" });
     res.status(400).json({ error: "Invalid request" });
     return;
   }
   const smallBlind = body.smallBlind;
   const buyIn = body.buyIn;
   if (!Number.isInteger(smallBlind) || smallBlind < 1) {
+    reportError({ area: "validation", route: "create" });
     res.status(400).json({ error: "smallBlind must be a positive integer" });
     return;
   }
   if (!Number.isInteger(buyIn) || buyIn < smallBlind * 2) {
+    reportError({ area: "validation", route: "create" });
     res.status(400).json({ error: "buyIn must be at least two big blinds" });
     return;
   }
@@ -55,11 +62,17 @@ router.post("/", async (req, res) => {
     ...(body.kind === "backgammon" ? { backgammon: openingBackgammon() } : {}),
     players: [],
   };
-  while (!(await insertTable(table))) table.id = tableCode();
   try {
-    await createPokerTable(table.id, smallBlind);
+    while (!(await insertTable(table))) table.id = tableCode();
+    try {
+      await createPokerTable(table.id, smallBlind);
+    } catch (error) {
+      await removeTable(table.id);
+      throw error;
+    }
+    await openTable(table.id, table.kind ?? "poker");
   } catch (error) {
-    await removeTable(table.id);
+    reportError({ area: "store", op: "create" });
     throw error;
   }
   res.status(201).json({
@@ -80,6 +93,7 @@ router.post("/:id/join", async (req, res) => {
   const id = String(req.params.id);
   const body = readSchema(joinBody, req.body);
   if (!body) {
+    reportError({ area: "validation", route: "join", tableId: id });
     res.status(400).json({ error: "Invalid request" });
     return;
   }
@@ -87,6 +101,7 @@ router.post("/:id/join", async (req, res) => {
   const password = body.password;
   const adminSecret = body.adminSecret ?? "";
   if (!name) {
+    await noteJoinRefused(id);
     res.status(400).json({ error: "Name must be 1 to 24 characters" });
     return;
   }
@@ -98,7 +113,7 @@ router.post("/:id/join", async (req, res) => {
       });
       if (attempt > joinLimit()) throw new JoinRefused(429, "This table is not taking more players");
     }
-    const player = await withTable(id, async (table) => {
+    const joined = await withTable(id, async (table) => {
       if (!table.password || password !== table.password) throw new JoinRefused(403, "Wrong password");
       const taken = new Set(table.players.map((player) => player.seat));
       const seat = Array.from({ length: MAX_SEATS }, (_, index) => index).find((index) => !taken.has(index));
@@ -112,11 +127,14 @@ router.post("/:id/join", async (req, res) => {
       } else if (!table.adminId) {
         table.adminId = player.id;
       }
-      return player;
+      return { player, seated: seatedCount(table) };
     });
     await publishTable(id);
-    res.status(201).json({ id: player.id, secret: player.secret });
+    await notePlayers(id, joined.seated);
+    res.status(201).json({ id: joined.player.id, secret: joined.player.secret });
   } catch (error) {
+    if (error instanceof JoinRefused) await noteJoinRefused(id);
+    else reportCaught(id, error, "join");
     const status = error instanceof TableNotFound ? 404 : error instanceof JoinRefused ? error.status : 400;
     res.status(status).json({ error: error instanceof Error ? error.message : "Join failed" });
   }
@@ -130,6 +148,7 @@ router.post("/:id/livekit", async (req, res) => {
   }
   const body = readSchema(liveKitBody, req.body);
   if (!body) {
+    reportError({ area: "validation", route: "livekit", tableId: table.id, kind: table.kind ?? "poker" });
     res.status(400).json({ error: "Invalid request" });
     return;
   }
@@ -137,12 +156,16 @@ router.post("/:id/livekit", async (req, res) => {
   const secret = body.secret;
   const player = table.players.find((seat) => seat.id === playerId && seat.secret === secret);
   if (!player) {
+    reportError({ area: "auth", route: "livekit", tableId: table.id, kind: table.kind ?? "poker" });
     res.status(401).json({ error: "Invalid player" });
     return;
   }
   try {
     res.json(await liveKitToken(table.id, player.id, player.name));
+    await noteVideo(table.id);
   } catch (error) {
+    if (error instanceof VideoUnavailable) reportError({ area: "video", route: "livekit", tableId: table.id, kind: table.kind ?? "poker" });
+    else reportCaught(table.id, error, "livekit", table.kind ?? "poker");
     const status = error instanceof VideoUnavailable ? 503 : 500;
     res.status(status).json({ error: "Video is not available" });
   }

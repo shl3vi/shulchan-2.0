@@ -105,13 +105,20 @@ export async function insertTable(table: TableRecord) {
 
 export async function removeTable(id: string) {
   await pool.query("DELETE FROM tables WHERE id = $1", [id]);
-  await redis.del([tableKey(id), pokerKey(id)]);
+  await redis.del([tableKey(id), pokerKey(id), `ledger:${id}`]);
+}
+
+let onExpired: (ids: string[]) => Promise<void> = async () => {};
+
+export function whenTablesExpire(handler: (ids: string[]) => Promise<void>) {
+  onExpired = handler;
 }
 
 async function expireTables() {
   const expired = await pool.query<{ id: string }>("DELETE FROM tables WHERE expires_at < now() RETURNING id");
   if (expired.rows.length === 0) return;
   await redis.del(expired.rows.flatMap((row) => [tableKey(row.id), pokerKey(row.id)]));
+  await onExpired(expired.rows.map((row) => row.id));
 }
 
 const releaseLock = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`;
