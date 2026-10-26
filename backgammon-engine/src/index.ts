@@ -43,6 +43,6 @@ app.post("/apply", (req, res) => {
 });
 
 const port = Number(process.env.PORT ?? 4002);
-app.listen(port, "127.0.0.1", () => {
-  console.log(`Backgammon engine listening on http://localhost:${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Backgammon engine listening on http://0.0.0.0:${port}`);
 });

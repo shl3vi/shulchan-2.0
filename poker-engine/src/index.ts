@@ -192,6 +192,6 @@ app.post("/tables/:id/act", async (req, res) => {
 });
 
 const port = Number(process.env.PORT ?? 4001);
-app.listen(port, "127.0.0.1", () => {
-  console.log(`Poker engine listening on http://localhost:${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Poker engine listening on http://0.0.0.0:${port}`);
 });
