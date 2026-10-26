@@ -5,6 +5,9 @@
     },
     "railway": {
       "enabled": true
+    },
+    "posthog": {
+      "enabled": true
     }
   }
 }
