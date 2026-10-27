@@ -2,6 +2,6 @@
   "name": "server",
   "private": true,
   "scripts": {
-    "postinstall": "npm install --prefix ../table"
+    "postinstall": "npm install --include=dev --prefix ../table && npm run build --prefix ../table"
   }
 }

@@ -8,6 +8,7 @@ import { pool } from "./db.js";
 import { enginesReady } from "./engine.js";
 import { allowedOrigins, cors, rateLimit } from "./http.js";
 import { router } from "./routes.js";
+import { attachCluster } from "./cluster.js";
 import { attachSockets } from "./sockets.js";
 import { installAnalytics, startAnalytics, stopAnalytics } from "./events/install.js";
 import { connectRedis, flushTables, redis, stopStore, subscriber } from "./store.js";
@@ -80,7 +81,12 @@ if (debug) {
 
 const httpServer = createServer(app);
 const origins = allowedOrigins();
-const io = new Server(httpServer, { cors: { origin: origins.length > 0 ? origins : false } });
+const io = new Server(httpServer, {
+  cors: { origin: origins.length > 0 ? origins : false },
+  // A second replica has no sticky sessions. The app opens a WebSocket and stays on it.
+  transports: ["websocket"],
+});
+const closeCluster = await attachCluster(io);
 attachSockets(io);
 
 const port = Number(process.env.PORT ?? 4000);
@@ -96,6 +102,7 @@ async function shutdown() {
   const closed = new Promise((resolve) => httpServer.close(() => resolve(undefined)));
   io.close();
   await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 8000))]);
+  await closeCluster();
   stopStore();
   await flushTables();
   await stopAnalytics();
