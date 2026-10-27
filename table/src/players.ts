@@ -10,7 +10,7 @@ export function seatedCount(table: TableRecord) {
 }
 
 export async function dropRemovedPlayers(table: TableRecord) {
-  const view = await readPoker(table.id);
+  const view = await readPoker(table);
   const live = new Set(view.seats.map((seat) => seat.seat));
   table.players = table.players.filter((player) => !player.pendingRemoval || live.has(player.seat));
 }
@@ -28,7 +28,7 @@ export async function releaseSeat(table: TableRecord, playerId: string) {
     assignAdmin(table, next);
   }
   if (!player.pendingRemoval) {
-    await unseatPoker(table.id, player.seat);
+    await unseatPoker(table, player.seat);
     player.pendingRemoval = true;
   }
   await dropRemovedPlayers(table);

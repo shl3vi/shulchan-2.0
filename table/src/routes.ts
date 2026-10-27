@@ -11,7 +11,7 @@ import { openTable, noteJoinRefused, notePlayers, noteVideo } from "./events/led
 import { reportError, reportCaught } from "./events/report.js";
 import { seatedCount, tablePassword } from "./players.js";
 import { clearPasswordFailures, noteWrongPassword, passwordRetryAfter } from "./password.js";
-import { insertTable, publishTable, readTable, removeTable, TableNotFound, withTable, type TableRecord } from "./store.js";
+import { insertTable, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
 const MAX_SEATS = 9;
@@ -55,17 +55,12 @@ router.post("/", async (req, res) => {
     password: tablePassword(),
     hostEmail: host.email,
     kind: body.kind === "backgammon" ? "backgammon" : "poker",
-    ...(body.kind === "backgammon" ? { backgammon: await openingBackgammon() } : {}),
     players: [],
   };
+  const view = await createPokerTable(table, smallBlind);
+  if (body.kind === "backgammon") table.backgammon = await openingBackgammon();
   try {
     while (!(await insertTable(table))) table.id = tableCode();
-    try {
-      await createPokerTable(table.id, smallBlind);
-    } catch (error) {
-      await removeTable(table.id);
-      throw error;
-    }
     await openTable(table.id, table.kind ?? "poker");
   } catch (error) {
     reportError({ area: "store", op: "create" });
@@ -75,7 +70,7 @@ router.post("/", async (req, res) => {
     gameId: table.id,
     adminSecret: table.adminSecret,
     password: table.password,
-    state: snapshot(table, await readPoker(table.id)),
+    state: snapshot(table, view),
   });
 });
 
@@ -111,7 +106,7 @@ router.post("/:id/join", async (req, res) => {
       const seat = Array.from({ length: MAX_SEATS }, (_, index) => index).find((index) => !taken.has(index));
       if (seat === undefined) throw new JoinRefused(400, "Table is full");
       const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), seat, bought: table.buyIn };
-      await seatPoker(table.id, seat, table.buyIn);
+      await seatPoker(table, seat, table.buyIn);
       table.players.push(player);
       if (table.adminSecret && adminSecret === table.adminSecret) {
         table.adminId = player.id;
@@ -216,5 +211,5 @@ router.get("/:id", async (req, res) => {
     res.status(401).json({ error: "Sign in to this table" });
     return;
   }
-  res.json(snapshot(table, await readPoker(table.id), viewer?.id));
+  res.json(snapshot(table, await readPoker(table), viewer?.id));
 });

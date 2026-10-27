@@ -294,3 +294,29 @@ export function act(doc: EngineDoc, seat: number, action: ActionName, amount?: n
 export function present(doc: EngineDoc): EngineView {
   return viewOf(doc, restore(doc));
 }
+
+export type PokerAction =
+  | { type: "present" }
+  | { type: "seat"; seat: number; stack: number }
+  | { type: "add"; seat: number; amount: number }
+  | { type: "unseat"; seat: number }
+  | { type: "start" }
+  | { type: "act"; seat: number; action: ActionName; amount?: number };
+
+/** Returns the next hand. The caller keeps it; this process stores nothing. */
+export function applyAction(doc: EngineDoc, action: PokerAction): EngineDoc {
+  switch (action.type) {
+    case "present":
+      return doc;
+    case "seat":
+      return seatPlayer(doc, action.seat, action.stack);
+    case "add":
+      return addChips(doc, action.seat, action.amount);
+    case "unseat":
+      return unseat(doc, action.seat);
+    case "start":
+      return startHand(doc);
+    case "act":
+      return act(doc, action.seat, action.action, action.amount);
+  }
+}

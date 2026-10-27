@@ -1,39 +1,17 @@
 import { timingSafeEqual } from "node:crypto";
 import express from "express";
-import { createClient, type RedisClientType } from "redis";
-import { connectPostgres, pool, secondsUntil } from "./db.js";
-import { act, addChips, createDoc, present, seatPlayer, startHand, unseat, type ActionName, type EngineDoc } from "./game.js";
+import { applyAction, createDoc, present, type ActionName, type EngineDoc, type PokerAction } from "./game.js";
 
 const engineToken = process.env.ENGINE_TOKEN;
 if (!engineToken) throw new Error("ENGINE_TOKEN is required");
 const expectedToken = Buffer.from(engineToken);
 
-const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
-const redis: RedisClientType = createClient({ url: redisUrl });
-await redis.connect();
-await connectPostgres();
-
-const actions = new Set<ActionName>(["fold", "check", "call", "bet", "raise"]);
+const actionNames = new Set<ActionName>(["fold", "check", "call", "bet", "raise"]);
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "128kb" }));
 
-async function answers(run: () => Promise<unknown>) {
-  try {
-    await Promise.race([
-      run(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 1500)),
-    ]);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-app.get("/health", async (_req, res) => {
-  const redisOk = await answers(() => redis.ping());
-  const postgresOk = await answers(() => pool.query("SELECT 1"));
-  const ok = redisOk && postgresOk;
-  res.status(ok ? 200 : 503).json({ ok, redis: redisOk, postgres: postgresOk });
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, game: "poker" });
 });
 
 app.use((req, res, next) => {
@@ -45,209 +23,54 @@ app.use((req, res, next) => {
   next();
 });
 
-function key(id: string) {
-  return `poker:${id}`;
+function whole(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value);
 }
 
-async function read(id: string): Promise<EngineDoc | null> {
-  const raw = await redis.get(key(id));
-  if (raw) return JSON.parse(raw) as EngineDoc;
-  const found = await pool.query<{ engine: EngineDoc; expires_at: Date }>(
-    "SELECT engine, expires_at FROM tables WHERE id = $1 AND expires_at > now() AND engine IS NOT NULL",
-    [id],
-  );
-  const row = found.rows[0];
-  if (!row) return null;
-  await redis.set(key(id), JSON.stringify(row.engine), { EX: secondsUntil(row.expires_at) });
-  return row.engine;
+function isHand(value: unknown): value is EngineDoc {
+  if (!value || typeof value !== "object") return false;
+  const hand = value as EngineDoc;
+  return Number.isInteger(hand.smallBlind) && hand.smallBlind >= 1 && Array.isArray(hand.seats) && Array.isArray(hand.waiting);
 }
 
-const pendingDocs = new Map<string, EngineDoc>();
-let persistChain: Promise<void> = Promise.resolve();
-
-function queueDoc(id: string, doc: EngineDoc) {
-  pendingDocs.set(id, doc);
-  persistChain = persistChain.then(writePendingDocs).catch((error) => {
-    console.error("Hand persist failed", error instanceof Error ? error.message : error);
-  });
-}
-
-async function writePendingDocs() {
-  while (pendingDocs.size > 0) {
-    const batch = [...pendingDocs.entries()];
-    pendingDocs.clear();
-    for (const [id, doc] of batch) {
-      const latest = pendingDocs.get(id) ?? doc;
-      pendingDocs.delete(id);
-      try {
-        const saved = await pool.query(
-          "UPDATE tables SET engine = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now()",
-          [id, JSON.stringify(latest)],
-        );
-        if (saved.rowCount !== 1) console.error("Hand persist skipped", id);
-      } catch (error) {
-        if (!pendingDocs.has(id)) pendingDocs.set(id, latest);
-        throw error;
-      }
-    }
+function readAction(value: unknown): PokerAction | null {
+  if (!value || typeof value !== "object") return null;
+  const action = value as { type?: string; seat?: number; stack?: number; amount?: number; action?: string };
+  if (action.type === "present") return { type: "present" };
+  if (action.type === "start") return { type: "start" };
+  if (action.type === "seat" && whole(action.seat) && whole(action.stack)) {
+    return { type: "seat", seat: action.seat, stack: action.stack };
   }
-}
-
-async function flushHands() {
-  await persistChain;
-  if (pendingDocs.size === 0) return;
-  const [id, doc] = [...pendingDocs.entries()][0]!;
-  queueDoc(id, doc);
-  await persistChain;
-}
-
-/** Redis is the live hand. Postgres follows in the background, so an action is not waiting on it. */
-async function write(id: string, doc: EngineDoc) {
-  const ownTtl = await redis.ttl(key(id));
-  const ttl = ownTtl > 0 ? ownTtl : await redis.ttl(`table:${id}`);
-  if (ttl > 0) {
-    await redis.set(key(id), JSON.stringify(doc), { EX: ttl });
-    queueDoc(id, doc);
-    return;
+  if (action.type === "add" && whole(action.seat) && whole(action.amount)) {
+    return { type: "add", seat: action.seat, amount: action.amount };
   }
-  const saved = await pool.query<{ expires_at: Date }>(
-    "UPDATE tables SET engine = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now() RETURNING expires_at",
-    [id, JSON.stringify(doc)],
-  );
-  const row = saved.rows[0];
-  if (!row) throw new Error("Game not found");
-  await redis.set(key(id), JSON.stringify(doc), { EX: secondsUntil(row.expires_at) });
-}
-
-async function locked<T>(id: string, run: () => Promise<T>): Promise<T> {
-  const lock = `lock:poker:${id}`;
-  const token = crypto.randomUUID();
-  for (let attempt = 0; attempt < 25; attempt += 1) {
-    const acquired = await redis.set(lock, token, { NX: true, PX: 5000 });
-    if (acquired) {
-      try {
-        return await run();
-      } finally {
-        if ((await redis.get(lock)) === token) await redis.del(lock);
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 40));
+  if (action.type === "unseat" && whole(action.seat)) return { type: "unseat", seat: action.seat };
+  if (action.type === "act" && whole(action.seat) && actionNames.has(action.action as ActionName)) {
+    const amount = action.amount == null ? undefined : Number(action.amount);
+    return { type: "act", seat: action.seat, action: action.action as ActionName, amount };
   }
-  throw new Error("Table is busy");
+  return null;
 }
 
-app.post("/tables", async (req, res) => {
-  const id = String(req.body?.tableId ?? "");
+app.post("/games", (req, res) => {
   const smallBlind = Number(req.body?.smallBlind);
-  if (!id) {
-    res.status(400).json({ error: "tableId is required" });
-    return;
-  }
   if (!Number.isInteger(smallBlind) || smallBlind < 1) {
     res.status(400).json({ error: "smallBlind must be a positive integer" });
     return;
   }
-  await write(id, createDoc(smallBlind));
-  res.status(201).json(present((await read(id))!));
+  const hand = createDoc(smallBlind);
+  res.status(201).json({ hand, view: present(hand) });
 });
 
-app.get("/tables/:id", async (req, res) => {
-  const doc = await read(String(req.params.id));
-  if (!doc) {
-    res.status(404).json({ error: "Game not found" });
-    return;
-  }
-  res.json(present(doc));
-});
-
-app.post("/tables/:id/seat", async (req, res) => {
-  const id = String(req.params.id);
-  const seat = Number(req.body?.seat);
-  const stack = Number(req.body?.stack);
-  try {
-    const view = await locked(id, async () => {
-      const doc = await read(id);
-      if (!doc) throw new Error("Game not found");
-      if (!Number.isInteger(seat) || !Number.isInteger(stack) || stack < 1) throw new Error("Invalid seat");
-      const next = seatPlayer(doc, seat, stack);
-      await write(id, next);
-      return present(next);
-    });
-    res.status(201).json(view);
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Seat failed" });
-  }
-});
-
-app.post("/tables/:id/add", async (req, res) => {
-  const id = String(req.params.id);
-  const seat = Number(req.body?.seat);
-  const amount = Number(req.body?.amount);
-  try {
-    const view = await locked(id, async () => {
-      const doc = await read(id);
-      if (!doc) throw new Error("Game not found");
-      const next = addChips(doc, seat, amount);
-      await write(id, next);
-      return present(next);
-    });
-    res.json(view);
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Buy-in failed" });
-  }
-});
-
-app.post("/tables/:id/unseat", async (req, res) => {
-  const id = String(req.params.id);
-  const seat = Number(req.body?.seat);
-  try {
-    const view = await locked(id, async () => {
-      const doc = await read(id);
-      if (!doc) throw new Error("Game not found");
-      const next = unseat(doc, seat);
-      await write(id, next);
-      return present(next);
-    });
-    res.json(view);
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Cannot leave" });
-  }
-});
-
-app.post("/tables/:id/start", async (req, res) => {
-  const id = String(req.params.id);
-  try {
-    const view = await locked(id, async () => {
-      const doc = await read(id);
-      if (!doc) throw new Error("Game not found");
-      const next = startHand(doc);
-      await write(id, next);
-      return present(next);
-    });
-    res.json(view);
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Cannot start" });
-  }
-});
-
-app.post("/tables/:id/act", async (req, res) => {
-  const id = String(req.params.id);
-  const action = req.body?.action as ActionName;
-  const seat = Number(req.body?.seat);
-  const amount = req.body?.amount == null ? undefined : Number(req.body.amount);
-  if (!actions.has(action)) {
-    res.status(400).json({ error: "Unknown action" });
+app.post("/apply", (req, res) => {
+  const action = readAction(req.body?.action);
+  if (!isHand(req.body?.hand) || !action) {
+    res.status(400).json({ error: "Invalid request" });
     return;
   }
   try {
-    const view = await locked(id, async () => {
-      const doc = await read(id);
-      if (!doc) throw new Error("Game not found");
-      const next = act(doc, seat, action, amount);
-      await write(id, next);
-      return present(next);
-    });
-    res.json(view);
+    const hand = applyAction(req.body.hand, action);
+    res.json({ hand, view: present(hand) });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Action failed" });
   }
@@ -266,9 +89,6 @@ async function shutdown() {
     new Promise((resolve) => httpServer.close(() => resolve(undefined))),
     new Promise((resolve) => setTimeout(resolve, 5000)),
   ]);
-  await flushHands();
-  await redis.quit().catch(() => undefined);
-  await pool.end().catch(() => undefined);
   process.exit(0);
 }
 

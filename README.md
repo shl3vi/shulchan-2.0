@@ -1,6 +1,6 @@
 # Shulchan 2.0
 
-Poker table. The table service owns seats and sockets. The poker engine owns the hand. Redis stores both.
+Poker table. The table service owns seats, sockets, and the hand. The poker engine only returns the next hand. Redis stores the live table.
 
 ```bash
 npm run dev
@@ -20,7 +20,7 @@ LiveKit runs in Docker on this Mac. Phones must be on the same Wi-Fi so the vide
 
 ## Cloud
 
-Railway hosts Redis, Postgres, the table service (`shulchan-server`), and separate poker and backgammon engine services. The engines have no public domain. The table reaches them on Railway's private network and sends `ENGINE_TOKEN`, the same value set on all three services. The backgammon engine rolls the dice and checks every move, so a phone only sends what the player wants to do. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
+Railway hosts Redis, Postgres, the table service (`shulchan-server`), and separate poker and backgammon engine services. The engines have no public domain. The table reaches them on Railway's private network and sends `ENGINE_TOKEN`, the same value set on all three services. The poker engine checks each betting action, and the backgammon engine rolls the dice and checks every move. A phone only sends what the player wants to do. The table stores the result. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
 
 An installable APK, from `client/`:
 

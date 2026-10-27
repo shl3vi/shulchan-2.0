@@ -14,7 +14,7 @@ import { publishTable, readTable, subscriber, withTable, type TableRecord } from
 async function broadcast(io: Server, tableId: string) {
   const table = await readTable(tableId);
   if (!table) return;
-  const view = await readPoker(tableId);
+  const view = await readPoker(table);
   const room = io.of("/table").adapter.rooms.get(tableId);
   if (!room) return;
   for (const socketId of room) {
@@ -56,7 +56,7 @@ export function attachSockets(io: Server) {
     const kind = table.kind ?? "poker";
 
     socket.join(tableId);
-    socket.emit("state", snapshot(table, await readPoker(tableId), playerId));
+    socket.emit("state", snapshot(table, await readPoker(table), playerId));
 
     async function change<T>(fallback: string, run: (current: TableRecord) => Promise<T>) {
       try {
@@ -72,7 +72,7 @@ export function attachSockets(io: Server) {
 
     async function resync() {
       const current = await readTable(tableId);
-      if (current) socket.emit("state", snapshot(current, await readPoker(tableId), playerId));
+      if (current) socket.emit("state", snapshot(current, await readPoker(current), playerId));
     }
 
     function requireAdmin(current: TableRecord) {
@@ -102,7 +102,7 @@ export function attachSockets(io: Server) {
     onEvent("start-hand", () => {
       void change("Cannot start", async (current) => {
         requireAdmin(current);
-        const view = await startPoker(tableId);
+        const view = await startPoker(current);
         await dropRemovedPlayers(current);
         return { round: view.round, seated: seatedCount(current) };
       }).then(async (mark) => {
@@ -173,7 +173,7 @@ export function attachSockets(io: Server) {
         }
         const seated = current.players.find((seat) => seat.id === player.id);
         if (!seated) throw new Error("Player not found");
-        await addChips(tableId, player.seat, amount);
+        await addChips(current, player.seat, amount);
         seated.bought = (seated.bought ?? current.buyIn) + amount;
       });
     });
@@ -214,7 +214,7 @@ export function attachSockets(io: Server) {
         return;
       }
       return change("Action failed", async (current) => {
-        const view = await actPoker(tableId, player.seat, parsed.action, parsed.amount);
+        const view = await actPoker(current, player.seat, parsed.action, parsed.amount);
         await dropRemovedPlayers(current);
         return { round: view.round, seated: seatedCount(current) };
       }).then(async (mark) => {

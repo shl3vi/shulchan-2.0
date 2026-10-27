@@ -1,3 +1,5 @@
+import { legacyPokerHand, type TableRecord } from "./store.js";
+
 const engineUrl = process.env.POKER_ENGINE_URL ?? "http://127.0.0.1:4001";
 const engineToken = process.env.ENGINE_TOKEN;
 if (!engineToken) throw new Error("ENGINE_TOKEN is required");
@@ -46,37 +48,63 @@ export async function enginePost<T>(base: string, path: string, body?: unknown):
   return payload;
 }
 
-function post<T>(path: string, body?: unknown): Promise<T> {
-  return enginePost<T>(engineUrl, path, body);
+type PokerPacket = { hand: unknown; view: EngineView };
+
+type PokerAction =
+  | { type: "present" }
+  | { type: "seat"; seat: number; stack: number }
+  | { type: "add"; seat: number; amount: number }
+  | { type: "unseat"; seat: number }
+  | { type: "start" }
+  | { type: "act"; seat: number; action: ActionName; amount?: number };
+
+function post(path: string, body?: unknown) {
+  return enginePost<PokerPacket>(engineUrl, path, body);
 }
 
-export function createPokerTable(tableId: string, smallBlind: number) {
-  return post<EngineView>("/tables", { tableId, smallBlind });
+async function handOf(table: TableRecord) {
+  if (table.poker) return table.poker;
+  const legacy = await legacyPokerHand(table.id);
+  if (!legacy) throw new Error("Game not found");
+  return legacy;
 }
 
-export function seatPoker(tableId: string, seat: number, stack: number) {
-  return post<EngineView>(`/tables/${tableId}/seat`, { seat, stack });
+function keep(table: TableRecord, result: PokerPacket) {
+  table.poker = result.hand;
+  table.pokerView = result.view;
+  return result.view;
 }
 
-export function addChips(tableId: string, seat: number, amount: number) {
-  return post<EngineView>(`/tables/${tableId}/add`, { seat, amount });
+/** Asks the engine for a new hand and stores that hand on the table. */
+export async function createPokerTable(table: TableRecord, smallBlind: number) {
+  return keep(table, await post("/games", { smallBlind }));
 }
 
-export function unseatPoker(tableId: string, seat: number) {
-  return post<EngineView>(`/tables/${tableId}/unseat`, { seat });
+async function apply(table: TableRecord, action: PokerAction) {
+  return keep(table, await post("/apply", { hand: await handOf(table), action }));
 }
 
-export function startPoker(tableId: string) {
-  return post<EngineView>(`/tables/${tableId}/start`);
+export function seatPoker(table: TableRecord, seat: number, stack: number) {
+  return apply(table, { type: "seat", seat, stack });
 }
 
-export function actPoker(tableId: string, seat: number, action: ActionName, amount?: number) {
-  return post<EngineView>(`/tables/${tableId}/act`, { seat, action, amount });
+export function addChips(table: TableRecord, seat: number, amount: number) {
+  return apply(table, { type: "add", seat, amount });
 }
 
-export async function readPoker(tableId: string): Promise<EngineView> {
-  const response = await fetch(`${engineUrl}/tables/${tableId}`, { headers: engineHeaders });
-  const payload = (await response.json()) as EngineView & { error?: string };
-  if (!response.ok) throw new Error(payload.error ?? "Poker engine failed");
-  return payload;
+export function unseatPoker(table: TableRecord, seat: number) {
+  return apply(table, { type: "unseat", seat });
+}
+
+export function startPoker(table: TableRecord) {
+  return apply(table, { type: "start" });
+}
+
+export function actPoker(table: TableRecord, seat: number, action: ActionName, amount?: number) {
+  return apply(table, { type: "act", seat, action, amount });
+}
+
+export async function readPoker(table: TableRecord): Promise<EngineView> {
+  if (table.poker && table.pokerView) return table.pokerView;
+  return (await post("/apply", { hand: await handOf(table), action: { type: "present" } })).view;
 }

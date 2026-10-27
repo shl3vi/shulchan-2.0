@@ -1,4 +1,5 @@
 import { createClient, type RedisClientType } from "redis";
+import type { EngineView } from "./engine.js";
 import { connectPostgres, pool, secondsUntil, TABLE_TTL_MS } from "./db.js";
 
 export type SeatPlayer = {
@@ -21,6 +22,8 @@ export type TableRecord = {
   kind?: "poker" | "backgammon";
   backgammon?: unknown;
   backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
+  poker?: unknown;
+  pokerView?: EngineView;
   players: SeatPlayer[];
 };
 
@@ -51,6 +54,17 @@ export function stopStore() {
 
 export function pokerKey(id: string) {
   return `poker:${id}`;
+}
+
+/** A hand saved before the table record carried it. Redis first, then the old engine column. */
+export async function legacyPokerHand(id: string): Promise<unknown | null> {
+  const raw = await redis.get(pokerKey(id));
+  if (raw) return JSON.parse(raw) as unknown;
+  const found = await pool.query<{ engine: unknown }>(
+    "SELECT engine FROM tables WHERE id = $1 AND expires_at > now() AND engine IS NOT NULL",
+    [id],
+  );
+  return found.rows[0]?.engine ?? null;
 }
 
 export function tableKey(id: string) {

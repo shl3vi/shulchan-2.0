@@ -68,10 +68,8 @@ export async function ensureDebugTable(config: DebugConfig) {
           password: config.password ?? tablePassword(),
           players: [],
         };
-        if (await insertTable(table)) {
-          await createPokerTable(table.id, table.smallBlind);
-          await openTable(table.id, "poker");
-        }
+        await createPokerTable(table, config.smallBlind);
+        if (await insertTable(table)) await openTable(table.id, "poker");
       }
       const table = await readTable(config.tableId);
       if (!table) throw new Error("Debug table missing");
@@ -81,9 +79,11 @@ export async function ensureDebugTable(config: DebugConfig) {
         });
       }
       try {
-        await readPoker(config.tableId);
+        await readPoker(table);
       } catch {
-        await createPokerTable(config.tableId, table.smallBlind);
+        await withTable(config.tableId, async (current) => {
+          await createPokerTable(current, current.smallBlind);
+        });
       }
       console.log(`Debug table ${config.tableId} is ready`);
       return;
@@ -104,7 +104,7 @@ function sameToken(given: string, expected: string) {
 async function debugState(tableId: string) {
   const table = await readTable(tableId);
   if (!table) throw new TableNotFound();
-  const view = await readPoker(tableId);
+  const view = await readPoker(table);
   const snap = snapshot(table, view);
   const holes = new Map(view.holeCards.map((entry) => [entry.seat, entry.cards]));
   return {
@@ -132,8 +132,8 @@ async function debugState(tableId: string) {
 async function resetTable(config: DebugConfig) {
   const current = await readTable(config.tableId);
   if (!current) throw new TableNotFound();
-  await createPokerTable(config.tableId, current.smallBlind);
   await withTable(config.tableId, async (table) => {
+    await createPokerTable(table, table.smallBlind);
     table.players = [];
     delete table.adminId;
     delete table.adminSecret;
@@ -147,7 +147,7 @@ async function addPlayer(config: DebugConfig, name: string) {
     const seat = Array.from({ length: MAX_SEATS }, (_, index) => index).find((index) => !taken.has(index));
     if (seat === undefined) throw new Error("Table is full");
     const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), seat, bought: table.buyIn };
-    await seatPoker(table.id, seat, table.buyIn);
+    await seatPoker(table, seat, table.buyIn);
     table.players.push(player);
     if (!table.adminId) table.adminId = player.id;
   });
@@ -177,7 +177,7 @@ async function rebuy(config: DebugConfig, playerId: string, amount: number) {
     }
     const seated = table.players.find((player) => player.id === playerId && !player.pendingRemoval);
     if (!seated) throw new Error("Player not found");
-    await addChips(config.tableId, seated.seat, amount);
+    await addChips(table, seated.seat, amount);
     seated.bought = (seated.bought ?? table.buyIn) + amount;
   });
   await publishTable(config.tableId);
@@ -189,13 +189,13 @@ async function act(config: DebugConfig, action: ActionName, amount?: number) {
   }
   const table = await readTable(config.tableId);
   if (!table) throw new TableNotFound();
-  const view = await readPoker(config.tableId);
+  const view = await readPoker(table);
   const actor = view.playerToActSeat == null ? undefined : table.players.find((player) => player.seat === view.playerToActSeat);
   if (!actor) throw new Error("No action is open");
   await withTable(config.tableId, async (current) => {
     const seated = current.players.find((player) => player.id === actor.id);
     if (!seated) throw new Error("No action is open");
-    await actPoker(config.tableId, seated.seat, action, amount);
+    await actPoker(current, seated.seat, action, amount);
     await dropRemovedPlayers(current);
   });
   await publishTable(config.tableId);
@@ -203,7 +203,7 @@ async function act(config: DebugConfig, action: ActionName, amount?: number) {
 
 async function deal(config: DebugConfig) {
   await withTable(config.tableId, async (table) => {
-    await startPoker(config.tableId);
+    await startPoker(table);
     await dropRemovedPlayers(table);
   });
   await publishTable(config.tableId);
