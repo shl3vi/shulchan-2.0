@@ -4,11 +4,13 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { APP_SCHEME, authRouter } from "./auth.js";
 import { debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
+import { pool } from "./db.js";
+import { enginesReady } from "./engine.js";
 import { allowedOrigins, cors, rateLimit } from "./http.js";
 import { router } from "./routes.js";
 import { attachSockets } from "./sockets.js";
 import { installAnalytics, startAnalytics, stopAnalytics } from "./events/install.js";
-import { connectRedis } from "./store.js";
+import { connectRedis, flushTables, redis, stopStore, subscriber } from "./store.js";
 
 installAnalytics();
 await connectRedis();
@@ -24,8 +26,26 @@ app.use(cors);
 app.use(rateLimit);
 app.use(express.json({ limit: "8kb" }));
 app.use(authRouter);
-app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+async function answers(run: () => Promise<unknown>) {
+  try {
+    await Promise.race([
+      run(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 1500)),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+app.get("/health", async (_req, res) => {
+  const [redisOk, postgresOk, engines] = await Promise.all([
+    answers(() => redis.ping()),
+    answers(() => pool.query("SELECT 1")),
+    enginesReady(),
+  ]);
+  const ok = redisOk && postgresOk && engines.poker && engines.backgammon;
+  res.status(ok ? 200 : 503).json({ ok, redis: redisOk, postgres: postgresOk, ...engines });
 });
 app.get("/join", (req, res) => {
   const game = String(req.query.game ?? "");
@@ -69,6 +89,21 @@ httpServer.listen(port, "0.0.0.0", () => {
   startAnalytics();
 });
 
-process.once("SIGTERM", () => {
-  void stopAnalytics().finally(() => process.exit(0));
-});
+let closing = false;
+async function shutdown() {
+  if (closing) return;
+  closing = true;
+  const closed = new Promise((resolve) => httpServer.close(() => resolve(undefined)));
+  io.close();
+  await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 8000))]);
+  stopStore();
+  await flushTables();
+  await stopAnalytics();
+  await redis.quit().catch(() => undefined);
+  await subscriber.quit().catch(() => undefined);
+  await pool.end().catch(() => undefined);
+  process.exit(0);
+}
+
+process.once("SIGTERM", () => void shutdown());
+process.once("SIGINT", () => void shutdown());

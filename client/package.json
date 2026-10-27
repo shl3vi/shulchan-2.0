@@ -57,5 +57,8 @@
   "private": true,
   "engines": {
     "node": "24.x"
+  },
+  "overrides": {
+    "zod": "4.6.7"
   }
 }

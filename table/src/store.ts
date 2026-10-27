@@ -34,11 +34,19 @@ export async function connectRedis() {
   await subscriber.connect();
   await connectPostgres();
   await expireTables();
-  setInterval(() => {
+  expiryTimer = setInterval(() => {
     void expireTables().catch((error) => {
       console.error("Table expiry failed", error instanceof Error ? error.message : error);
     });
   }, 60_000);
+  expiryTimer.unref();
+}
+
+let expiryTimer: NodeJS.Timeout | undefined;
+
+export function stopStore() {
+  if (expiryTimer) clearInterval(expiryTimer);
+  expiryTimer = undefined;
 }
 
 export function pokerKey(id: string) {
@@ -62,14 +70,61 @@ export async function readTable(id: string) {
   return row.record;
 }
 
+const pendingTables = new Map<string, TableRecord>();
+let persistChain: Promise<void> = Promise.resolve();
+
+function queueTable(table: TableRecord) {
+  pendingTables.set(table.id, table);
+  persistChain = persistChain.then(writePendingTables).catch((error) => {
+    console.error("Table persist failed", error instanceof Error ? error.message : error);
+  });
+}
+
+async function writePendingTables() {
+  while (pendingTables.size > 0) {
+    const batch = [...pendingTables.values()];
+    pendingTables.clear();
+    for (const table of batch) {
+      const latest = pendingTables.get(table.id) ?? table;
+      pendingTables.delete(table.id);
+      try {
+        const saved = await pool.query(
+          "UPDATE tables SET record = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now()",
+          [latest.id, JSON.stringify(latest)],
+        );
+        if (saved.rowCount !== 1) console.error("Table persist skipped", latest.id);
+      } catch (error) {
+        if (!pendingTables.has(latest.id)) pendingTables.set(latest.id, latest);
+        throw error;
+      }
+    }
+  }
+}
+
+/** Waits until the latest table records have been written to Postgres. */
+export async function flushTables() {
+  await persistChain;
+  if (pendingTables.size === 0) return;
+  queueTable([...pendingTables.values()][0]!);
+  await persistChain;
+}
+
+/** Redis is the live copy. Postgres follows in the background, so a move is not waiting on it. */
 export async function writeTable(table: TableRecord) {
+  const key = tableKey(table.id);
+  const ttl = await redis.ttl(key);
+  if (ttl > 0) {
+    await redis.set(key, JSON.stringify(table), { EX: ttl });
+    queueTable(table);
+    return;
+  }
   const saved = await pool.query<{ expires_at: Date }>(
     "UPDATE tables SET record = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now() RETURNING expires_at",
     [table.id, JSON.stringify(table)],
   );
   const row = saved.rows[0];
   if (!row) throw new TableNotFound();
-  await redis.set(tableKey(table.id), JSON.stringify(table), { EX: secondsUntil(row.expires_at) });
+  await redis.set(key, JSON.stringify(table), { EX: secondsUntil(row.expires_at) });
 }
 
 export async function insertTable(table: TableRecord) {

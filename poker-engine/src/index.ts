@@ -17,8 +17,23 @@ const actions = new Set<ActionName>(["fold", "check", "call", "bet", "raise"]);
 const app = express();
 app.use(express.json());
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+async function answers(run: () => Promise<unknown>) {
+  try {
+    await Promise.race([
+      run(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 1500)),
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+app.get("/health", async (_req, res) => {
+  const redisOk = await answers(() => redis.ping());
+  const postgresOk = await answers(() => pool.query("SELECT 1"));
+  const ok = redisOk && postgresOk;
+  res.status(ok ? 200 : 503).json({ ok, redis: redisOk, postgres: postgresOk });
 });
 
 app.use((req, res, next) => {
@@ -47,7 +62,54 @@ async function read(id: string): Promise<EngineDoc | null> {
   return row.engine;
 }
 
+const pendingDocs = new Map<string, EngineDoc>();
+let persistChain: Promise<void> = Promise.resolve();
+
+function queueDoc(id: string, doc: EngineDoc) {
+  pendingDocs.set(id, doc);
+  persistChain = persistChain.then(writePendingDocs).catch((error) => {
+    console.error("Hand persist failed", error instanceof Error ? error.message : error);
+  });
+}
+
+async function writePendingDocs() {
+  while (pendingDocs.size > 0) {
+    const batch = [...pendingDocs.entries()];
+    pendingDocs.clear();
+    for (const [id, doc] of batch) {
+      const latest = pendingDocs.get(id) ?? doc;
+      pendingDocs.delete(id);
+      try {
+        const saved = await pool.query(
+          "UPDATE tables SET engine = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now()",
+          [id, JSON.stringify(latest)],
+        );
+        if (saved.rowCount !== 1) console.error("Hand persist skipped", id);
+      } catch (error) {
+        if (!pendingDocs.has(id)) pendingDocs.set(id, latest);
+        throw error;
+      }
+    }
+  }
+}
+
+async function flushHands() {
+  await persistChain;
+  if (pendingDocs.size === 0) return;
+  const [id, doc] = [...pendingDocs.entries()][0]!;
+  queueDoc(id, doc);
+  await persistChain;
+}
+
+/** Redis is the live hand. Postgres follows in the background, so an action is not waiting on it. */
 async function write(id: string, doc: EngineDoc) {
+  const ownTtl = await redis.ttl(key(id));
+  const ttl = ownTtl > 0 ? ownTtl : await redis.ttl(`table:${id}`);
+  if (ttl > 0) {
+    await redis.set(key(id), JSON.stringify(doc), { EX: ttl });
+    queueDoc(id, doc);
+    return;
+  }
   const saved = await pool.query<{ expires_at: Date }>(
     "UPDATE tables SET engine = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now() RETURNING expires_at",
     [id, JSON.stringify(doc)],
@@ -192,6 +254,23 @@ app.post("/tables/:id/act", async (req, res) => {
 });
 
 const port = Number(process.env.PORT ?? 4001);
-app.listen(port, "0.0.0.0", () => {
+const httpServer = app.listen(port, "0.0.0.0", () => {
   console.log(`Poker engine listening on http://0.0.0.0:${port}`);
 });
+
+let closing = false;
+async function shutdown() {
+  if (closing) return;
+  closing = true;
+  await Promise.race([
+    new Promise((resolve) => httpServer.close(() => resolve(undefined))),
+    new Promise((resolve) => setTimeout(resolve, 5000)),
+  ]);
+  await flushHands();
+  await redis.quit().catch(() => undefined);
+  await pool.end().catch(() => undefined);
+  process.exit(0);
+}
+
+process.once("SIGTERM", () => void shutdown());
+process.once("SIGINT", () => void shutdown());

@@ -19,6 +19,22 @@ export type EngineView = {
   shownCards: { seat: number; cards: Card[] }[];
 };
 
+const backgammonUrl = process.env.BACKGAMMON_ENGINE_URL ?? "http://127.0.0.1:4002";
+
+async function probe(base: string) {
+  try {
+    const response = await fetch(`${base}/health`, { signal: AbortSignal.timeout(1500) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function enginesReady() {
+  const [poker, backgammon] = await Promise.all([probe(engineUrl), probe(backgammonUrl)]);
+  return { poker, backgammon };
+}
+
 export async function enginePost<T>(base: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${base}${path}`, {
     method: "POST",
