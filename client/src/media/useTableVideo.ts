@@ -20,6 +20,7 @@ export function useTableVideo(credentials: Credentials | null) {
   const [live, setLive] = useState(false);
   const [muted, setMuted] = useState<Set<string>>(new Set());
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [videoNotice, setVideoNotice] = useState(false);
   const handle = useRef<VideoHandle | null>(null);
   const starting = useRef(false);
   const generation = useRef(0);
@@ -75,7 +76,10 @@ export function useTableVideo(credentials: Credentials | null) {
   const visible = new Map(Array.from(tracks).filter(([identity]) => !hidden.has(identity)));
 
   return {
-    supported: videoSupported,
+    videoNotice,
+    dismissVideoNotice() {
+      setVideoNotice(false);
+    },
     tracks: visible,
     micOn,
     cameraOn,
@@ -102,7 +106,10 @@ export function useTableVideo(credentials: Credentials | null) {
       })();
     },
     setCamera(enabled: boolean) {
-      if (!videoSupported) return;
+      if (!videoSupported) {
+        if (enabled) setVideoNotice(true);
+        return;
+      }
       void (async () => {
         if (enabled && !(await allowCapture("camera"))) enabled = false;
         desired.current.camera = enabled;
