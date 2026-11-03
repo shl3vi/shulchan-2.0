@@ -29,6 +29,7 @@ export type TableSnapshot = {
   } | null;
   buyIn: number;
   kind?: "poker" | "backgammon";
+  autoDeal?: boolean;
   backgammon?: unknown;
   backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
   password?: string;
@@ -74,7 +75,9 @@ export function snapshot(table: TableRecord, view: EngineView, viewerId?: string
       : null,
     buyIn: table.buyIn,
     kind: table.kind ?? "poker",
-    ...(table.kind === "backgammon" ? { backgammon: table.backgammon, backgammonLog: table.backgammonLog ?? [] } : {}),
+    ...(table.kind === "backgammon"
+      ? { backgammon: table.backgammon, backgammonLog: table.backgammonLog ?? [] }
+      : { autoDeal: table.autoDeal === true }),
     ...(viewer && viewer.id === table.adminId ? { password: table.password } : {}),
     shownCards: view.shownCards ?? [],
     lastWinners: view.lastWinners.flatMap((winner) => {

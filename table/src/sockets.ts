@@ -1,15 +1,22 @@
 import type { Server, Socket } from "socket.io";
+import { considerAutoDeal } from "./autodeal.js";
 import { actPoker, addChips, readPoker, startPoker } from "./engine.js";
 import { snapshot } from "./snapshot.js";
 import { noteBackgammon, notePlayers, notePoker } from "./events/ledger.js";
 import { reportCaught, reportError } from "./events/report.js";
-import { assignAdmin, dropRemovedPlayers, releaseSeat, seatedCount, tablePassword } from "./players.js";
+import { assignAdmin, dropRemovedPlayers, foldDeparted, releaseSeat, sameSecret, seatedCount, tablePassword } from "./players.js";
 import { noteBackgammonWin, playBackgammon } from "./backgammon.js";
 import { debugConfig } from "./debug.js";
 import { allowSocketEvent } from "./http.js";
 import { removeFromRoom } from "./livekit.js";
-import { actBody, backgammonBody, MAX_CHIPS, playerBody, readSchema, rebuyBody } from "./schema.js";
-import { publishTable, readTable, subscriber, withTable, type TableRecord } from "./store.js";
+import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, playerBody, readSchema, rebuyBody } from "./schema.js";
+import { publishTable, readTable, subscriber, withTable, type SeatPlayer, type TableRecord } from "./store.js";
+
+class LeftTable extends Error {
+  constructor() {
+    super("You are no longer at this table");
+  }
+}
 
 async function broadcast(io: Server, tableId: string) {
   const table = await readTable(tableId);
@@ -42,7 +49,7 @@ export function attachSockets(io: Server) {
     const playerId = String(socket.handshake.auth.playerId ?? "");
     const playerSecret = String(socket.handshake.auth.playerSecret ?? "");
     const table = await readTable(tableId);
-    const player = table?.players.find((seat) => seat.id === playerId && seat.secret === playerSecret);
+    const player = table?.players.find((seat) => sameSecret(playerId, seat.id) && sameSecret(playerSecret, seat.secret));
     if (!table || !player) {
       reportError({
         area: "auth",
@@ -53,17 +60,28 @@ export function attachSockets(io: Server) {
       socket.disconnect(true);
       return;
     }
+    const connected = player;
     const kind = table.kind ?? "poker";
 
     socket.join(tableId);
     socket.emit("state", snapshot(table, await readPoker(table), playerId));
 
-    async function change<T>(fallback: string, run: (current: TableRecord) => Promise<T>) {
+    async function change<T>(fallback: string, run: (current: TableRecord, seat: SeatPlayer) => Promise<T>) {
       try {
-        const result = await withTable(tableId, run);
+        const result = await withTable(tableId, async (current) => {
+          const seat = current.players.find((entry) => entry.id === connected.id && !entry.pendingRemoval);
+          if (!seat) throw new LeftTable();
+          return run(current, seat);
+        });
         await publishTable(tableId);
+        void considerAutoDeal(tableId);
         return result;
       } catch (error) {
+        if (error instanceof LeftTable) {
+          socket.emit("kicked");
+          socket.disconnect(true);
+          return undefined;
+        }
         reportCaught(tableId, error, "socket", kind);
         socket.emit("error", { message: error instanceof Error ? error.message : fallback });
         return undefined;
@@ -76,12 +94,12 @@ export function attachSockets(io: Server) {
     }
 
     function requireAdmin(current: TableRecord) {
-      if (player!.id !== current.adminId) throw new Error("Not the table admin");
+      if (connected.id !== current.adminId) throw new Error("Not the table admin");
     }
 
     const onEvent = (event: string, handler: (body: unknown) => void) => {
       socket.on(event, (body: unknown) => {
-        void allowSocketEvent(player.id).then((allowed) => {
+        void allowSocketEvent(connected.id).then((allowed) => {
           if (!allowed) {
             socket.emit("error", { message: "Too many requests" });
             return;
@@ -99,6 +117,20 @@ export function attachSockets(io: Server) {
       return amount != null && Number.isInteger(amount) && amount >= 1 && amount <= MAX_CHIPS;
     }
 
+    onEvent("auto-deal", (body: unknown) => {
+      const parsed = readSchema(autoDealBody, body);
+      if (!parsed) {
+        reportError({ area: "validation", route: "auto-deal", tableId, kind });
+        socket.emit("error", { message: "Invalid request" });
+        return;
+      }
+      return change("Cannot change automatic dealing", async (current) => {
+        requireAdmin(current);
+        if ((current.kind ?? "poker") === "backgammon") throw new Error("This table is not poker");
+        current.autoDeal = parsed.enabled;
+      });
+    });
+
     onEvent("start-hand", () => {
       void change("Cannot start", async (current) => {
         requireAdmin(current);
@@ -114,7 +146,7 @@ export function attachSockets(io: Server) {
 
     onEvent("leave", () => {
       void change("Cannot leave", async (current) => {
-        await releaseSeat(current, player.id);
+        await releaseSeat(current, connected.id);
         return seatedCount(current);
       }).then(async (seated) => {
         if (seated === undefined) return;
@@ -132,7 +164,7 @@ export function attachSockets(io: Server) {
       return change("Cannot transfer admin", async (current) => {
         requireAdmin(current);
         const next = current.players.find((seat) => seat.id === parsed.playerId && !seat.pendingRemoval);
-        if (!next || next.id === player.id) throw new Error("Player not found");
+        if (!next || next.id === connected.id) throw new Error("Player not found");
         assignAdmin(current, next.id);
       });
     });
@@ -167,14 +199,12 @@ export function attachSockets(io: Server) {
         return;
       }
       const amount = parsed.amount;
-      return change("Buy-in failed", async (current) => {
+      return change("Buy-in failed", async (current, seat) => {
         if (!Number.isInteger(amount) || amount < 1 || amount > current.buyIn) {
           throw new Error("Buy-in must be a whole number up to the table buy-in");
         }
-        const seated = current.players.find((seat) => seat.id === player.id);
-        if (!seated) throw new Error("Player not found");
-        await addChips(current, player.seat, amount);
-        seated.bought = (seated.bought ?? current.buyIn) + amount;
+        await addChips(current, seat.seat, amount);
+        seat.bought = (seat.bought ?? current.buyIn) + amount;
       });
     });
 
@@ -192,7 +222,7 @@ export function attachSockets(io: Server) {
         }
         const previous = current.backgammon as { phase?: unknown; turn?: unknown } | undefined;
         const before = current.backgammonLog?.length ?? 0;
-        const game = (await playBackgammon(current, player.id, action)) as { phase?: unknown; turn?: unknown };
+        const game = (await playBackgammon(current, connected.id, action)) as { phase?: unknown; turn?: unknown };
         noteBackgammonWin(current, game);
         current.backgammon = game;
         return { previous: previous ?? null, game, games: (current.backgammonLog?.length ?? 0) - before };
@@ -213,9 +243,11 @@ export function attachSockets(io: Server) {
         socket.emit("error", { message: parsed ? "Bet size is outside the allowed range" : "Unknown action" });
         return;
       }
-      return change("Action failed", async (current) => {
-        const view = await actPoker(current, player.seat, parsed.action, parsed.amount);
+      return change("Action failed", async (current, seat) => {
+        await actPoker(current, seat.seat, parsed.action, parsed.amount);
+        await foldDeparted(current);
         await dropRemovedPlayers(current);
+        const view = await readPoker(current);
         return { round: view.round, seated: seatedCount(current) };
       }).then(async (mark) => {
         if (!mark) return;

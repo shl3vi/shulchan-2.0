@@ -21,7 +21,7 @@ export function reportError(input: {
 export function reportCaught(tableId: string | undefined, error: unknown, route: string, kind?: "poker" | "backgammon") {
   if (error instanceof TableNotFound) return;
   const message = error instanceof Error ? error.message : "";
-  if (message === "Not the table admin" || message === "This table is not backgammon") {
+  if (message === "Not the table admin" || message === "This table is not backgammon" || message === "This table is not poker") {
     reportError({ area: "forbidden", tableId, route, kind });
     return;
   }

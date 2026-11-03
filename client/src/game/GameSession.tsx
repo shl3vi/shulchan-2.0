@@ -10,13 +10,21 @@ type GameSessionValue = {
   state: TableSnapshot | null;
   error: string | null;
   dismissError: () => void;
-  createAndSit: (name: string, smallBlind: number, buyIn: number, hostToken: string, kind?: "poker" | "backgammon") => Promise<void>;
+  createAndSit: (
+    name: string,
+    smallBlind: number,
+    buyIn: number,
+    hostToken: string,
+    kind?: "poker" | "backgammon",
+    autoDeal?: boolean,
+  ) => Promise<void>;
   join: (name: string, gameId: string, password: string) => Promise<void>;
   ready: boolean;
   leave: () => Promise<void>;
   removePlayer: (playerId: string) => void;
   transferAdmin: (playerId: string) => void;
   startHand: () => void;
+  setAutoDeal: (enabled: boolean) => void;
   act: (action: string, amount?: number) => void;
   rebuy: (amount: number) => void;
   emit: (event: string, body: unknown) => void;
@@ -104,9 +112,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       ready,
-      async createAndSit(name, smallBlind, buyIn, hostToken, kind = "poker") {
+      async createAndSit(name, smallBlind, buyIn, hostToken, kind = "poker", autoDeal = false) {
         if (credentials) throw new Error(t("alreadyAtTable"));
-        const table = await createTable(smallBlind, buyIn, hostToken, kind);
+        const table = await createTable(smallBlind, buyIn, hostToken, kind, autoDeal);
         const player = await joinTable(table.gameId, name, table.password, table.adminSecret);
         remember({
           gameId: table.gameId,
@@ -140,6 +148,10 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       startHand() {
         if (!state?.you?.isAdmin) return;
         socket?.emit("start-hand");
+      },
+      setAutoDeal(enabled) {
+        if (!state?.you?.isAdmin) return;
+        socket?.emit("auto-deal", { enabled });
       },
       act(action, amount) {
         socket?.emit("act", { action, amount });

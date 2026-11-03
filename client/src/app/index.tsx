@@ -121,6 +121,7 @@ export default function HomeScreen() {
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [kind, setKind] = useState<"poker" | "backgammon" | null>(null);
+  const [autoDeal, setAutoDeal] = useState(true);
   const [joinGame, setJoinGame] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
   const [joinName, setJoinName] = useState("");
@@ -210,7 +211,7 @@ export default function HomeScreen() {
     setBusy(true);
     try {
       if (!host) return;
-      await session.createAndSit(seatedName, smallBlind, buyIn, host.token, nextKind);
+      await session.createAndSit(seatedName, smallBlind, buyIn, host.token, nextKind, nextKind === "poker" && autoDeal);
       router.push(nextKind === "backgammon" ? { pathname: "/table", params: { kind: "backgammon" } } : "/table");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("serverUnreachable"));
@@ -297,6 +298,18 @@ export default function HomeScreen() {
           <ChipRow values={BLINDS} selected={smallBlind} minimum={1} onSelect={setSmallBlind} onValidity={setBlindOk} />
           <Text style={[styles.label, { textAlign: align }]}>{t("buyIn")}</Text>
           <ChipRow values={BUY_INS} selected={buyIn} minimum={11} onSelect={setBuyIn} onValidity={setBuyInOk} />
+          <Pressable
+            style={[styles.autoDeal, isRtl() && styles.autoDealRtl]}
+            onPress={() => setAutoDeal((on) => !on)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: autoDeal }}
+          >
+            <Ionicons name={autoDeal ? "checkbox" : "square-outline"} size={22} color="#f6d36b" />
+            <View style={styles.autoDealCopy}>
+              <Text style={[styles.autoDealText, { textAlign: align }]}>{t("autoDeal")}</Text>
+              <Text style={[styles.autoDealHint, { textAlign: align }]}>{t("autoDealHint")}</Text>
+            </View>
+          </Pressable>
             </>
           ) : null}
           <Pressable
@@ -414,6 +427,11 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: "#f6d36b", borderColor: "#f6d36b" },
   chipText: { color: "#d6d3d1", fontWeight: "800" },
   chipTextOn: { color: "#1c1917" },
+  autoDeal: { marginTop: 14, flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  autoDealRtl: { flexDirection: "row-reverse" },
+  autoDealCopy: { flex: 1, gap: 2 },
+  autoDealText: { color: "#fafaf9", fontWeight: "800", fontSize: 16 },
+  autoDealHint: { color: "#a8a29e", fontSize: 13 },
   deal: { marginTop: 12, backgroundColor: "#f6d36b", borderRadius: 24, paddingVertical: 14, alignItems: "center" },
   dealBusy: { opacity: 0.7 },
   dealText: { color: "#1c1917", fontWeight: "900", fontSize: 18, letterSpacing: 0.4 },

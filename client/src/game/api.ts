@@ -43,8 +43,19 @@ export function redeemHostCode(code: string) {
   return pending;
 }
 
-export function createTable(smallBlind: number, buyIn: number, hostToken: string, kind: "poker" | "backgammon" = "poker") {
-  return post<{ gameId: string; adminSecret: string; password: string }>("/api/games", { smallBlind, buyIn, kind }, {
+export function createTable(
+  smallBlind: number,
+  buyIn: number,
+  hostToken: string,
+  kind: "poker" | "backgammon" = "poker",
+  autoDeal = false,
+) {
+  return post<{ gameId: string; adminSecret: string; password: string }>("/api/games", {
+    smallBlind,
+    buyIn,
+    kind,
+    ...(kind === "poker" ? { autoDeal } : {}),
+  }, {
     authorization: `Bearer ${hostToken}`,
   });
 }

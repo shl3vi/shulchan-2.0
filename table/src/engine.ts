@@ -1,4 +1,4 @@
-import { legacyPokerHand, type TableRecord } from "./store.js";
+import type { TableRecord } from "./store.js";
 
 const engineUrl = process.env.POKER_ENGINE_URL ?? "http://127.0.0.1:4001";
 const engineToken = process.env.ENGINE_TOKEN;
@@ -62,11 +62,9 @@ function post(path: string, body?: unknown) {
   return enginePost<PokerPacket>(engineUrl, path, body);
 }
 
-async function handOf(table: TableRecord) {
-  if (table.poker) return table.poker;
-  const legacy = await legacyPokerHand(table.id);
-  if (!legacy) throw new Error("Game not found");
-  return legacy;
+function handOf(table: TableRecord) {
+  if (!table.poker) throw new Error("Game not found");
+  return table.poker;
 }
 
 function keep(table: TableRecord, result: PokerPacket) {
@@ -81,7 +79,7 @@ export async function createPokerTable(table: TableRecord, smallBlind: number) {
 }
 
 async function apply(table: TableRecord, action: PokerAction) {
-  return keep(table, await post("/apply", { hand: await handOf(table), action }));
+  return keep(table, await post("/apply", { hand: handOf(table), action }));
 }
 
 export function seatPoker(table: TableRecord, seat: number, stack: number) {

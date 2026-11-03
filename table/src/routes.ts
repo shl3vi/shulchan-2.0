@@ -1,6 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
 import { Router } from "express";
-import { createPokerTable, readPoker, seatPoker, unseatPoker } from "./engine.js";
+import { considerAutoDeal } from "./autodeal.js";
+import { createPokerTable, readPoker, seatPoker } from "./engine.js";
 import { liveKitToken, VideoUnavailable } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
@@ -9,7 +9,7 @@ import { openingBackgammon } from "./backgammon.js";
 import { createBody, joinBody, liveKitBody, readSchema } from "./schema.js";
 import { openTable, noteJoinRefused, notePlayers, noteVideo } from "./events/ledger.js";
 import { reportError, reportCaught } from "./events/report.js";
-import { seatedCount, tablePassword } from "./players.js";
+import { sameSecret, seatedCount, tablePassword } from "./players.js";
 import { clearPasswordFailures, noteWrongPassword, passwordRetryAfter } from "./password.js";
 import { insertTable, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
 
@@ -55,6 +55,7 @@ router.post("/", async (req, res) => {
     password: tablePassword(),
     hostEmail: host.email,
     kind: body.kind === "backgammon" ? "backgammon" : "poker",
+    ...(body.kind !== "backgammon" && body.autoDeal ? { autoDeal: true } : {}),
     players: [],
   };
   const view = await createPokerTable(table, smallBlind);
@@ -101,14 +102,14 @@ router.post("/:id/join", async (req, res) => {
     const retry = await passwordRetryAfter(id, ip).catch(() => 0);
     if (retry > 0) throw new JoinRefused(429, "Too many password attempts", retry);
     const joined = await withTable(id, async (table) => {
-      if (!table.password || password !== table.password) throw new JoinRefused(403, "Wrong password");
+      if (!sameSecret(password, table.password)) throw new JoinRefused(403, "Wrong password");
       const taken = new Set(table.players.map((player) => player.seat));
       const seat = Array.from({ length: MAX_SEATS }, (_, index) => index).find((index) => !taken.has(index));
       if (seat === undefined) throw new JoinRefused(400, "Table is full");
       const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), seat, bought: table.buyIn };
       await seatPoker(table, seat, table.buyIn);
       table.players.push(player);
-      if (table.adminSecret && adminSecret === table.adminSecret) {
+      if (table.adminSecret && sameSecret(adminSecret, table.adminSecret)) {
         table.adminId = player.id;
         delete table.adminSecret;
       } else if (!table.adminId) {
@@ -117,6 +118,7 @@ router.post("/:id/join", async (req, res) => {
       return { player, seated: seatedCount(table) };
     });
     await publishTable(id);
+    void considerAutoDeal(id);
     await notePlayers(id, joined.seated);
     await clearPasswordFailures(id, ip).catch(() => undefined);
     res.status(201).json({ id: joined.player.id, secret: joined.player.secret });
@@ -152,7 +154,7 @@ router.post("/:id/livekit", async (req, res) => {
   }
   const playerId = body.playerId;
   const secret = body.secret;
-  const player = table.players.find((seat) => seat.id === playerId && seat.secret === secret);
+  const player = table.players.find((seat) => sameSecret(playerId, seat.id) && sameSecret(secret, seat.secret));
   if (!player) {
     reportError({ area: "auth", route: "livekit", tableId: table.id, kind: table.kind ?? "poker" });
     res.status(401).json({ error: "Invalid player" });
@@ -168,12 +170,6 @@ router.post("/:id/livekit", async (req, res) => {
     res.status(status).json({ error: "Video is not available" });
   }
 });
-
-function sameSecret(given: string, expected: string) {
-  const left = Buffer.from(given);
-  const right = Buffer.from(expected);
-  return left.length === right.length && left.length > 0 && timingSafeEqual(left, right);
-}
 
 router.get("/:id", async (req, res) => {
   const id = String(req.params.id);

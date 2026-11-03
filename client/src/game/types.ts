@@ -18,6 +18,7 @@ export type TableSnapshot = {
   bigBlind: number;
   buyIn: number;
   kind?: "poker" | "backgammon";
+  autoDeal?: boolean;
   backgammon?: unknown;
   backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
   communityCards: Card[];

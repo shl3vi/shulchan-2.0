@@ -1,6 +1,6 @@
 import { createClient, type RedisClientType } from "redis";
 import type { EngineView } from "./engine.js";
-import { connectPostgres, pool, secondsUntil, TABLE_TTL_MS } from "./db.js";
+import { connectPostgres, pool, TABLE_TTL_MS } from "./db.js";
 
 export type SeatPlayer = {
   id: string;
@@ -19,11 +19,15 @@ export type TableRecord = {
   buyIn: number;
   password: string;
   hostEmail?: string;
+  /** Poker only. The next hand starts on its own once the table is waiting. */
+  autoDeal?: boolean;
   kind?: "poker" | "backgammon";
   backgammon?: unknown;
   backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
   poker?: unknown;
   pokerView?: EngineView;
+  /** Bumped on every saved change, so a restart cannot revive an older hand. */
+  revision?: number;
   players: SeatPlayer[];
 };
 
@@ -36,6 +40,7 @@ export async function connectRedis() {
   await redis.connect();
   await subscriber.connect();
   await connectPostgres();
+  await adoptLiveRedis();
   await expireTables();
   expiryTimer = setInterval(() => {
     void expireTables().catch((error) => {
@@ -56,124 +61,136 @@ export function pokerKey(id: string) {
   return `poker:${id}`;
 }
 
-/** A hand saved before the table record carried it. Redis first, then the old engine column. */
-export async function legacyPokerHand(id: string): Promise<unknown | null> {
-  const raw = await redis.get(pokerKey(id));
-  if (raw) return JSON.parse(raw) as unknown;
-  const found = await pool.query<{ engine: unknown }>(
-    "SELECT engine FROM tables WHERE id = $1 AND expires_at > now() AND engine IS NOT NULL",
-    [id],
-  );
-  return found.rows[0]?.engine ?? null;
-}
-
 export function tableKey(id: string) {
   return `table:${id}`;
 }
 
-export async function readTable(id: string) {
-  const raw = await redis.get(tableKey(id));
-  if (raw) return JSON.parse(raw) as TableRecord;
-  const found = await pool.query<{ record: TableRecord; expires_at: Date }>(
-    "SELECT record, expires_at FROM tables WHERE id = $1 AND expires_at > now()",
-    [id],
-  );
-  const row = found.rows[0];
-  if (!row) return null;
-  await redis.set(tableKey(id), JSON.stringify(row.record), { EX: secondsUntil(row.expires_at) });
-  return row.record;
+async function scan(match: string) {
+  const keys: string[] = [];
+  for await (const key of redis.scanIterator({ MATCH: match, COUNT: 100 })) {
+    keys.push(String(key));
+  }
+  return keys;
 }
 
-const pendingTables = new Map<string, TableRecord>();
-let persistChain: Promise<void> = Promise.resolve();
-
-function queueTable(table: TableRecord) {
-  pendingTables.set(table.id, table);
-  persistChain = persistChain.then(writePendingTables).catch((error) => {
-    console.error("Table persist failed", error instanceof Error ? error.message : error);
-  });
-}
-
-async function writePendingTables() {
-  while (pendingTables.size > 0) {
-    const batch = [...pendingTables.values()];
-    pendingTables.clear();
-    for (const table of batch) {
-      const latest = pendingTables.get(table.id) ?? table;
-      pendingTables.delete(table.id);
-      try {
-        const saved = await pool.query(
+/**
+ * Redis used to hold the live hand, with Postgres catching up afterwards.
+ * Keep the newer of those two copies, then leave the hand only in Postgres.
+ */
+async function adoptLiveRedis() {
+  for (const key of await scan("poker:*")) {
+    const id = key.slice("poker:".length);
+    const raw = await redis.get(key);
+    if (raw) {
+      const found = await pool.query<{ record: TableRecord }>(
+        "SELECT record FROM tables WHERE id = $1 AND expires_at > now()",
+        [id],
+      );
+      const table = found.rows[0]?.record;
+      if (table && !table.poker) {
+        table.poker = JSON.parse(raw) as unknown;
+        table.revision = (table.revision ?? 0) + 1;
+        await pool.query(
           "UPDATE tables SET record = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now()",
-          [latest.id, JSON.stringify(latest)],
+          [id, JSON.stringify(table)],
         );
-        if (saved.rowCount !== 1) console.error("Table persist skipped", latest.id);
-      } catch (error) {
-        if (!pendingTables.has(latest.id)) pendingTables.set(latest.id, latest);
-        throw error;
       }
     }
+    await redis.del(key);
+  }
+  for (const key of await scan("table:*")) {
+    const id = key.slice("table:".length);
+    const raw = await redis.get(key);
+    if (raw) {
+      const cached = JSON.parse(raw) as TableRecord;
+      const found = await pool.query<{ record: TableRecord }>(
+        "SELECT record FROM tables WHERE id = $1 AND expires_at > now()",
+        [id],
+      );
+      const saved = found.rows[0]?.record;
+      if (saved && saved.revision == null && cached.revision == null) {
+        cached.revision = 1;
+        await pool.query(
+          "UPDATE tables SET record = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now()",
+          [id, JSON.stringify(cached)],
+        );
+      }
+    }
+    await redis.del(key);
   }
 }
 
-/** Waits until the latest table records have been written to Postgres. */
-export async function flushTables() {
-  await persistChain;
-  if (pendingTables.size === 0) return;
-  queueTable([...pendingTables.values()][0]!);
-  await persistChain;
-}
-
-/** Redis is the live copy. Postgres follows in the background, so a move is not waiting on it. */
-export async function writeTable(table: TableRecord) {
-  const key = tableKey(table.id);
-  const ttl = await redis.ttl(key);
-  if (ttl > 0) {
-    await redis.set(key, JSON.stringify(table), { EX: ttl });
-    queueTable(table);
-    return;
-  }
-  const saved = await pool.query<{ expires_at: Date }>(
-    "UPDATE tables SET record = $2::jsonb, updated_at = now() WHERE id = $1 AND expires_at > now() RETURNING expires_at",
-    [table.id, JSON.stringify(table)],
+export async function readTable(id: string) {
+  const found = await pool.query<{ record: TableRecord }>(
+    "SELECT record FROM tables WHERE id = $1 AND expires_at > now()",
+    [id],
   );
-  const row = saved.rows[0];
-  if (!row) throw new TableNotFound();
-  await redis.set(key, JSON.stringify(table), { EX: secondsUntil(row.expires_at) });
+  return found.rows[0]?.record ?? null;
+}
+
+/** Moves are written before they return, so shutdown has nothing left to flush. */
+export async function flushTables() {
+  return;
+}
+
+export async function writeTable(table: TableRecord) {
+  table.revision = (table.revision ?? 0) + 1;
+  const saved = await pool.query(
+    `UPDATE tables
+     SET record = $2::jsonb, updated_at = now(), expires_at = now() + make_interval(secs => $3::int)
+     WHERE id = $1 AND expires_at > now()`,
+    [table.id, JSON.stringify(table), TABLE_TTL_MS / 1000],
+  );
+  if (saved.rowCount !== 1) throw new TableNotFound();
 }
 
 export async function insertTable(table: TableRecord) {
-  const expiresAt = new Date(Date.now() + TABLE_TTL_MS);
+  table.revision = 1;
   const saved = await pool.query(
     `INSERT INTO tables (id, kind, record, expires_at)
-     VALUES ($1, $2, $3::jsonb, $4)
+     VALUES ($1, $2, $3::jsonb, now() + make_interval(secs => $4::int))
      ON CONFLICT (id) DO UPDATE
        SET kind = EXCLUDED.kind,
            record = EXCLUDED.record,
-           engine = NULL,
            created_at = now(),
            expires_at = EXCLUDED.expires_at,
            updated_at = now()
        WHERE tables.expires_at <= now()
      RETURNING id`,
-    [table.id, table.kind ?? "poker", JSON.stringify(table), expiresAt],
+    [table.id, table.kind ?? "poker", JSON.stringify(table), TABLE_TTL_MS / 1000],
   );
-  if (saved.rowCount !== 1) return false;
-  try {
-    const ok = (await redis.set(tableKey(table.id), JSON.stringify(table), { NX: true, EX: secondsUntil(expiresAt) })) === "OK";
-    if (!ok) {
-      await pool.query("DELETE FROM tables WHERE id = $1", [table.id]);
-      return false;
+  return saved.rowCount === 1;
+}
+
+/** Once a host has no table left, their sign-in email does not stay in Redis. */
+async function releaseHost(email: string | null | undefined) {
+  if (!email || email === "signed-in") return;
+  const still = await pool.query(
+    "SELECT 1 FROM tables WHERE expires_at > now() AND record->>'hostEmail' = $1 LIMIT 1",
+    [email],
+  );
+  if (still.rowCount) return;
+  const keys: string[] = [];
+  for (const key of await scan("host:*")) {
+    const raw = await redis.get(key);
+    if (!raw) continue;
+    try {
+      const host = JSON.parse(raw) as { email?: string };
+      if (host.email === email) keys.push(key);
+    } catch {
+      // not a host session
     }
-    return true;
-  } catch (error) {
-    await pool.query("DELETE FROM tables WHERE id = $1", [table.id]);
-    throw error;
   }
+  if (keys.length > 0) await redis.del(keys);
 }
 
 export async function removeTable(id: string) {
-  await pool.query("DELETE FROM tables WHERE id = $1", [id]);
+  const deleted = await pool.query<{ email: string | null }>(
+    `DELETE FROM tables WHERE id = $1 RETURNING record->>'hostEmail' AS email`,
+    [id],
+  );
   await redis.del([tableKey(id), pokerKey(id), `ledger:${id}`]);
+  await releaseHost(deleted.rows[0]?.email);
 }
 
 let onExpired: (ids: string[]) => Promise<void> = async () => {};
@@ -183,9 +200,13 @@ export function whenTablesExpire(handler: (ids: string[]) => Promise<void>) {
 }
 
 async function expireTables() {
-  const expired = await pool.query<{ id: string }>("DELETE FROM tables WHERE expires_at < now() RETURNING id");
+  const expired = await pool.query<{ id: string; email: string | null }>(
+    `DELETE FROM tables WHERE expires_at < now() RETURNING id, record->>'hostEmail' AS email`,
+  );
   if (expired.rows.length === 0) return;
   await redis.del(expired.rows.flatMap((row) => [tableKey(row.id), pokerKey(row.id)]));
+  const emails = [...new Set(expired.rows.map((row) => row.email).filter((email): email is string => !!email))];
+  for (const email of emails) await releaseHost(email);
   await onExpired(expired.rows.map((row) => row.id));
 }
 

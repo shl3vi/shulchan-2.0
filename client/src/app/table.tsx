@@ -434,7 +434,7 @@ export default function TableScreen() {
   const router = useRouter();
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const insets = useSafeAreaInsets();
-  const { credentials, state, error, dismissError, startHand, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
+  const { credentials, state, error, dismissError, startHand, setAutoDeal, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
   const video = useTableVideo(credentials);
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
   const [info, setInfo] = useState(false);
@@ -614,6 +614,12 @@ export default function TableScreen() {
                 )
               ) : (
                 <>
+                  {state?.kind !== "backgammon" ? (
+                    <Pressable style={styles.statsRow} onPress={() => setAutoDeal(state?.autoDeal !== true)}>
+                      <Text style={styles.statsLine}>{t("autoDeal")}</Text>
+                      <Text style={styles.makeAdmin}>{state?.autoDeal ? t("autoDealOn") : t("autoDealOff")}</Text>
+                    </Pressable>
+                  ) : null}
                   {(state?.players ?? []).length === 0 ? <Text style={styles.statsLine}>{t("noPlayers")}</Text> : null}
                   {(state?.players ?? []).map((player) => (
                     <View key={player.id} style={styles.statsRow}>

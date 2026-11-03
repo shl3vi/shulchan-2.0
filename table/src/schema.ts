@@ -4,6 +4,7 @@ export const createBody = z.object({
   smallBlind: z.number().int().positive(),
   buyIn: z.number().int().positive(),
   kind: z.enum(["poker", "backgammon"]).optional(),
+  autoDeal: z.boolean().optional(),
 }).strict();
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -56,6 +57,10 @@ export const playerBody = z.object({
 
 export const rebuyBody = z.object({
   amount: chipAmount,
+}).strict();
+
+export const autoDealBody = z.object({
+  enabled: z.boolean(),
 }).strict();
 
 export function readSchema<T>(schema: z.ZodType<T>, body: unknown): T | null {
