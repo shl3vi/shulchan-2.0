@@ -69,7 +69,7 @@ function ChipRow({
             if (!preset) setDraft(String(selected));
           }}
         >
-          <Ionicons name="add" size={18} color={custom || !preset ? "#1c1917" : "#d6d3d1"} />
+          <Ionicons name="add" size={18} color={custom || !preset ? "#171b35" : "#c7c9d9"} />
         </Pressable>
       </View>
       {custom ? (
@@ -88,7 +88,7 @@ function ChipRow({
           onBlur={() => commit(draft)}
           keyboardType="number-pad"
           placeholder={minimum > 1 ? t("moreThan", { n: minimum - 1 }) : t("yourAmount")}
-          placeholderTextColor="#78716c"
+          placeholderTextColor="#73758b"
           autoFocus
         />
       ) : null}
@@ -265,7 +265,7 @@ export default function HomeScreen() {
       <View style={styles.hero}>
         <View style={styles.brandRow}>
           <View style={styles.brandIcon}>
-            <Ionicons name="game-controller" size={20} color="#081b16" />
+            <Ionicons name="game-controller" size={20} color="#171b35" />
           </View>
           <Text style={styles.mark}>SHULCHAN</Text>
         </View>
@@ -273,11 +273,11 @@ export default function HomeScreen() {
         <View style={styles.heroArt}>
           <View style={styles.heroHalo} />
           <View style={[styles.gameTile, styles.gameTileLeft]}>
-            <Ionicons name="dice" size={31} color="#f8d66d" />
+            <Ionicons name="dice" size={31} color="#f3a66f" />
           </View>
           <View style={styles.tableTop}>
             <View style={styles.tableInner}>
-              <Ionicons name="diamond" size={28} color="#f8d66d" />
+              <Ionicons name="diamond" size={28} color="#f3a66f" />
               <View style={styles.cardStack}>
                 <View style={[styles.miniCard, styles.miniCardBack]} />
                 <View style={styles.miniCard}>
@@ -287,7 +287,7 @@ export default function HomeScreen() {
             </View>
           </View>
           <View style={[styles.gameTile, styles.gameTileRight]}>
-            <Ionicons name="people" size={29} color="#f8d66d" />
+            <Ionicons name="people" size={29} color="#f3a66f" />
           </View>
         </View>
       </View>
@@ -302,29 +302,38 @@ export default function HomeScreen() {
       {seated ? (
         <Pressable style={styles.return} onPress={() => router.push("/table")}>
           <View style={styles.returnIcon}>
-            <Ionicons name="play" size={24} color="#10231d" />
+            <Ionicons name="play" size={24} color="#2a130a" />
           </View>
           <View style={styles.returnCopy}>
             <Text style={styles.returnTitle}>{t("atTable")}</Text>
             <Text style={styles.returnText}>{t("backToSeat")}</Text>
           </View>
-          <Ionicons name={isRtl() ? "arrow-back" : "arrow-forward"} size={22} color="#10231d" />
+          <Ionicons name={isRtl() ? "arrow-back" : "arrow-forward"} size={22} color="#2a130a" />
         </Pressable>
       ) : null}
       <Pressable
-        style={[
+        style={({ pressed }) => [
           styles.joinCode,
+          styles.primaryAction,
           isRtl() && styles.joinCodeRtl,
           styles.createButton,
+          pressed && styles.buttonPressed,
           (busy || seated) && styles.actionDisabled,
         ]}
         disabled={busy || seated}
         onPress={openCreate}
+        accessibilityRole="button"
       >
-        <View style={styles.actionIcon}>
-          <Ionicons name="add" size={20} color="#0d211b" />
+        <View style={[styles.actionIcon, styles.primaryActionIcon]}>
+          <Ionicons name="add" size={20} color="#2a130a" />
         </View>
-        <Text style={styles.joinCodeText}>{t("createTable")}</Text>
+        <Text style={[styles.joinCodeText, styles.primaryActionText]}>{t("createTable")}</Text>
+        <Ionicons
+          name={isRtl() ? "arrow-back" : "arrow-forward"}
+          size={20}
+          color="#2a130a"
+          style={styles.actionArrow}
+        />
       </Pressable>
       {creating && !host ? (
         <View style={styles.signIn}>
@@ -348,13 +357,13 @@ export default function HomeScreen() {
             onPress={() => setKind("backgammon")}
           >
             <View style={styles.kindIcon}>
-              <Ionicons name="dice" size={31} color="#f8d66d" />
+              <Ionicons name="dice" size={31} color="#f3a66f" />
             </View>
             <Text style={styles.kindTitle}>{t("backgammonTable")}</Text>
           </Pressable>
           <Pressable style={styles.kindCard} onPress={() => setKind("poker")}>
             <View style={styles.kindIcon}>
-              <Ionicons name="diamond" size={29} color="#f8d66d" />
+              <Ionicons name="diamond" size={29} color="#f3a66f" />
             </View>
             <Text style={styles.kindTitle}>{t("pokerTable")}</Text>
           </Pressable>
@@ -373,7 +382,7 @@ export default function HomeScreen() {
             }}
             autoCapitalize="words"
             placeholder={t("enterYourName")}
-            placeholderTextColor="#78716c"
+            placeholderTextColor="#73758b"
             maxLength={24}
           />
           {kind === "poker" ? (
@@ -388,7 +397,7 @@ export default function HomeScreen() {
             accessibilityRole="checkbox"
             accessibilityState={{ checked: autoDeal }}
           >
-            <Ionicons name={autoDeal ? "checkbox" : "square-outline"} size={22} color="#f6d36b" />
+            <Ionicons name={autoDeal ? "checkbox" : "square-outline"} size={22} color="#a8b2ff" />
             <View style={styles.autoDealCopy}>
               <Text style={[styles.autoDealText, { textAlign: align }]}>{t("autoDeal")}</Text>
               <Text style={[styles.autoDealHint, { textAlign: align }]}>{t("autoDealHint")}</Text>
@@ -409,17 +418,29 @@ export default function HomeScreen() {
       {error && !creating ? <Text style={styles.error}>{error}</Text> : null}
       {seated ? null : (
         <Pressable
-          style={[styles.joinCode, isRtl() && styles.joinCodeRtl]}
+          style={({ pressed }) => [
+            styles.joinCode,
+            styles.secondaryAction,
+            isRtl() && styles.joinCodeRtl,
+            pressed && styles.buttonPressed,
+          ]}
           onPress={() => {
             setCreating(false);
             setKind(null);
             setJoining((open) => !open);
           }}
+          accessibilityRole="button"
         >
           <View style={styles.actionIcon}>
-            <Ionicons name="enter-outline" size={20} color="#0d211b" />
+            <Ionicons name="enter-outline" size={20} color="#a8b2ff" />
           </View>
           <Text style={styles.joinCodeText}>{t("joinWithId")}</Text>
+          <Ionicons
+            name={isRtl() ? "arrow-back" : "arrow-forward"}
+            size={20}
+            color="#a8b2ff"
+            style={styles.actionArrow}
+          />
         </Pressable>
       )}
       {joining && !seated ? (
@@ -432,7 +453,7 @@ export default function HomeScreen() {
             autoCapitalize="characters"
             autoCorrect={false}
             placeholder="K7P2QX"
-            placeholderTextColor="#78716c"
+            placeholderTextColor="#73758b"
           />
           <Text style={[styles.label, { textAlign: align }]}>{t("password")}</Text>
           <TextInput
@@ -441,7 +462,7 @@ export default function HomeScreen() {
             onChangeText={setJoinPassword}
             keyboardType="number-pad"
             placeholder="123456"
-            placeholderTextColor="#78716c"
+            placeholderTextColor="#73758b"
           />
           <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
           <TextInput
@@ -450,7 +471,7 @@ export default function HomeScreen() {
             onChangeText={setJoinName}
             autoCapitalize="words"
             placeholder={t("enterYourName")}
-            placeholderTextColor="#78716c"
+            placeholderTextColor="#73758b"
             maxLength={24}
           />
           <Pressable
@@ -469,7 +490,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#06130f" },
+  screen: { flex: 1, backgroundColor: "#090b16" },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 22 },
   backdrop: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, overflow: "hidden" },
@@ -480,8 +501,8 @@ const styles = StyleSheet.create({
     borderRadius: 185,
     top: -235,
     left: -85,
-    backgroundColor: "#174f3e",
-    opacity: 0.48,
+    backgroundColor: "#5c4dd8",
+    opacity: 0.28,
   },
   glowSide: {
     position: "absolute",
@@ -490,8 +511,8 @@ const styles = StyleSheet.create({
     borderRadius: 140,
     top: 270,
     right: -210,
-    backgroundColor: "#8f6719",
-    opacity: 0.2,
+    backgroundColor: "#e47b4c",
+    opacity: 0.14,
   },
   dotField: {
     position: "absolute",
@@ -501,42 +522,42 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-    opacity: 0.25,
+    opacity: 0.3,
   },
-  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "#f8d66d" },
+  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "#a8b2ff" },
   hero: { alignItems: "center", marginBottom: 22 },
   brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   brandIcon: {
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: "#f8d66d",
+    backgroundColor: "#a8b2ff",
     alignItems: "center",
     justifyContent: "center",
     transform: [{ rotate: "-5deg" }],
-    shadowColor: "#f8d66d",
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
+    shadowColor: "#7c89ff",
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 5 },
     elevation: 6,
   },
-  mark: { color: "#fff2bd", fontSize: 31, fontWeight: "900", letterSpacing: 3.4, textAlign: "center" },
-  tag: { color: "#b9c9c3", textAlign: "center", marginTop: 10, fontSize: 15, letterSpacing: 0.15 },
+  mark: { color: "#f7f7fc", fontSize: 31, fontWeight: "900", letterSpacing: 3.4, textAlign: "center" },
+  tag: { color: "#a6a8b8", textAlign: "center", marginTop: 10, fontSize: 15, letterSpacing: 0.15 },
   heroArt: { width: "100%", height: 118, marginTop: 16, alignItems: "center", justifyContent: "center" },
   heroHalo: {
     position: "absolute",
     width: 210,
     height: 88,
     borderRadius: 50,
-    backgroundColor: "#1d6a50",
-    opacity: 0.24,
+    backgroundColor: "#6457d9",
+    opacity: 0.2,
   },
   tableTop: {
     width: 176,
     height: 94,
     borderRadius: 48,
     padding: 5,
-    backgroundColor: "#d0a944",
+    backgroundColor: "#e6a66c",
     shadowColor: "#000",
     shadowOpacity: 0.42,
     shadowRadius: 16,
@@ -547,8 +568,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 43,
     borderWidth: 1,
-    borderColor: "#39836a",
-    backgroundColor: "#0c3c2e",
+    borderColor: "#8177d9",
+    backgroundColor: "#24204b",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -580,9 +601,9 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 20,
-    backgroundColor: "#132a23",
+    backgroundColor: "rgba(28, 31, 58, 0.9)",
     borderWidth: 1,
-    borderColor: "#2b5548",
+    borderColor: "rgba(194, 199, 255, 0.22)",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,
@@ -596,16 +617,16 @@ const styles = StyleSheet.create({
   gameTileRight: { right: 20, top: 3, transform: [{ rotate: "9deg" }] },
   helloRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 12 },
   hello: { color: "#f7f7f2", fontSize: 19, fontWeight: "800", flex: 1 },
-  logout: { color: "#f6d36b", fontWeight: "800", fontSize: 16 },
+  logout: { color: "#a8b2ff", fontWeight: "800", fontSize: 16 },
   return: {
-    backgroundColor: "#f8d66d",
+    backgroundColor: "#f3a66f",
     borderRadius: 24,
     padding: 15,
     marginBottom: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 13,
-    shadowColor: "#e8ba35",
+    shadowColor: "#e8874e",
     shadowOpacity: 0.22,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 7 },
@@ -620,30 +641,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   returnCopy: { flex: 1 },
-  returnTitle: { color: "#10231d", fontWeight: "900", fontSize: 18 },
-  returnText: { color: "#485149", marginTop: 3, fontSize: 14 },
+  returnTitle: { color: "#2a130a", fontWeight: "900", fontSize: 18 },
+  returnText: { color: "#623922", marginTop: 3, fontSize: 14 },
   felt: {
-    backgroundColor: "#10251e",
+    backgroundColor: "rgba(20, 23, 42, 0.82)",
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: "#29483d",
+    borderColor: "rgba(205, 210, 255, 0.16)",
     padding: 18,
     gap: 8,
     marginTop: 12,
     shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOpacity: 0.26,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 7 },
     elevation: 6,
   },
   feltOff: { opacity: 0.45 },
-  label: { color: "#f6d36b", fontWeight: "800", letterSpacing: 0.6, marginTop: 6 },
+  label: { color: "#c8ceff", fontWeight: "800", letterSpacing: 0.6, marginTop: 6 },
   input: {
-    backgroundColor: "#071711",
+    backgroundColor: "rgba(8, 10, 23, 0.78)",
     color: "white",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#345449",
+    borderColor: "rgba(198, 203, 255, 0.2)",
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
@@ -653,16 +674,16 @@ const styles = StyleSheet.create({
   chips: { flexDirection: "row", gap: 8 },
   chip: {
     flex: 1,
-    backgroundColor: "#071711",
+    backgroundColor: "rgba(8, 10, 23, 0.72)",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#345449",
+    borderColor: "rgba(198, 203, 255, 0.2)",
     paddingVertical: 10,
     alignItems: "center",
   },
-  chipOn: { backgroundColor: "#f8d66d", borderColor: "#f8d66d" },
-  chipText: { color: "#d6d3d1", fontWeight: "800" },
-  chipTextOn: { color: "#1c1917" },
+  chipOn: { backgroundColor: "#a8b2ff", borderColor: "#a8b2ff" },
+  chipText: { color: "#c7c9d9", fontWeight: "800" },
+  chipTextOn: { color: "#171b35" },
   autoDeal: { marginTop: 14, flexDirection: "row", alignItems: "flex-start", gap: 10 },
   autoDealRtl: { flexDirection: "row-reverse" },
   autoDealCopy: { flex: 1, gap: 2 },
@@ -670,23 +691,23 @@ const styles = StyleSheet.create({
   autoDealHint: { color: "#a8a29e", fontSize: 13 },
   deal: {
     marginTop: 12,
-    backgroundColor: "#f8d66d",
+    backgroundColor: "#f3a66f",
     borderRadius: 24,
     paddingVertical: 15,
     alignItems: "center",
-    shadowColor: "#e8ba35",
+    shadowColor: "#e8874e",
     shadowOpacity: 0.2,
     shadowRadius: 9,
     shadowOffset: { width: 0, height: 5 },
     elevation: 5,
   },
   dealBusy: { opacity: 0.7 },
-  dealText: { color: "#1c1917", fontWeight: "900", fontSize: 18, letterSpacing: 0.4 },
+  dealText: { color: "#2a130a", fontWeight: "900", fontSize: 18, letterSpacing: 0.4 },
   signIn: {
-    backgroundColor: "#10251e",
+    backgroundColor: "rgba(20, 23, 42, 0.82)",
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: "#29483d",
+    borderColor: "rgba(205, 210, 255, 0.16)",
     padding: 18,
     gap: 8,
     marginTop: 12,
@@ -718,10 +739,10 @@ const styles = StyleSheet.create({
   kindCard: {
     flex: 1,
     minHeight: 120,
-    backgroundColor: "#10251e",
+    backgroundColor: "rgba(20, 23, 42, 0.82)",
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#29483d",
+    borderColor: "rgba(205, 210, 255, 0.16)",
     alignItems: "center",
     justifyContent: "flex-start",
     padding: 16,
@@ -730,39 +751,51 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 18,
-    backgroundColor: "#183a2f",
+    backgroundColor: "rgba(135, 143, 255, 0.16)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
   },
-  kindTitle: { color: "#fff2bd", fontWeight: "900", fontSize: 17, lineHeight: 21, textAlign: "center" },
+  kindTitle: { color: "#f3f7f5", fontWeight: "900", fontSize: 17, lineHeight: 21, textAlign: "center" },
   joinCode: {
     marginTop: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
     gap: 8,
-    borderRadius: 22,
+    minHeight: 58,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#416055",
-    backgroundColor: "#10251e",
+    borderColor: "rgba(205, 210, 255, 0.18)",
+    backgroundColor: "rgba(20, 23, 42, 0.76)",
     paddingVertical: 12,
     paddingHorizontal: 18,
     shadowColor: "#000",
-    shadowOpacity: 0.24,
-    shadowRadius: 10,
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 5 },
     elevation: 5,
   },
   joinCodeRtl: { flexDirection: "row-reverse" },
+  primaryAction: {
+    backgroundColor: "#f3a66f",
+    borderColor: "#ffc094",
+    shadowColor: "#e8874e",
+    shadowOpacity: 0.24,
+  },
+  secondaryAction: { backgroundColor: "rgba(20, 23, 42, 0.72)" },
+  buttonPressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
   actionIcon: {
     width: 32,
     height: 32,
     borderRadius: 11,
-    backgroundColor: "#f8d66d",
+    backgroundColor: "rgba(168, 178, 255, 0.12)",
     alignItems: "center",
     justifyContent: "center",
   },
-  joinCodeText: { color: "#fff2bd", fontWeight: "900", fontSize: 17, letterSpacing: 0.2 },
+  primaryActionIcon: { backgroundColor: "rgba(72, 32, 14, 0.1)" },
+  joinCodeText: { color: "#f3f7f5", fontWeight: "900", fontSize: 17, letterSpacing: 0.2 },
+  primaryActionText: { color: "#2a130a" },
+  actionArrow: { marginStart: "auto" },
   code: { textAlign: "center", letterSpacing: 4, fontSize: 20, fontWeight: "800" },
 });

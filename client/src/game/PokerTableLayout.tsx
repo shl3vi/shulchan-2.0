@@ -655,17 +655,17 @@ export function TalkButton({ on, onTalk }: { on: boolean; onTalk: (on: boolean) 
         }, 0);
       }}
     >
-      <MicIcon muted={!on} />
+      <MicIcon muted={!on} active={on} />
     </Pressable>
   );
 }
 
-function MicIcon({ muted }: { muted: boolean }) {
+function MicIcon({ muted, active }: { muted: boolean; active: boolean }) {
   return (
     <View style={styles.mic}>
-      <View style={[styles.micHead, muted && styles.micMuted]} />
-      <View style={[styles.micArc, muted && styles.micMutedBorder]} />
-      <View style={[styles.micStem, muted && styles.micMuted]} />
+      <View style={[styles.micHead, active && styles.micActive, muted && styles.micMuted]} />
+      <View style={[styles.micArc, active && styles.micActiveBorder, muted && styles.micMutedBorder]} />
+      <View style={[styles.micStem, active && styles.micActive, muted && styles.micMuted]} />
       {muted ? <View style={styles.micSlash} /> : null}
     </View>
   );
@@ -822,13 +822,13 @@ export function ActionDock({
 type MenuIcon = "info" | "share" | "leave" | "stats" | "admin" | "buy" | "restart";
 
 function MenuGlyph({ kind }: { kind?: MenuIcon }) {
-  if (kind === "info") return <Ionicons name="information-circle-outline" size={18} color="#fafaf9" />;
-  if (kind === "share") return <Ionicons name="share-outline" size={18} color="#fafaf9" />;
+  if (kind === "info") return <Ionicons name="information-circle-outline" size={18} color="#c8ceff" />;
+  if (kind === "share") return <Ionicons name="share-outline" size={18} color="#c8ceff" />;
   if (kind === "leave") return <Ionicons name="warning" size={18} color="#f87171" />;
-  if (kind === "admin") return <Ionicons name="shield-checkmark-outline" size={18} color="#fafaf9" />;
-  if (kind === "buy") return <Ionicons name="add-circle-outline" size={18} color="#fafaf9" />;
-  if (kind === "restart") return <Ionicons name="refresh" size={18} color="#fafaf9" />;
-  return <Ionicons name="stats-chart" size={18} color="#fafaf9" />;
+  if (kind === "admin") return <Ionicons name="shield-checkmark-outline" size={18} color="#c8ceff" />;
+  if (kind === "buy") return <Ionicons name="add-circle-outline" size={18} color="#c8ceff" />;
+  if (kind === "restart") return <Ionicons name="refresh" size={18} color="#c8ceff" />;
+  return <Ionicons name="stats-chart" size={18} color="#c8ceff" />;
 }
 
 export function TableMenu({
@@ -870,7 +870,7 @@ export function TableMenu({
 }
 
 const styles = StyleSheet.create({
-  room: { flex: 1, minHeight: 0, backgroundColor: "#040b08", overflow: "hidden" },
+  room: { flex: 1, minHeight: 0, backgroundColor: "#090b16", overflow: "hidden" },
   talk: {
     position: "absolute",
     right: 16,
@@ -879,20 +879,20 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#1c1917",
+    backgroundColor: "rgba(20, 23, 42, 0.9)",
     borderWidth: 1,
-    borderColor: "#44403c",
+    borderColor: "rgba(205, 210, 255, 0.24)",
     alignItems: "center",
     justifyContent: "center",
   },
-  talkOn: { backgroundColor: "#1e3a8a", borderColor: "#93c5fd" },
+  talkOn: { backgroundColor: "#a8b2ff", borderColor: "#c8ceff" },
   wash: {
     position: "absolute",
     left: 0,
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#06130d",
+    backgroundColor: "#090b16",
     pointerEvents: "none",
   },
   roomGlow: {
@@ -902,7 +902,7 @@ const styles = StyleSheet.create({
     left: "-9%",
     top: "12%",
     borderRadius: 999,
-    backgroundColor: "rgba(28,82,52,0.2)",
+    backgroundColor: "rgba(92, 77, 216, 0.16)",
     pointerEvents: "none",
   },
   mic: { width: 18, height: 24, alignItems: "center" },
@@ -919,6 +919,8 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   micStem: { width: 2, height: 5, backgroundColor: "white" },
+  micActive: { backgroundColor: "#171b35" },
+  micActiveBorder: { borderColor: "#171b35" },
   micMuted: { backgroundColor: "#a8a29e" },
   micMutedBorder: { borderColor: "#a8a29e" },
   micSlash: {
@@ -995,26 +997,26 @@ const menu = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "rgba(12,10,9,0.78)",
+    backgroundColor: "rgba(20, 23, 42, 0.88)",
     borderWidth: 1,
-    borderColor: "rgba(246,211,107,0.45)",
+    borderColor: "rgba(168, 178, 255, 0.48)",
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
   },
-  bar: { width: 16, height: 2, borderRadius: 1, backgroundColor: "#fafaf9" },
-  backdrop: { flex: 1, ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
+  bar: { width: 16, height: 2, borderRadius: 1, backgroundColor: "#c8ceff" },
+  backdrop: { flex: 1, backgroundColor: "rgba(5, 6, 14, 0.24)", ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
   panel: {
     position: "absolute",
     zIndex: 6,
     minWidth: 180,
-    backgroundColor: "rgba(28,25,23,0.96)",
-    borderRadius: 14,
+    backgroundColor: "rgba(20, 23, 42, 0.97)",
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#44403c",
+    borderColor: "rgba(205, 210, 255, 0.2)",
     overflow: "hidden",
   },
-  item: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#292524" },
-  itemText: { color: "white", fontSize: 15, fontWeight: "600" },
+  item: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "rgba(205, 210, 255, 0.1)" },
+  itemText: { color: "#f7f7fc", fontSize: 15, fontWeight: "600" },
   dangerText: { color: "#fecaca" },
 });

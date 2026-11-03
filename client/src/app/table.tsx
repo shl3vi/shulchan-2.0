@@ -304,7 +304,7 @@ function BackgammonTable({
           </View>
         </View>
         <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
-          <Ionicons name="home" size={20} color="#fafaf9" />
+          <Ionicons name="home" size={20} color="#c8ceff" />
         </Pressable>
         <View style={[styles.menu, { top: insets.top + 8 }]}>
           <TableMenu
@@ -392,12 +392,12 @@ function BackgammonTable({
         {videoNotice ? <VideoNotice onClose={onDismissVideo} /> : null}
         {Platform.OS !== "web" ? (
           <Pressable style={[styles.cameraToggle, cameraOn && styles.cameraToggleOn]} onPress={() => setCamera(!cameraOn)}>
-            <Ionicons name={cameraOn ? "videocam" : "videocam-off"} size={22} color={cameraOn ? "#1c1917" : "#fafaf9"} />
+            <Ionicons name={cameraOn ? "videocam" : "videocam-off"} size={22} color={cameraOn ? "#171b35" : "#c8ceff"} />
           </Pressable>
         ) : null}
         {Platform.OS !== "web" ? <TalkButton on={micOn} onTalk={setMic} /> : null}
       </View>
-      <View style={{ paddingBottom: insets.bottom, backgroundColor: "#0c0a09" }}>
+      <View style={{ paddingBottom: insets.bottom, backgroundColor: "#090b16" }}>
         <View style={styles.ad}>{tableAdAllowed(null) ? <AdBanner /> : null}</View>
       </View>
     </View>
@@ -439,7 +439,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
           {value}
         </Text>
         <Pressable onPress={() => void copy()} hitSlop={8} accessibilityLabel={copied ? t("copied") : t("copy")}>
-          <Ionicons name={copied ? "checkmark" : "copy-outline"} size={22} color="#f6d36b" />
+          <Ionicons name={copied ? "checkmark" : "copy-outline"} size={22} color="#a8b2ff" />
         </Pressable>
       </View>
     </View>
@@ -498,7 +498,7 @@ export default function TableScreen() {
       <View style={styles.screen}>
         <StatusBar style="light" />
         <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
-          <Ionicons name="home" size={20} color="#fafaf9" />
+          <Ionicons name="home" size={20} color="#c8ceff" />
         </Pressable>
         <Text style={styles.meta}>{t("sitFirst")}</Text>
       </View>
@@ -720,7 +720,7 @@ export default function TableScreen() {
           </View>
         ) : null}
         <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
-          <Ionicons name="home" size={20} color="#fafaf9" />
+          <Ionicons name="home" size={20} color="#c8ceff" />
         </Pressable>
         <View style={[styles.menu, { top: insets.top + 8 }]}>
           <TableMenu
@@ -752,7 +752,7 @@ export default function TableScreen() {
         </View>
         {Platform.OS !== "web" ? (
           <Pressable style={[styles.cameraToggle, video.cameraOn && styles.cameraToggleOn]} onPress={() => video.setCamera(!video.cameraOn)}>
-            <Ionicons name={video.cameraOn ? "videocam" : "videocam-off"} size={22} color={video.cameraOn ? "#1c1917" : "#fafaf9"} />
+            <Ionicons name={video.cameraOn ? "videocam" : "videocam-off"} size={22} color={video.cameraOn ? "#171b35" : "#c8ceff"} />
           </Pressable>
         ) : null}
         {Platform.OS !== "web" ? <TalkButton on={video.micOn} onTalk={video.setMic} /> : null}
@@ -791,7 +791,7 @@ export default function TableScreen() {
         idleText={state?.round == null ? null : t("waitingTurn")}
         onAction={(action, chips) => act(action, chips)}
       />
-      <View style={{ paddingBottom: insets.bottom, backgroundColor: "#0c0a09" }}>
+      <View style={{ paddingBottom: insets.bottom, backgroundColor: "#090b16" }}>
         <View style={styles.ad}>{tableAdAllowed(state) ? <AdBanner /> : null}</View>
       </View>
     </View>
@@ -799,7 +799,7 @@ export default function TableScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#07110d", ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
+  screen: { flex: 1, backgroundColor: "#090b16", ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
   players: { flex: 1, alignItems: "center", justifyContent: "space-between", paddingBottom: 28 },
   player: { alignItems: "center", gap: 8, maxWidth: 160 },
   bgColumn: { flex: 1, justifyContent: "space-between", paddingBottom: 64 },
@@ -850,7 +850,7 @@ const styles = StyleSheet.create({
   stage: { flex: 1, minHeight: 0 },
   boardAnchor: { position: "relative" },
   diceCup: { position: "absolute", right: 10, bottom: -94, zIndex: 4 },
-  ad: { height: 50, width: "100%", backgroundColor: "#292524", alignItems: "center", overflow: "hidden" },
+  ad: { height: 50, width: "100%", backgroundColor: "#14172a", alignItems: "center", overflow: "hidden" },
   home: {
     position: "absolute",
     left: 12,
@@ -858,9 +858,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "rgba(12,10,9,0.78)",
+    backgroundColor: "rgba(20, 23, 42, 0.88)",
     borderWidth: 1,
-    borderColor: "rgba(246,211,107,0.45)",
+    borderColor: "rgba(168, 178, 255, 0.48)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -875,39 +875,41 @@ const styles = StyleSheet.create({
   sheet: {
     width: "100%",
     maxWidth: 360,
-    backgroundColor: "rgba(12,10,9,0.96)",
-    borderRadius: 16,
+    backgroundColor: "rgba(20, 23, 42, 0.97)",
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#44403c",
-    padding: 16,
-    gap: 10,
+    borderColor: "rgba(205, 210, 255, 0.2)",
+    padding: 18,
+    gap: 12,
   },
-  sheetTitle: { color: "#f6d36b", fontSize: 18, fontWeight: "800" },
+  sheetTitle: { color: "#c8ceff", fontSize: 18, fontWeight: "800" },
   statsTable: { gap: 6 },
-  statsHead: { borderBottomWidth: 1, borderBottomColor: "#44403c", paddingBottom: 6 },
-  statsCell: { flex: 1, color: "#fafaf9", fontSize: 16 },
+  statsHead: { borderBottomWidth: 1, borderBottomColor: "rgba(205, 210, 255, 0.16)", paddingBottom: 6 },
+  statsCell: { flex: 1, color: "#f7f7fc", fontSize: 16 },
   statsNum: { textAlign: "right", fontVariant: ["tabular-nums"] },
-  statsHeadText: { color: "#a8a29e", fontSize: 13, fontWeight: "700" },
+  statsHeadText: { color: "#a6a8b8", fontSize: 13, fontWeight: "700" },
   statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   statsActions: { flexDirection: "row", alignItems: "center", gap: 14 },
-  statsLine: { color: "#fafaf9", fontSize: 16, flexShrink: 1 },
-  makeAdmin: { color: "#f6d36b", fontWeight: "800" },
-  infoLabel: { color: "#a8a29e", fontSize: 13, fontWeight: "700", letterSpacing: 0.6 },
+  statsLine: { color: "#f7f7fc", fontSize: 16, flexShrink: 1 },
+  makeAdmin: { color: "#a8b2ff", fontWeight: "800" },
+  infoLabel: { color: "#a6a8b8", fontSize: 13, fontWeight: "700", letterSpacing: 0.6 },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  infoValue: { color: "#fafaf9", fontSize: 22, fontWeight: "900", letterSpacing: 2, flex: 1 },
+  infoValue: { color: "#f7f7fc", fontSize: 22, fontWeight: "900", letterSpacing: 2, flex: 1 },
   cancel: {
     marginTop: 6,
     alignSelf: "stretch",
     alignItems: "center",
     paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "#292524",
+    borderRadius: 12,
+    backgroundColor: "rgba(168, 178, 255, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(168, 178, 255, 0.22)",
   },
-  cancelText: { color: "#fafaf9", fontWeight: "700" },
+  cancelText: { color: "#f7f7fc", fontWeight: "700" },
   buyRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  buyStep: { width: 48, height: 48, borderRadius: 8, backgroundColor: "#292524", alignItems: "center", justifyContent: "center" },
-  buyStepText: { color: "#fafaf9", fontSize: 28, lineHeight: 32 },
-  buyChips: { color: "#fafaf9", fontSize: 32, fontWeight: "700" },
+  buyStep: { width: 48, height: 48, borderRadius: 12, backgroundColor: "rgba(168, 178, 255, 0.12)", alignItems: "center", justifyContent: "center" },
+  buyStepText: { color: "#c8ceff", fontSize: 28, lineHeight: 32 },
+  buyChips: { color: "#f7f7fc", fontSize: 32, fontWeight: "700" },
   error: {
     position: "absolute",
     left: 12,
@@ -932,11 +934,11 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#1c1917",
+    backgroundColor: "rgba(20, 23, 42, 0.9)",
     borderWidth: 1,
-    borderColor: "#44403c",
+    borderColor: "rgba(205, 210, 255, 0.24)",
     alignItems: "center",
     justifyContent: "center",
   },
-  cameraToggleOn: { backgroundColor: "#f6d36b", borderColor: "#f6d36b" },
+  cameraToggleOn: { backgroundColor: "#a8b2ff", borderColor: "#c8ceff" },
 });
