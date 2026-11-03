@@ -43,6 +43,28 @@ export function redeemHostCode(code: string) {
   return pending;
 }
 
+/** False when the saved host token is gone. Null when the server cannot be asked, so the phone keeps the sign-in. */
+export async function hostSession(token: string): Promise<boolean | null> {
+  try {
+    const response = await fetch(`${API_URL}/auth/host`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    if (response.status === 401) return false;
+    if (response.ok) return true;
+    if (response.status !== 404) return null;
+    const probe = await fetch(`${API_URL}/api/games`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: "{}",
+    });
+    if (probe.status === 401) return false;
+    if (probe.status === 400) return true;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function createTable(
   smallBlind: number,
   buyIn: number,

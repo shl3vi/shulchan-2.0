@@ -177,11 +177,23 @@ authRouter.post("/auth/session", async (req, res) => {
   res.json({ token: hostToken, email: session.email });
 });
 
+authRouter.get("/auth/host", async (req, res) => {
+  const host = await readHost(req.get("authorization"));
+  if (!host) {
+    res.status(401).json({ error: "Sign in with Google to open a table" });
+    return;
+  }
+  res.json({ email: host.email });
+});
+
 export async function readHost(authorization: string | undefined) {
   const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
   if (!token) return null;
   const raw = await redis.get(`host:${token}`);
-  if (raw) return JSON.parse(raw) as { sub: string; email: string };
+  if (raw) {
+    await redis.expire(`host:${token}`, hostTokenSeconds());
+    return JSON.parse(raw) as { sub: string; email: string };
+  }
   // Local dev cannot reach Railway's private Redis. A token that production accepts is remembered here.
   const upstream = process.env.AUTH_UPSTREAM;
   if (!upstream) return null;

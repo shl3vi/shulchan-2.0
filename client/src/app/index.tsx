@@ -7,7 +7,7 @@ import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { redeemHostCode, signInUrl } from "@/game/api";
+import { hostSession, redeemHostCode, signInUrl } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
 import { loadHost, saveHost, type Host } from "@/game/hostStore";
 import { playerName } from "@/game/name";
@@ -135,7 +135,21 @@ export default function HomeScreen() {
   }
 
   const refreshHost = useCallback(() => {
-    void loadHost().then(setHost);
+    void (async () => {
+      const saved = await loadHost();
+      if (!saved) {
+        setHost(null);
+        return;
+      }
+      const alive = await hostSession(saved.token);
+      if (alive === false) {
+        setHost(null);
+        setKind(null);
+        await saveHost(null);
+        return;
+      }
+      setHost(saved);
+    })();
   }, []);
   useFocusEffect(refreshHost);
 
@@ -214,7 +228,15 @@ export default function HomeScreen() {
       await session.createAndSit(seatedName, smallBlind, buyIn, host.token, nextKind, nextKind === "poker" && autoDeal);
       router.push(nextKind === "backgammon" ? { pathname: "/table", params: { kind: "backgammon" } } : "/table");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("serverUnreachable"));
+      const message = cause instanceof Error ? cause.message : t("serverUnreachable");
+      if (message === "Sign in with Google to open a table") {
+        setHost(null);
+        setKind(null);
+        setError(null);
+        await saveHost(null);
+        return;
+      }
+      setError(message);
     } finally {
       setBusy(false);
     }
