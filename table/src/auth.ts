@@ -35,13 +35,22 @@ function hostTokenSeconds() {
   return Math.max(1, Number.isFinite(days) ? days : 7) * 24 * 60 * 60;
 }
 
+function privateHost(host: string) {
+  return host === "localhost" || host === "127.0.0.1" || host.endsWith(".exp.direct")
+    || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)(\d{1,3}\.){2}\d{1,3}$/.test(host);
+}
+
 function returnUrl(value: string) {
   try {
     const url = new URL(value);
-    const path = url.pathname === "/" ? "" : url.pathname;
-    if (url.protocol !== `${APP_SCHEME}:` || url.hostname !== "auth" || path !== "") return "";
     if (url.username || url.password || url.search || url.hash) return "";
-    return `${APP_SCHEME}://auth`;
+    const path = url.pathname === "/" ? "" : url.pathname.replace(/\/+$/, "");
+    if (url.protocol === `${APP_SCHEME}:` && url.hostname === "auth" && path === "") return `${APP_SCHEME}://auth`;
+    // Expo Go uses its own scheme. The code still needs the verifier that stayed on the phone.
+    if ((url.protocol === "exp:" || url.protocol === "exps:") && (path === "/auth" || path === "/--/auth") && privateHost(url.hostname)) {
+      return `${url.protocol}//${url.host}${url.pathname}`;
+    }
+    return "";
   } catch {
     return "";
   }
