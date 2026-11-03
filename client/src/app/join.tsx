@@ -58,7 +58,7 @@ export default function JoinScreen() {
     <View style={[styles.screen, { paddingTop: insets.top + 36, paddingBottom: insets.bottom + 20 }]}>
       <StatusBar style="light" />
       {invite ? null : (
-        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
+        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.dismissTo("/")} hitSlop={8}>
           <Ionicons name="home" size={20} color="#fafaf9" />
         </Pressable>
       )}

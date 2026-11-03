@@ -1,14 +1,29 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { StyleSheet, View } from "react-native";
-import { Stack } from "expo-router";
+import { DarkTheme, Stack, ThemeProvider } from "expo-router";
 import { GameSessionProvider, useGameSession } from "@/game/GameSession";
 import { loadLocale, subscribeLocale, locale } from "@/i18n";
 
+const navigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: "#a8b2ff",
+    background: "#090b16",
+    card: "#14172a",
+    text: "#f7f7fc",
+    border: "rgba(205, 210, 255, 0.18)",
+    notification: "#f3a66f",
+  },
+};
+
 export default function RootLayout() {
   return (
-    <GameSessionProvider>
-      <Shell />
-    </GameSessionProvider>
+    <ThemeProvider value={navigationTheme}>
+      <GameSessionProvider>
+        <Shell />
+      </GameSessionProvider>
+    </ThemeProvider>
   );
 }
 
@@ -27,7 +42,19 @@ function Shell() {
 
 function AppStack() {
   return (
-    <Stack screenOptions={{ headerShown: false, animation: "none", contentStyle: styles.home }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: "simple_push",
+        animationDuration: 400,
+        animationMatchesGesture: true,
+        fullScreenGestureEnabled: true,
+        gestureEnabled: true,
+        freezeOnBlur: true,
+        statusBarAnimation: "fade",
+        contentStyle: styles.home,
+      }}
+    >
       <Stack.Screen name="index" />
       <Stack.Screen name="join" />
       <Stack.Screen name="table" />
@@ -38,5 +65,5 @@ function AppStack() {
 
 const styles = StyleSheet.create({
   hold: { flex: 1, backgroundColor: "transparent" },
-  home: { flex: 1, backgroundColor: "#07110d" },
+  home: { flex: 1, backgroundColor: "#090b16" },
 });

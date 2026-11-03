@@ -303,7 +303,7 @@ function BackgammonTable({
             />
           </View>
         </View>
-        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
+        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.dismissTo("/")} hitSlop={8}>
           <Ionicons name="home" size={20} color="#c8ceff" />
         </Pressable>
         <View style={[styles.menu, { top: insets.top + 8 }]}>
@@ -497,7 +497,7 @@ export default function TableScreen() {
     return (
       <View style={styles.screen}>
         <StatusBar style="light" />
-        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
+        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.dismissTo("/")} hitSlop={8}>
           <Ionicons name="home" size={20} color="#c8ceff" />
         </Pressable>
         <Text style={styles.meta}>{t("sitFirst")}</Text>
@@ -552,7 +552,7 @@ export default function TableScreen() {
         videoNotice={video.videoNotice}
         onDismissVideo={video.dismissVideoNotice}
         onLeave={() => {
-          void leave().then(() => router.replace("/"));
+          void leave().then(() => router.dismissTo("/"));
         }}
       />
     );
@@ -719,7 +719,7 @@ export default function TableScreen() {
             </Pressable>
           </View>
         ) : null}
-        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.replace("/")} hitSlop={8}>
+        <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.dismissTo("/")} hitSlop={8}>
           <Ionicons name="home" size={20} color="#c8ceff" />
         </Pressable>
         <View style={[styles.menu, { top: insets.top + 8 }]}>
@@ -744,7 +744,7 @@ export default function TableScreen() {
                 icon: "leave",
                 danger: true,
                 onPress: () => {
-                  void leave().then(() => router.replace("/"));
+                  void leave().then(() => router.dismissTo("/"));
                 },
               },
             ]}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as Linking from "expo-linking";
@@ -127,6 +127,7 @@ export default function HomeScreen() {
   const [joinName, setJoinName] = useState("");
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const nameInput = useRef<TextInput>(null);
 
   function normalizeCode(code: string) {
@@ -263,6 +264,15 @@ export default function HomeScreen() {
       >
       <StatusBar style="light" />
       <View style={styles.hero}>
+        <Pressable
+          style={({ pressed }) => [styles.settingsButton, pressed && styles.buttonPressed]}
+          onPress={() => setSettingsOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={t("settings")}
+          hitSlop={8}
+        >
+          <Ionicons name="settings-outline" size={21} color="#c8ceff" />
+        </Pressable>
         <View style={styles.brandRow}>
           <View style={styles.brandIcon}>
             <Ionicons name="game-controller" size={20} color="#171b35" />
@@ -300,7 +310,11 @@ export default function HomeScreen() {
         </View>
       ) : null}
       {seated ? (
-        <Pressable style={styles.return} onPress={() => router.push("/table")}>
+        <Pressable
+          style={({ pressed }) => [styles.return, pressed && styles.buttonPressed]}
+          onPress={() => router.push("/table")}
+          accessibilityRole="button"
+        >
           <View style={styles.returnIcon}>
             <Ionicons name="play" size={24} color="#2a130a" />
           </View>
@@ -485,6 +499,71 @@ export default function HomeScreen() {
         </View>
       ) : null}
       </ScrollView>
+      <Modal
+        visible={settingsOpen}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setSettingsOpen(false)}
+      >
+        <Pressable style={styles.settingsBackdrop} onPress={() => setSettingsOpen(false)}>
+          <Pressable
+            style={[styles.settingsSheet, { paddingBottom: Math.max(insets.bottom, 18) }]}
+            onPress={() => {}}
+          >
+            <View style={[styles.settingsHeader, isRtl() && styles.settingsHeaderRtl]}>
+              <View style={styles.settingsTitleRow}>
+                <View style={styles.settingsTitleIcon}>
+                  <Ionicons name="settings-outline" size={20} color="#c8ceff" />
+                </View>
+                <Text style={styles.settingsTitle}>{t("settings")}</Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [styles.settingsClose, pressed && styles.buttonPressed]}
+                onPress={() => setSettingsOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel={t("cancel")}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={22} color="#c7c9d9" />
+              </Pressable>
+            </View>
+            <Text style={[styles.settingsSectionLabel, { textAlign: align }]}>{t("account")}</Text>
+            <View style={styles.accountCard}>
+              <View style={[styles.accountIdentity, isRtl() && styles.accountIdentityRtl]}>
+                <View style={styles.accountAvatar}>
+                  <Ionicons name="person-outline" size={21} color="#a8b2ff" />
+                </View>
+                <View style={styles.accountCopy}>
+                  <Text style={[styles.accountTitle, { textAlign: align }]}>
+                    {host?.email ?? t("noAccountConnected")}
+                  </Text>
+                  {!host ? (
+                    <Text style={[styles.accountHint, { textAlign: align }]}>{t("signInToManageAccount")}</Text>
+                  ) : null}
+                </View>
+              </View>
+              <View style={styles.accountDivider} />
+              <Pressable
+                style={({ pressed }) => [
+                  styles.deleteAccount,
+                  !host && styles.deleteAccountDisabled,
+                  pressed && host && styles.buttonPressed,
+                ]}
+                disabled={!host}
+                onPress={() => Alert.alert(t("deleteAccount"), t("deleteAccountUnavailable"))}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !host }}
+              >
+                <Ionicons name="trash-outline" size={19} color={host ? "#ffaaa2" : "#686a79"} />
+                <Text style={[styles.deleteAccountText, !host && styles.deleteAccountTextDisabled]}>
+                  {t("deleteAccount")}
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -526,6 +605,20 @@ const styles = StyleSheet.create({
   },
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "#a8b2ff" },
   hero: { alignItems: "center", marginBottom: 22 },
+  settingsButton: {
+    position: "absolute",
+    right: 0,
+    top: -2,
+    zIndex: 4,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(20, 23, 42, 0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(168, 178, 255, 0.24)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   brandIcon: {
     width: 36,
@@ -798,4 +891,83 @@ const styles = StyleSheet.create({
   primaryActionText: { color: "#2a130a" },
   actionArrow: { marginStart: "auto" },
   code: { textAlign: "center", letterSpacing: 4, fontSize: 20, fontWeight: "800" },
+  settingsBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(3, 4, 12, 0.68)",
+  },
+  settingsSheet: {
+    backgroundColor: "#14172a",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: "rgba(205, 210, 255, 0.18)",
+    paddingTop: 18,
+    paddingHorizontal: 20,
+    gap: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.42,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -10 },
+    elevation: 20,
+  },
+  settingsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  settingsHeaderRtl: { flexDirection: "row-reverse" },
+  settingsTitleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  settingsTitleIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "rgba(168, 178, 255, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  settingsTitle: { color: "#f7f7fc", fontSize: 22, fontWeight: "900" },
+  settingsClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  settingsSectionLabel: {
+    color: "#a6a8b8",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  accountCard: {
+    borderRadius: 20,
+    backgroundColor: "rgba(9, 11, 22, 0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(205, 210, 255, 0.14)",
+    overflow: "hidden",
+  },
+  accountIdentity: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
+  accountIdentityRtl: { flexDirection: "row-reverse" },
+  accountAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "rgba(168, 178, 255, 0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  accountCopy: { flex: 1, gap: 4 },
+  accountTitle: { color: "#f7f7fc", fontSize: 16, fontWeight: "800" },
+  accountHint: { color: "#8f91a3", fontSize: 13, lineHeight: 18 },
+  accountDivider: { height: 1, backgroundColor: "rgba(205, 210, 255, 0.1)" },
+  deleteAccount: {
+    minHeight: 50,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  deleteAccountDisabled: { opacity: 0.7 },
+  deleteAccountText: { color: "#ffaaa2", fontSize: 15, fontWeight: "800" },
+  deleteAccountTextDisabled: { color: "#686a79" },
 });
