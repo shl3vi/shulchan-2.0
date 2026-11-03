@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 import { readSchema, sessionBody } from "./schema.js";
-import { redis } from "./store.js";
+import { deleteHostAccount, redis } from "./store.js";
 
 export const APP_SCHEME = "shulchan";
 const CODE_SECONDS = 60;
@@ -175,6 +175,18 @@ authRouter.post("/auth/session", async (req, res) => {
   const hostToken = randomBytes(32).toString("hex");
   await redis.set(`host:${hostToken}`, JSON.stringify({ sub: session.sub, email: session.email }), { EX: hostTokenSeconds() });
   res.json({ token: hostToken, email: session.email });
+});
+
+authRouter.delete("/auth/account", async (req, res) => {
+  const header = req.get("authorization");
+  const host = await readHost(header);
+  if (!host) {
+    res.status(401).json({ error: "Sign in with Google to open a table" });
+    return;
+  }
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : "";
+  await deleteHostAccount(host.email, token);
+  res.json({ ok: true });
 });
 
 authRouter.get("/auth/host", async (req, res) => {

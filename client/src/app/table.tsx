@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Animated, Easing, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
@@ -17,6 +17,7 @@ import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
 import { move as playMove, newGame, opponent, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
 import { t } from "@/i18n";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 function WinnerSparkles() {
   const spin = useRef(new Animated.Value(0)).current;
@@ -139,6 +140,7 @@ function BackgammonTable({
   const [info, setInfo] = useState(false);
   const [rules, setRules] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
   const [seat, setSeat] = useState(false);
   const [game, setGame] = useState<Game>(() => newGame());
   const [selected, setSelected] = useState<number | "bar" | null>(null);
@@ -170,10 +172,7 @@ function BackgammonTable({
       go();
       return;
     }
-    Alert.alert(t("restartGame"), t("restartSure"), [
-      { text: t("cancel"), style: "cancel" },
-      { text: t("restartYes"), style: "destructive", onPress: go },
-    ]);
+    setConfirmRestart(true);
   }
 
   function shareTable() {
@@ -389,6 +388,19 @@ function BackgammonTable({
             </Pressable>
           </Pressable>
         </Modal>
+        <ConfirmDialog
+          visible={confirmRestart}
+          title={t("restartGame")}
+          message={t("restartSure")}
+          dismissLabel={t("cancel")}
+          onDismiss={() => setConfirmRestart(false)}
+          confirmLabel={t("restartYes")}
+          confirmTone="danger"
+          onConfirm={() => {
+            setConfirmRestart(false);
+            send({ type: "restart" });
+          }}
+        />
         {videoNotice ? <VideoNotice onClose={onDismissVideo} /> : null}
         {Platform.OS !== "web" ? (
           <Pressable style={[styles.cameraToggle, cameraOn && styles.cameraToggleOn]} onPress={() => setCamera(!cameraOn)}>

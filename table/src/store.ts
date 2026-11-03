@@ -184,6 +184,35 @@ async function releaseHost(email: string | null | undefined) {
   if (keys.length > 0) await redis.del(keys);
 }
 
+/** Drops every open table for this sign-in, then every host token that carries the same email. */
+export async function deleteHostAccount(email: string, token: string) {
+  const ids: string[] = [];
+  if (email && email !== "signed-in") {
+    const deleted = await pool.query<{ id: string }>(
+      `DELETE FROM tables WHERE expires_at > now() AND record->>'hostEmail' = $1 RETURNING id`,
+      [email],
+    );
+    for (const row of deleted.rows) ids.push(row.id);
+    if (ids.length > 0) {
+      await redis.del(ids.flatMap((id) => [tableKey(id), pokerKey(id), `ledger:${id}`]));
+    }
+    const keys: string[] = [];
+    for (const key of await scan("host:*")) {
+      const raw = await redis.get(key);
+      if (!raw) continue;
+      try {
+        const host = JSON.parse(raw) as { email?: string };
+        if (host.email === email) keys.push(key);
+      } catch {
+        // not a host session
+      }
+    }
+    if (keys.length > 0) await redis.del(keys);
+  }
+  await redis.del(`host:${token}`);
+  if (ids.length > 0) await onExpired(ids);
+}
+
 export async function removeTable(id: string) {
   const deleted = await pool.query<{ email: string | null }>(
     `DELETE FROM tables WHERE id = $1 RETURNING record->>'hostEmail' AS email`,

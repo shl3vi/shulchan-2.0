@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as Linking from "expo-linking";
@@ -7,12 +7,13 @@ import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { hostSession, redeemHostCode, signInUrl } from "@/game/api";
+import { deleteHostAccount, hostSession, redeemHostCode, signInUrl } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
 import { loadHost, saveHost, type Host } from "@/game/hostStore";
 import { playerName } from "@/game/name";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
 import { isRtl, t } from "@/i18n";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -128,6 +129,8 @@ export default function HomeScreen() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
   const nameInput = useRef<TextInput>(null);
 
   function normalizeCode(code: string) {
@@ -184,6 +187,30 @@ export default function HomeScreen() {
     setKind(null);
     setError(null);
     await saveHost(null);
+  }
+
+  function deleteAccount() {
+    if (!host) return;
+    setConfirmDelete(true);
+  }
+
+  async function confirmDeleteAccount() {
+    if (!host) return;
+    const token = host.token;
+    setConfirmDelete(false);
+    setBusy(true);
+    try {
+      await deleteHostAccount(token);
+      setHost(null);
+      setCreating(false);
+      setKind(null);
+      setSettingsOpen(false);
+      await saveHost(null);
+    } catch (cause) {
+      setDeleteNotice(cause instanceof Error ? cause.message : t("deleteAccountFailed"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   function openCreate() {
@@ -551,7 +578,7 @@ export default function HomeScreen() {
                   pressed && host && styles.buttonPressed,
                 ]}
                 disabled={!host}
-                onPress={() => Alert.alert(t("deleteAccount"), t("deleteAccountUnavailable"))}
+                onPress={deleteAccount}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !host }}
               >
@@ -564,6 +591,23 @@ export default function HomeScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      <ConfirmDialog
+        visible={confirmDelete}
+        title={t("deleteAccount")}
+        message={t("deleteAccountSure")}
+        dismissLabel={t("cancel")}
+        onDismiss={() => setConfirmDelete(false)}
+        confirmLabel={t("deleteAccountYes")}
+        confirmTone="danger"
+        onConfirm={() => void confirmDeleteAccount()}
+      />
+      <ConfirmDialog
+        visible={deleteNotice != null}
+        title={t("deleteAccount")}
+        message={deleteNotice ?? ""}
+        dismissLabel={t("cancel")}
+        onDismiss={() => setDeleteNotice(null)}
+      />
     </View>
   );
 }

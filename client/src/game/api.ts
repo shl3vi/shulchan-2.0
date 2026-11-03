@@ -65,6 +65,18 @@ export async function hostSession(token: string): Promise<boolean | null> {
   }
 }
 
+export async function deleteHostAccount(token: string) {
+  const response = await fetch(`${API_URL}/auth/account`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (response.status === 401) return;
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Request failed");
+  }
+}
+
 export function createTable(
   smallBlind: number,
   buyIn: number,
