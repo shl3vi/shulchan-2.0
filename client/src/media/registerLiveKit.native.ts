@@ -1,9 +1,11 @@
-import { AudioSession, registerGlobals } from "@livekit/react-native";
+import { videoSupported } from "@/media/videoSupport";
 
 const ignored = ["Received leave request while trying to (re)connect", "NegotiationError"];
 let consolePatched = false;
 
-export function registerLiveKit() {
+export async function registerLiveKit() {
+  if (!videoSupported) return;
+  const { AudioSession, registerGlobals } = await import("@livekit/react-native");
   registerGlobals();
   void AudioSession.configureAudio({
     android: { preferredOutputList: ["speaker"] },

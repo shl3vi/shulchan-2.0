@@ -11,7 +11,6 @@ export function startTableVideo(
   onDown: () => void,
   desired: { camera: boolean; mic: boolean },
 ) {
-  registerLiveKit();
   const room = new Room();
   let stopped = false;
 
@@ -55,6 +54,7 @@ export function startTableVideo(
 
   void (async () => {
     try {
+      await registerLiveKit();
       const session = await liveKitToken(credentials.gameId, credentials.playerId, credentials.playerSecret);
       if (stopped) return;
       await room.connect(session.url, session.token);

@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import type { VideoTrack } from "livekit-client";
 import type { Credentials } from "@/game/types";
 import { allowCapture } from "@/media/capturePermission";
+import { videoSupported } from "@/media/videoSupport";
 
 type VideoHandle = {
   disconnect: () => void;
@@ -53,7 +54,7 @@ export function useTableVideo(credentials: Credentials | null) {
 
   function ensure() {
     const current = credentialsRef.current;
-    if (Platform.OS === "web" || !current || handle.current || starting.current) return;
+    if (Platform.OS === "web" || !videoSupported || !current || handle.current || starting.current) return;
     const ticket = generation.current;
     starting.current = true;
     void import("@/media/tableVideoSession").then((mod) => {
@@ -74,6 +75,7 @@ export function useTableVideo(credentials: Credentials | null) {
   const visible = new Map(Array.from(tracks).filter(([identity]) => !hidden.has(identity)));
 
   return {
+    supported: videoSupported,
     tracks: visible,
     micOn,
     cameraOn,
@@ -81,6 +83,7 @@ export function useTableVideo(credentials: Credentials | null) {
     muted,
     hidden,
     setMic(enabled: boolean) {
+      if (!videoSupported) return;
       void (async () => {
         if (enabled && !(await allowCapture("microphone"))) enabled = false;
         desired.current.mic = enabled;
@@ -99,6 +102,7 @@ export function useTableVideo(credentials: Credentials | null) {
       })();
     },
     setCamera(enabled: boolean) {
+      if (!videoSupported) return;
       void (async () => {
         if (enabled && !(await allowCapture("camera"))) enabled = false;
         desired.current.camera = enabled;

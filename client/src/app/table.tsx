@@ -102,6 +102,7 @@ function BackgammonTable({
   gameId,
   password,
   onLeave,
+  videoNotice,
   isAdmin,
   myColor,
   serverGame,
@@ -124,6 +125,7 @@ function BackgammonTable({
   gameId?: string;
   password?: string;
   onLeave: () => void;
+  videoNotice?: boolean;
   isAdmin: boolean;
   myColor: Color | null;
   serverGame?: unknown;
@@ -385,6 +387,7 @@ function BackgammonTable({
             </Pressable>
           </Pressable>
         </Modal>
+        {videoNotice ? <VideoNotice /> : null}
         {Platform.OS !== "web" ? (
           <Pressable style={[styles.cameraToggle, cameraOn && styles.cameraToggleOn]} onPress={() => setCamera(!cameraOn)}>
             <Ionicons name={cameraOn ? "videocam" : "videocam-off"} size={22} color={cameraOn ? "#1c1917" : "#fafaf9"} />
@@ -395,6 +398,14 @@ function BackgammonTable({
       <View style={{ paddingBottom: insets.bottom, backgroundColor: "#0c0a09" }}>
         <View style={styles.ad}>{tableAdAllowed(null) ? <AdBanner /> : null}</View>
       </View>
+    </View>
+  );
+}
+
+function VideoNotice() {
+  return (
+    <View style={styles.error} pointerEvents="none">
+      <Text style={styles.errorText}>{t("videoUnsupported")}</Text>
     </View>
   );
 }
@@ -533,6 +544,7 @@ export default function TableScreen() {
         gameId={credentials?.gameId}
         password={state?.password}
         isAdmin={state?.you?.isAdmin === true}
+        videoNotice={!video.supported}
         onLeave={() => {
           void leave().then(() => router.replace("/"));
         }}
@@ -686,6 +698,7 @@ export default function TableScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+        {!video.supported ? <VideoNotice /> : null}
         {error ? (
           <View style={styles.error}>
             <Text style={styles.errorText}>
