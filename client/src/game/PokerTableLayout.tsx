@@ -50,15 +50,30 @@ function PlayingCard({
     width: u(board ? 26 : 20),
     height: u(board ? 38 : 28),
     borderRadius: u(4),
-    backgroundColor: "white",
+    backgroundColor: "#fffdf7",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    boxShadow: "0 1px 2px rgba(0,0,0,0.35)",
+    borderWidth: Math.max(0.5, u(0.65)),
+    borderColor: "rgba(96,72,48,0.35)",
+    boxShadow: `0 ${u(2)}px ${u(3)}px rgba(0,0,0,0.48)`,
+    elevation: 3,
   };
   if (back) {
     return (
-      <View style={[box, { backgroundColor: "#172554", borderWidth: u(1), borderColor: "#93c5fd" }]}>
-        <Text style={{ color: "#bfdbfe", fontSize: u(board ? 14 : 11) }}>♠</Text>
+      <View style={[box, { backgroundColor: "#18243f", borderWidth: u(1), borderColor: "#b9c7dd" }]}>
+        <View
+          style={{
+            position: "absolute",
+            top: u(2),
+            left: u(2),
+            right: u(2),
+            bottom: u(2),
+            borderRadius: u(2),
+            borderWidth: Math.max(0.5, u(0.75)),
+            borderColor: "rgba(255,255,255,0.28)",
+          }}
+        />
+        <Text style={{ color: "#dbe7f6", fontSize: u(board ? 14 : 11) }}>♠</Text>
       </View>
     );
   }
@@ -72,6 +87,7 @@ function PlayingCard({
             borderWidth: u(1),
             borderColor: "rgba(255,255,255,0.22)",
             boxShadow: "none",
+            elevation: 0,
           },
         ]}
       />
@@ -104,8 +120,22 @@ function BetChip({ amount, scale }: { amount: number; scale: number }) {
         borderColor: "#f6e2a8",
         alignItems: "center",
         justifyContent: "center",
+        boxShadow: `0 ${u(2)}px ${u(3)}px rgba(0,0,0,0.5)`,
+        elevation: 3,
       }}
     >
+      <View
+        style={{
+          position: "absolute",
+          top: u(3),
+          left: u(3),
+          right: u(3),
+          bottom: u(3),
+          borderRadius: u(CHIP / 2),
+          borderWidth: Math.max(0.5, u(1)),
+          borderColor: "rgba(255,255,255,0.32)",
+        }}
+      />
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
@@ -280,6 +310,10 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
               backgroundColor: "#1c1917",
               alignItems: "center",
               justifyContent: "center",
+              boxShadow: player?.toAct
+                ? `0 0 ${u(9)}px rgba(246,211,107,0.52)`
+                : `0 ${u(4)}px ${u(7)}px rgba(0,0,0,0.58)`,
+              elevation: player?.toAct ? 7 : 4,
             }}
           >
             {face}
@@ -298,6 +332,8 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
           borderColor: player?.toAct ? "#e8c98a" : "rgba(255,255,255,0.08)",
           alignItems: "center",
           justifyContent: "center",
+          boxShadow: `0 ${u(2)}px ${u(4)}px rgba(0,0,0,0.45)`,
+          elevation: 2,
         }}
       >
         <Text
@@ -342,36 +378,103 @@ function TableFelt({
         width: u(railW),
         height: u(railH),
         borderRadius: radius,
-        backgroundColor: "#071a12",
-        padding: u(RAIL),
-        boxShadow: "0 10px 18px rgba(0,0,0,0.5)",
+        backgroundColor: "#28150d",
+        borderWidth: Math.max(1, u(2)),
+        borderColor: "#765033",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: `0 ${u(13)}px ${u(22)}px rgba(0,0,0,0.68)`,
+        elevation: 12,
       }}
     >
       <View
+        pointerEvents="none"
         style={{
-          flex: 1,
+          position: "absolute",
+          left: u(4),
+          right: u(4),
+          top: u(4),
+          bottom: u(4),
+          borderRadius: radius,
+          borderWidth: Math.max(1, u(1.5)),
+          borderColor: "rgba(226,175,110,0.35)",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: u(8),
+          right: u(8),
+          top: u(8),
+          height: "42%",
+          borderRadius: radius,
+          backgroundColor: "rgba(255,207,145,0.055)",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: u(RAIL - 3),
+          top: u(RAIL - 3),
+          width: u(FELT.w + 6),
+          height: u(FELT.h + 6),
           borderRadius: u(FELT.w / 2),
-          backgroundColor: "#157a40",
-          borderWidth: u(10),
-          borderColor: "#0c4e2a",
+          backgroundColor: "#100a07",
+          boxShadow: `inset 0 ${u(2)}px ${u(4)}px rgba(0,0,0,0.8)`,
+        }}
+      />
+      <View
+        style={{
+          width: u(FELT.w),
+          height: u(FELT.h),
+          borderRadius: u(FELT.w / 2),
+          backgroundColor: "#116c3b",
+          borderWidth: Math.max(1, u(2)),
+          borderColor: "#1b8b50",
           alignItems: "center",
           justifyContent: "center",
           overflow: "hidden",
         }}
       >
-          <View
-            style={{
-              pointerEvents: "none",
-              position: "absolute",
-              left: "16%",
-              top: "18%",
-              width: "68%",
-              height: "64%",
-              borderRadius: u(FELT.h),
-              backgroundColor: "#1a8a4c",
-              opacity: 0.55,
-            }}
-          />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: "5%",
+            top: "4%",
+            width: "90%",
+            height: "42%",
+            borderRadius: u(FELT.h),
+            backgroundColor: "rgba(82,190,119,0.11)",
+          }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: "9%",
+            top: "12%",
+            width: "82%",
+            height: "76%",
+            borderRadius: u(FELT.h),
+            borderWidth: Math.max(1, u(1)),
+            borderColor: "rgba(194,238,207,0.12)",
+          }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: "17%",
+            top: "20%",
+            width: "66%",
+            height: "60%",
+            borderRadius: u(FELT.h),
+            backgroundColor: "rgba(12,91,49,0.2)",
+          }}
+        />
           <Text
             numberOfLines={1}
             style={{
@@ -425,7 +528,7 @@ function TableFelt({
               <Text style={{ color: "#1c1917", fontWeight: "800", fontSize: u(13) }}>{t("deal")}</Text>
             </Pressable>
           ) : null}
-        </View>
+      </View>
     </View>
   );
 }
@@ -465,6 +568,7 @@ export function PokerTableLayout({
       }}
     >
       <View style={styles.wash} />
+      <View style={styles.roomGlow} />
       {scale > 0 ? (
         <View
           style={{
@@ -766,7 +870,7 @@ export function TableMenu({
 }
 
 const styles = StyleSheet.create({
-  room: { flex: 1, minHeight: 0, backgroundColor: "#07110d", overflow: "hidden" },
+  room: { flex: 1, minHeight: 0, backgroundColor: "#040b08", overflow: "hidden" },
   talk: {
     position: "absolute",
     right: 16,
@@ -788,7 +892,17 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: "#0a1a12",
+    backgroundColor: "#06130d",
+    pointerEvents: "none",
+  },
+  roomGlow: {
+    position: "absolute",
+    width: "118%",
+    height: "72%",
+    left: "-9%",
+    top: "12%",
+    borderRadius: 999,
+    backgroundColor: "rgba(28,82,52,0.2)",
     pointerEvents: "none",
   },
   mic: { width: 18, height: 24, alignItems: "center" },
