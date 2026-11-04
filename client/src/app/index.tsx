@@ -152,7 +152,9 @@ export default function HomeScreen() {
         await saveHost(null);
         return;
       }
-      setHost(saved);
+      const next = alive?.name && alive.name !== saved.name ? { ...saved, name: alive.name } : saved;
+      if (next !== saved) await saveHost(next);
+      setHost(next);
     })();
   }, []);
   useFocusEffect(refreshHost);
@@ -330,7 +332,7 @@ export default function HomeScreen() {
       </View>
       {host ? (
         <View style={styles.helloRow}>
-          <Text style={styles.hello}>{t("hello", { name: host.email.split("@")[0] ?? host.email })}</Text>
+          <Text style={styles.hello}>{t("hello", { name: host.name?.trim() || host.email.split("@")[0] || host.email })}</Text>
           <Pressable onPress={logout} hitSlop={8}>
             <Text style={styles.logout}>{t("logout")}</Text>
           </Pressable>

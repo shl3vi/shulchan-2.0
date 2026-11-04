@@ -108,7 +108,7 @@ authRouter.get("/auth/google", async (req, res) => {
   url.searchParams.set("client_id", clientId());
   url.searchParams.set("redirect_uri", redirectUri());
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", "openid email");
+  url.searchParams.set("scope", "openid email profile");
   url.searchParams.set("state", state);
   url.searchParams.set("prompt", "select_account");
   res.redirect(url.toString());
@@ -139,15 +139,16 @@ authRouter.get("/auth/callback", async (req, res) => {
     return;
   }
   const infoResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token.id_token)}`);
-  const info = (await infoResponse.json()) as { aud?: string; sub?: string; email?: string; email_verified?: string };
+  const info = (await infoResponse.json()) as { aud?: string; sub?: string; email?: string; email_verified?: string; name?: string };
   if (!infoResponse.ok || info.aud !== clientId() || info.email_verified !== "true" || !info.sub || !info.email) {
     res.status(401).type("text").send("Google did not confirm this sign-in");
     return;
   }
+  const name = info.name?.trim() || undefined;
   const code = randomBytes(32).toString("hex");
   await redis.set(
     `oauth-code:${code}`,
-    JSON.stringify({ sub: info.sub, email: info.email, challenge: pending.challenge }),
+    JSON.stringify({ sub: info.sub, email: info.email, ...(name ? { name } : {}), challenge: pending.challenge }),
     { EX: CODE_SECONDS },
   );
   const done = new URL(pending.back);
@@ -167,14 +168,19 @@ authRouter.post("/auth/session", async (req, res) => {
     res.status(401).json({ error: "Sign-in expired. Try again." });
     return;
   }
-  const session = JSON.parse(raw) as { sub?: string; email?: string; challenge?: string };
+  const session = JSON.parse(raw) as { sub?: string; email?: string; name?: string; challenge?: string };
   if (!session.sub || !session.email || !session.challenge || !verifies(body.verifier, session.challenge)) {
     res.status(401).json({ error: "Sign-in expired. Try again." });
     return;
   }
+  const name = session.name?.trim() || undefined;
   const hostToken = randomBytes(32).toString("hex");
-  await redis.set(`host:${hostToken}`, JSON.stringify({ sub: session.sub, email: session.email }), { EX: hostTokenSeconds() });
-  res.json({ token: hostToken, email: session.email });
+  await redis.set(
+    `host:${hostToken}`,
+    JSON.stringify({ sub: session.sub, email: session.email, ...(name ? { name } : {}) }),
+    { EX: hostTokenSeconds() },
+  );
+  res.json({ token: hostToken, email: session.email, ...(name ? { name } : {}) });
 });
 
 authRouter.delete("/auth/account", async (req, res) => {
@@ -195,7 +201,7 @@ authRouter.get("/auth/host", async (req, res) => {
     res.status(401).json({ error: "Sign in with Google to open a table" });
     return;
   }
-  res.json({ email: host.email });
+  res.json({ email: host.email, ...(host.name ? { name: host.name } : {}) });
 });
 
 export async function readHost(authorization: string | undefined) {
@@ -204,7 +210,7 @@ export async function readHost(authorization: string | undefined) {
   const raw = await redis.get(`host:${token}`);
   if (raw) {
     await redis.expire(`host:${token}`, hostTokenSeconds());
-    return JSON.parse(raw) as { sub: string; email: string };
+    return JSON.parse(raw) as { sub: string; email: string; name?: string };
   }
   // Local dev cannot reach Railway's private Redis. A token that production accepts is remembered here.
   const upstream = process.env.AUTH_UPSTREAM;

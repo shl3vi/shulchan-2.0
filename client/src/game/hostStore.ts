@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 
 const KEY = "shulchan.host";
 
-export type Host = { token: string; email: string };
+export type Host = { token: string; email: string; name?: string };
 
 async function readRaw(): Promise<string | null> {
   if (Platform.OS === "web") return AsyncStorage.getItem(KEY);

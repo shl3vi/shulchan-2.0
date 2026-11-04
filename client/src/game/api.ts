@@ -15,7 +15,7 @@ async function post<T>(path: string, body: unknown, headers?: Record<string, str
   return payload;
 }
 
-const pendingCodes = new Map<string, Promise<{ token: string; email: string }>>();
+const pendingCodes = new Map<string, Promise<{ token: string; email: string; name?: string }>>();
 let signInVerifier: string | null = null;
 
 /** Another app can catch the redirect, so the code only redeems together with this verifier, which never leaves the phone until then. */
@@ -36,7 +36,7 @@ export function redeemHostCode(code: string) {
   if (existing) return existing;
   const verifier = signInVerifier;
   if (!verifier) return Promise.reject(new Error("Sign-in expired. Try again."));
-  const pending = post<{ token: string; email: string }>("/auth/session", { code, verifier }).finally(() => {
+  const pending = post<{ token: string; email: string; name?: string }>("/auth/session", { code, verifier }).finally(() => {
     pendingCodes.delete(code);
   });
   pendingCodes.set(code, pending);
@@ -44,13 +44,17 @@ export function redeemHostCode(code: string) {
 }
 
 /** False when the saved host token is gone. Null when the server cannot be asked, so the phone keeps the sign-in. */
-export async function hostSession(token: string): Promise<boolean | null> {
+export async function hostSession(token: string): Promise<{ name?: string } | false | null> {
   try {
     const response = await fetch(`${API_URL}/auth/host`, {
       headers: { authorization: `Bearer ${token}` },
     });
     if (response.status === 401) return false;
-    if (response.ok) return true;
+    if (response.ok) {
+      const body = (await response.json().catch(() => null)) as { name?: string } | null;
+      const name = body?.name?.trim();
+      return name ? { name } : {};
+    }
     if (response.status !== 404) return null;
     const probe = await fetch(`${API_URL}/api/games`, {
       method: "POST",
@@ -58,7 +62,7 @@ export async function hostSession(token: string): Promise<boolean | null> {
       body: "{}",
     });
     if (probe.status === 401) return false;
-    if (probe.status === 400) return true;
+    if (probe.status === 400) return {};
     return null;
   } catch {
     return null;
