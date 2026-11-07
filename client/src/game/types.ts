@@ -9,6 +9,7 @@ export type PublicPlayer = {
   inHand: boolean;
   sittingOut: boolean;
   bought: number;
+  blocked?: boolean;
 };
 
 export type TableSnapshot = {

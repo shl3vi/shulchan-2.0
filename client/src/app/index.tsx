@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { Image } from "expo-image";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { deleteHostAccount, hostSession, redeemHostCode, signInUrl } from "@/game/api";
+import { hostSession, redeemHostCode, signInUrl, signInWithApple } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
 import { loadHost, saveHost, type Host } from "@/game/hostStore";
-import { playerName } from "@/game/name";
+import { nameProblem, playerName } from "@/game/name";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
 import { isRtl, t } from "@/i18n";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -129,8 +129,6 @@ export default function HomeScreen() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
   const nameInput = useRef<TextInput>(null);
 
   function normalizeCode(code: string) {
@@ -183,6 +181,29 @@ export default function HomeScreen() {
     }
   }
 
+  async function signInApple() {
+    setError(null);
+    setBusy(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) throw new Error(t("serverUnreachable"));
+      const given = [credential.fullName?.givenName, credential.fullName?.familyName].filter(Boolean).join(" ");
+      const next = await signInWithApple(credential.identityToken, given || undefined);
+      setHost(next);
+      await saveHost(next);
+    } catch (cause) {
+      if (cause && typeof cause === "object" && "code" in cause && cause.code === "ERR_REQUEST_CANCELED") return;
+      setError(cause instanceof Error ? cause.message : t("serverUnreachable"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function logout() {
     setHost(null);
     setCreating(false);
@@ -191,28 +212,9 @@ export default function HomeScreen() {
     await saveHost(null);
   }
 
-  function deleteAccount() {
-    if (!host) return;
-    setConfirmDelete(true);
-  }
-
-  async function confirmDeleteAccount() {
-    if (!host) return;
-    const token = host.token;
-    setConfirmDelete(false);
-    setBusy(true);
-    try {
-      await deleteHostAccount(token);
-      setHost(null);
-      setCreating(false);
-      setKind(null);
-      setSettingsOpen(false);
-      await saveHost(null);
-    } catch (cause) {
-      setDeleteNotice(cause instanceof Error ? cause.message : t("deleteAccountFailed"));
-    } finally {
-      setBusy(false);
-    }
+  function openSettingsPage(path: "/profile" | "/support") {
+    setSettingsOpen(false);
+    router.push(path);
   }
 
   function openCreate() {
@@ -226,7 +228,7 @@ export default function HomeScreen() {
   async function sit() {
     const seatedName = playerName(joinName);
     if (!seatedName || joinGame.trim().length === 0 || joinPassword.trim().length === 0) {
-      setJoinError(t("nameLength"));
+      setJoinError(nameProblem(joinName) === "blocked" ? t("nameRejected") : t("nameLength"));
       return;
     }
     setJoinError(null);
@@ -235,7 +237,8 @@ export default function HomeScreen() {
       await session.join(seatedName, normalizeCode(joinGame), joinPassword.trim());
       router.push("/table");
     } catch (cause) {
-      setJoinError(cause instanceof Error ? cause.message : t("couldNotJoin"));
+      const message = cause instanceof Error ? cause.message : t("couldNotJoin");
+      setJoinError(message === "Choose another name" ? t("nameRejected") : message);
     } finally {
       setJoinBusy(false);
     }
@@ -245,7 +248,7 @@ export default function HomeScreen() {
     const seatedName = playerName(name);
     if (!seatedName) {
       setNameMissing(true);
-      setError(t("nameLength"));
+      setError(nameProblem(name) === "blocked" ? t("nameRejected") : t("nameLength"));
       scroll.current?.scrollTo({ y: 0, animated: true });
       nameInput.current?.focus();
       return;
@@ -259,14 +262,14 @@ export default function HomeScreen() {
       router.push(nextKind === "backgammon" ? { pathname: "/table", params: { kind: "backgammon" } } : "/table");
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : t("serverUnreachable");
-      if (message === "Sign in with Google to open a table") {
+      if (message === "Sign in to open a table" || message === "Sign in with Google to open a table") {
         setHost(null);
         setKind(null);
         setError(null);
         await saveHost(null);
         return;
       }
-      setError(message);
+      setError(message === "Choose another name" ? t("nameRejected") : message);
     } finally {
       setBusy(false);
     }
@@ -381,15 +384,28 @@ export default function HomeScreen() {
       {creating && !host ? (
         <View style={styles.signIn}>
           <Text style={[styles.signInHint, { textAlign: align }]}>{t("signInToCreate")}</Text>
-          <Pressable
-            style={[styles.google, isRtl() && styles.googleRtl, busy && styles.googleBusy]}
-            disabled={busy}
-            onPress={signIn}
-            accessibilityRole="button"
-          >
-            <Image source={require("../../assets/images/google-g.png")} style={styles.googleG} contentFit="contain" />
-            <Text style={styles.googleText}>{t("signInGoogle")}</Text>
-          </Pressable>
+          <View style={styles.signInChoices}>
+            <Pressable
+              style={[styles.google, isRtl() && styles.googleRtl, busy && styles.googleBusy]}
+              disabled={busy}
+              onPress={signIn}
+              accessibilityRole="button"
+            >
+              <Image source={require("../../assets/images/google-g.png")} style={styles.googleG} contentFit="contain" />
+              <Text style={styles.googleText}>{t("signInGoogle")}</Text>
+            </Pressable>
+            {Platform.OS === "ios" ? (
+              <Pressable
+                style={[styles.apple, isRtl() && styles.googleRtl, busy && styles.googleBusy]}
+                disabled={busy}
+                onPress={signInApple}
+                accessibilityRole="button"
+              >
+                <Ionicons name="logo-apple" size={18} color="#fff" />
+                <Text style={styles.appleText}>{t("signInApple")}</Text>
+              </Pressable>
+            ) : null}
+          </View>
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : null}
@@ -402,13 +418,13 @@ export default function HomeScreen() {
             <View style={styles.kindIcon}>
               <Ionicons name="dice" size={31} color="#f3a66f" />
             </View>
-            <Text style={styles.kindTitle}>{t("backgammonTable")}</Text>
+            <Text style={styles.kindTitle} numberOfLines={2}>{t("backgammonTable")}</Text>
           </Pressable>
           <Pressable style={styles.kindCard} onPress={() => setKind("poker")}>
             <View style={styles.kindIcon}>
               <Ionicons name="diamond" size={29} color="#f3a66f" />
             </View>
-            <Text style={styles.kindTitle}>{t("pokerTable")}</Text>
+            <Text style={styles.kindTitle} numberOfLines={2}>{t("pokerTable")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -557,59 +573,30 @@ export default function HomeScreen() {
                 <Ionicons name="close" size={22} color="#c7c9d9" />
               </Pressable>
             </View>
-            <Text style={[styles.settingsSectionLabel, { textAlign: align }]}>{t("account")}</Text>
             <View style={styles.accountCard}>
-              <View style={[styles.accountIdentity, isRtl() && styles.accountIdentityRtl]}>
-                <View style={styles.accountAvatar}>
-                  <Ionicons name="person-outline" size={21} color="#a8b2ff" />
-                </View>
-                <View style={styles.accountCopy}>
-                  <Text style={[styles.accountTitle, { textAlign: align }]}>
-                    {host?.email ?? t("noAccountConnected")}
-                  </Text>
-                  {!host ? (
-                    <Text style={[styles.accountHint, { textAlign: align }]}>{t("signInToManageAccount")}</Text>
-                  ) : null}
-                </View>
-              </View>
+              <Pressable
+                style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+                onPress={() => openSettingsPage("/profile")}
+              >
+                <Ionicons name="person-outline" size={20} color="#a8b2ff" />
+                <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>
+                  {host?.email ?? t("account")}
+                </Text>
+                <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
+              </Pressable>
               <View style={styles.accountDivider} />
               <Pressable
-                style={({ pressed }) => [
-                  styles.deleteAccount,
-                  !host && styles.deleteAccountDisabled,
-                  pressed && host && styles.buttonPressed,
-                ]}
-                disabled={!host}
-                onPress={deleteAccount}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !host }}
+                style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+                onPress={() => openSettingsPage("/support")}
               >
-                <Ionicons name="trash-outline" size={19} color={host ? "#ffaaa2" : "#686a79"} />
-                <Text style={[styles.deleteAccountText, !host && styles.deleteAccountTextDisabled]}>
-                  {t("deleteAccount")}
-                </Text>
+                <Ionicons name="chatbubble-ellipses-outline" size={20} color="#a8b2ff" />
+                <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("support")}</Text>
+                <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
               </Pressable>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
-      <ConfirmDialog
-        visible={confirmDelete}
-        title={t("deleteAccount")}
-        message={t("deleteAccountSure")}
-        dismissLabel={t("cancel")}
-        onDismiss={() => setConfirmDelete(false)}
-        confirmLabel={t("deleteAccountYes")}
-        confirmTone="danger"
-        onConfirm={() => void confirmDeleteAccount()}
-      />
-      <ConfirmDialog
-        visible={deleteNotice != null}
-        title={t("deleteAccount")}
-        message={deleteNotice ?? ""}
-        dismissLabel={t("cancel")}
-        onDismiss={() => setDeleteNotice(null)}
-      />
     </View>
   );
 }
@@ -851,8 +838,8 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 12,
   },
+  signInChoices: { gap: 8, marginTop: 8 },
   google: {
-    marginTop: 8,
     minHeight: 40,
     backgroundColor: "#131314",
     borderRadius: 20,
@@ -869,6 +856,20 @@ const styles = StyleSheet.create({
   googleBusy: { opacity: 0.7 },
   googleG: { width: 20, height: 20 },
   googleText: { color: "#E3E3E3", fontWeight: "500", fontSize: 14 },
+  apple: {
+    minHeight: 40,
+    backgroundColor: "#000",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#fff",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  appleText: { color: "#fff", fontWeight: "500", fontSize: 14 },
   signInHint: { color: "#E3E3E3", fontSize: 15, marginBottom: 4 },
   error: { color: "#fecaca", marginTop: 8 },
   createButton: { marginTop: 0 },
@@ -876,7 +877,9 @@ const styles = StyleSheet.create({
   kindGrid: { flexDirection: "row", gap: 12, marginTop: 12 },
   kindGridRtl: { flexDirection: "row-reverse" },
   kindCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 0,
     minHeight: 120,
     backgroundColor: "rgba(20, 23, 42, 0.82)",
     borderRadius: 24,
@@ -978,13 +981,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  settingsSectionLabel: {
-    color: "#a6a8b8",
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
   accountCard: {
     borderRadius: 20,
     backgroundColor: "rgba(9, 11, 22, 0.72)",
@@ -992,28 +988,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(205, 210, 255, 0.14)",
     overflow: "hidden",
   },
-  accountIdentity: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
-  accountIdentityRtl: { flexDirection: "row-reverse" },
-  accountAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "rgba(168, 178, 255, 0.12)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  accountCopy: { flex: 1, gap: 4 },
-  accountTitle: { color: "#f7f7fc", fontSize: 16, fontWeight: "800" },
-  accountHint: { color: "#8f91a3", fontSize: 13, lineHeight: 18 },
-  accountDivider: { height: 1, backgroundColor: "rgba(205, 210, 255, 0.1)" },
-  deleteAccount: {
-    minHeight: 50,
+  settingsRow: {
+    minHeight: 52,
     paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
-  deleteAccountDisabled: { opacity: 0.7 },
-  deleteAccountText: { color: "#ffaaa2", fontSize: 15, fontWeight: "800" },
-  deleteAccountTextDisabled: { color: "#686a79" },
+  settingsRowRtl: { flexDirection: "row-reverse" },
+  settingsRowText: { flex: 1, color: "#f7f7fc", fontSize: 16, fontWeight: "700" },
+  accountDivider: { height: 1, backgroundColor: "rgba(205, 210, 255, 0.1)" },
 });

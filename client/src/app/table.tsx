@@ -11,12 +11,13 @@ import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
 import { ActionDock, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
-import type { Card, TableSnapshot } from "@/game/types";
+import type { Card, Credentials, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
 import { move as playMove, newGame, opponent, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
 import { t } from "@/i18n";
+import { SeatSafety } from "@/game/SeatSafety";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 function WinnerSparkles() {
@@ -98,8 +99,10 @@ function BackgammonTable({
   setCamera,
   otherMuted,
   otherHidden,
+  otherBlocked,
   onMuteOther,
   onHideOther,
+  credentials,
   gameId,
   password,
   onLeave,
@@ -122,8 +125,10 @@ function BackgammonTable({
   setCamera: (on: boolean) => void;
   otherMuted: boolean;
   otherHidden: boolean;
+  otherBlocked: boolean;
   onMuteOther: () => void;
   onHideOther: () => void;
+  credentials: Credentials;
   gameId?: string;
   password?: string;
   onLeave: () => void;
@@ -367,24 +372,37 @@ function BackgammonTable({
           <Pressable style={styles.sheetBackdrop} onPress={() => setSeat(false)}>
             <Pressable style={styles.sheet} onPress={() => {}}>
               <Text style={styles.sheetTitle}>{otherName}</Text>
-              <Pressable
-                style={styles.cancel}
-                onPress={() => {
-                  onMuteOther();
-                  setSeat(false);
-                }}
-              >
-                <Text style={styles.cancelText}>{otherMuted ? t("unmuteSeat") : t("muteSeat")}</Text>
-              </Pressable>
-              <Pressable
-                style={styles.cancel}
-                onPress={() => {
-                  onHideOther();
-                  setSeat(false);
-                }}
-              >
-                <Text style={styles.cancelText}>{otherHidden ? t("showVideo") : t("hideVideo")}</Text>
-              </Pressable>
+              {otherBlocked ? null : (
+                <Pressable
+                  style={styles.cancel}
+                  onPress={() => {
+                    onMuteOther();
+                    setSeat(false);
+                  }}
+                >
+                  <Text style={styles.cancelText}>{otherMuted ? t("unmuteSeat") : t("muteSeat")}</Text>
+                </Pressable>
+              )}
+              {otherBlocked ? null : (
+                <Pressable
+                  style={styles.cancel}
+                  onPress={() => {
+                    onHideOther();
+                    setSeat(false);
+                  }}
+                >
+                  <Text style={styles.cancelText}>{otherHidden ? t("showVideo") : t("hideVideo")}</Text>
+                </Pressable>
+              )}
+              {otherId ? (
+                <SeatSafety
+                  credentials={credentials}
+                  targetId={otherId}
+                  targetName={otherName}
+                  blocked={otherBlocked}
+                  onClose={() => setSeat(false)}
+                />
+              ) : null}
             </Pressable>
           </Pressable>
         </Modal>
@@ -479,6 +497,13 @@ export default function TableScreen() {
     setSeatId(null);
   }, [credentials?.playerId]);
 
+  const blockedKey = (state?.players ?? []).filter((player) => player.blocked).map((player) => player.id).join(" ");
+  const holdOff = useRef(video.holdOff);
+  holdOff.current = video.holdOff;
+  useEffect(() => {
+    holdOff.current(blockedKey ? blockedKey.split(" ") : []);
+  }, [blockedKey]);
+
   useEffect(() => {
     const backgammon = kind === "backgammon" || state?.kind === "backgammon";
     const live = !backgammon && state?.round != null;
@@ -552,6 +577,8 @@ export default function TableScreen() {
         setCamera={video.setCamera}
         otherMuted={other ? video.muted.has(other.id) : false}
         otherHidden={other ? video.hidden.has(other.id) : false}
+        otherBlocked={other?.blocked === true}
+        credentials={credentials}
         onMuteOther={() => {
           if (other) video.toggleMute(other.id);
         }}
@@ -772,24 +799,37 @@ export default function TableScreen() {
           <Pressable style={styles.sheetBackdrop} onPress={() => setSeatId(null)}>
             <Pressable style={styles.sheet} onPress={() => {}}>
               <Text style={styles.sheetTitle}>{state?.players.find((player) => player.id === seatId)?.name}</Text>
-              <Pressable
-                style={styles.cancel}
-                onPress={() => {
-                  if (seatId) video.toggleMute(seatId);
-                  setSeatId(null);
-                }}
-              >
-                <Text style={styles.cancelText}>{seatId && video.muted.has(seatId) ? t("unmuteSeat") : t("muteSeat")}</Text>
-              </Pressable>
-              <Pressable
-                style={styles.cancel}
-                onPress={() => {
-                  if (seatId) video.toggleHide(seatId);
-                  setSeatId(null);
-                }}
-              >
-                <Text style={styles.cancelText}>{seatId && video.hidden.has(seatId) ? t("showVideo") : t("hideVideo")}</Text>
-              </Pressable>
+              {seatId && state?.players.find((player) => player.id === seatId)?.blocked ? null : (
+                <Pressable
+                  style={styles.cancel}
+                  onPress={() => {
+                    if (seatId) video.toggleMute(seatId);
+                    setSeatId(null);
+                  }}
+                >
+                  <Text style={styles.cancelText}>{seatId && video.muted.has(seatId) ? t("unmuteSeat") : t("muteSeat")}</Text>
+                </Pressable>
+              )}
+              {seatId && state?.players.find((player) => player.id === seatId)?.blocked ? null : (
+                <Pressable
+                  style={styles.cancel}
+                  onPress={() => {
+                    if (seatId) video.toggleHide(seatId);
+                    setSeatId(null);
+                  }}
+                >
+                  <Text style={styles.cancelText}>{seatId && video.hidden.has(seatId) ? t("showVideo") : t("hideVideo")}</Text>
+                </Pressable>
+              )}
+              {seatId ? (
+                <SeatSafety
+                  credentials={credentials}
+                  targetId={seatId}
+                  targetName={state?.players.find((player) => player.id === seatId)?.name ?? ""}
+                  blocked={state?.players.find((player) => player.id === seatId)?.blocked === true}
+                  onClose={() => setSeatId(null)}
+                />
+              ) : null}
             </Pressable>
           </Pressable>
         </Modal>

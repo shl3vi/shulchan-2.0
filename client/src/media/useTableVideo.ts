@@ -25,6 +25,7 @@ export function useTableVideo(credentials: Credentials | null) {
   const starting = useRef(false);
   const generation = useRef(0);
   const desired = useRef({ camera: false, mic: false });
+  const held = useRef<Set<string>>(new Set());
   const credentialsRef = useRef(credentials);
   credentialsRef.current = credentials;
 
@@ -45,6 +46,7 @@ export function useTableVideo(credentials: Credentials | null) {
 
   function reset() {
     desired.current = { camera: false, mic: false };
+    held.current = new Set();
     setTracks(new Map());
     setMicOn(false);
     setCameraOn(false);
@@ -72,6 +74,13 @@ export function useTableVideo(credentials: Credentials | null) {
       reset();
     });
   }
+
+  useEffect(() => {
+    for (const id of held.current) {
+      handle.current?.mute(id, true);
+      handle.current?.hide(id, true);
+    }
+  }, [tracks]);
 
   const visible = new Map(Array.from(tracks).filter(([identity]) => !hidden.has(identity)));
 
@@ -128,7 +137,33 @@ export function useTableVideo(credentials: Credentials | null) {
         });
       })();
     },
+    holdOff(ids: string[]) {
+      const next = new Set(ids);
+      const released = [...held.current].filter((id) => !next.has(id));
+      held.current = next;
+      for (const id of released) {
+        handle.current?.mute(id, false);
+        handle.current?.hide(id, false);
+      }
+      for (const id of next) {
+        handle.current?.mute(id, true);
+        handle.current?.hide(id, true);
+      }
+      setMuted((current) => {
+        const copy = new Set(current);
+        for (const id of released) copy.delete(id);
+        for (const id of next) copy.add(id);
+        return copy;
+      });
+      setHidden((current) => {
+        const copy = new Set(current);
+        for (const id of released) copy.delete(id);
+        for (const id of next) copy.add(id);
+        return copy;
+      });
+    },
     toggleMute(identity: string) {
+      if (held.current.has(identity)) return;
       const next = !muted.has(identity);
       handle.current?.mute(identity, next);
       setMuted((current) => {
@@ -139,6 +174,7 @@ export function useTableVideo(credentials: Credentials | null) {
       });
     },
     toggleHide(identity: string) {
+      if (held.current.has(identity)) return;
       const next = !hidden.has(identity);
       handle.current?.hide(identity, next);
       setHidden((current) => {

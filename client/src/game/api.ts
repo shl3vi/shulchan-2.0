@@ -1,4 +1,5 @@
 import * as Crypto from "expo-crypto";
+import { loadPersonKey } from "@/game/personKey";
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://shulchan.win";
 
@@ -31,6 +32,13 @@ export async function signInUrl(back: string) {
 }
 
 /** The redirect carries a one-time code. Two screens can redeem the same code; only one request is sent. */
+export function signInWithApple(identityToken: string, name?: string) {
+  return post<{ token: string; email: string; name?: string }>("/auth/apple", {
+    identityToken,
+    ...(name ? { name } : {}),
+  });
+}
+
 export function redeemHostCode(code: string) {
   const existing = pendingCodes.get(code);
   if (existing) return existing;
@@ -98,8 +106,23 @@ export function createTable(
   });
 }
 
-export function joinTable(gameId: string, name: string, password: string, adminSecret?: string) {
-  return post<{ id: string; secret: string }>(`/api/games/${gameId}/join`, { name, password, adminSecret });
+export async function joinTable(gameId: string, name: string, password: string, adminSecret?: string) {
+  const personKey = await loadPersonKey();
+  return post<{ id: string; secret: string }>(`/api/games/${gameId}/join`, { name, password, adminSecret, personKey });
+}
+
+export function reportPlayer(
+  gameId: string,
+  playerId: string,
+  secret: string,
+  targetId: string,
+  reason: "name" | "camera" | "microphone",
+) {
+  return post<{ ok: true }>(`/api/games/${gameId}/report`, { playerId, secret, targetId, reason });
+}
+
+export function blockPlayer(gameId: string, playerId: string, secret: string, targetId: string, blocked: boolean) {
+  return post<{ ok: true }>(`/api/games/${gameId}/${blocked ? "block" : "unblock"}`, { playerId, secret, targetId });
 }
 
 /** True when this seat is still at the table. A failed request leaves the seat alone. */

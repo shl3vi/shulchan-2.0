@@ -14,7 +14,8 @@
         "NSMicrophoneUsageDescription": "Talk at the table."
       },
       "bitcode": false,
-      "bundleIdentifier": "com.anonymous.shulchan"
+      "bundleIdentifier": "com.anonymous.shulchan",
+      "usesAppleSignIn": true
     },
     "android": {
       "permissions": [
@@ -56,6 +57,7 @@
         }
       ],
       "./plugins/withSplashBackground",
+      "./plugins/withSceneLifecycle",
       [
         "react-native-google-mobile-ads",
         {
@@ -64,7 +66,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-audio"
+      "expo-audio",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true,

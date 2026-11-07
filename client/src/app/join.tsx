@@ -5,7 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGameSession } from "@/game/GameSession";
-import { playerName } from "@/game/name";
+import { nameProblem, playerName } from "@/game/name";
 import { isRtl, t } from "@/i18n";
 
 // Short codes are uppercase; older tables still use lowercase UUIDs.
@@ -39,7 +39,7 @@ export default function JoinScreen() {
       return;
     }
     if (!seatedName || !ready) {
-      setError(t("nameLength"));
+      setError(nameProblem(name) === "blocked" ? t("nameRejected") : t("nameLength"));
       return;
     }
     setError(null);
@@ -48,7 +48,8 @@ export default function JoinScreen() {
       await session.join(seatedName, normalizeCode(game), password.trim());
       router.replace("/table");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("couldNotJoin"));
+      const message = cause instanceof Error ? cause.message : t("couldNotJoin");
+      setError(message === "Choose another name" ? t("nameRejected") : message);
     } finally {
       setBusy(false);
     }

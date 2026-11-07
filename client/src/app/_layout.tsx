@@ -51,7 +51,6 @@ function AppStack() {
         fullScreenGestureEnabled: true,
         gestureEnabled: true,
         freezeOnBlur: true,
-        statusBarAnimation: "fade",
         contentStyle: styles.home,
       }}
     >
@@ -59,6 +58,8 @@ function AppStack() {
       <Stack.Screen name="join" />
       <Stack.Screen name="table" />
       <Stack.Screen name="auth" />
+      <Stack.Screen name="profile" />
+      <Stack.Screen name="support" />
     </Stack>
   );
 }
