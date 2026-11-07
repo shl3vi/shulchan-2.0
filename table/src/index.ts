@@ -3,6 +3,7 @@ import helmet from "helmet";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { APP_SCHEME, authRouter } from "./auth.js";
+import { SUPPORT_EMAIL } from "./safety.js";
 import { debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
 import { pool } from "./db.js";
 import { enginesReady } from "./engine.js";
@@ -47,6 +48,19 @@ app.get("/health", async (_req, res) => {
   ]);
   const ok = redisOk && postgresOk && engines.poker && engines.backgammon;
   res.status(ok ? 200 : 503).json({ ok, redis: redisOk, postgres: postgresOk, ...engines });
+});
+app.get("/support", (_req, res) => {
+  res.type("html").send(`<!doctype html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shulchan support</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #07110d; color: #fafaf9; font-family: sans-serif; }
+  a { color: #f6d36b; }
+</style>
+<main>
+  <h1>Shulchan</h1>
+  <p>Questions and player reports go to <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
+</main>`);
 });
 app.get("/join", (req, res) => {
   const game = String(req.query.game ?? "");

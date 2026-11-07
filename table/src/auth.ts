@@ -1,6 +1,6 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createPublicKey, randomBytes, timingSafeEqual, verify } from "node:crypto";
 import { Router } from "express";
-import { readSchema, sessionBody } from "./schema.js";
+import { appleBody, readSchema, sessionBody } from "./schema.js";
 import { deleteHostAccount, redis } from "./store.js";
 
 export const APP_SCHEME = "shulchan";
@@ -156,6 +156,101 @@ authRouter.get("/auth/callback", async (req, res) => {
   res.redirect(done.toString());
 });
 
+type AppleJwk = { kid: string; kty: string; n: string; e: string; alg?: string; use?: string };
+
+let appleKeys: { at: number; keys: AppleJwk[] } | null = null;
+
+async function applePublicKeys() {
+  if (appleKeys && Date.now() - appleKeys.at < 60 * 60 * 1000) return appleKeys.keys;
+  const response = await fetch("https://appleid.apple.com/auth/keys");
+  const body = (await response.json()) as { keys?: AppleJwk[] };
+  if (!response.ok || !body.keys?.length) throw new Error("apple keys");
+  appleKeys = { at: Date.now(), keys: body.keys };
+  return body.keys;
+}
+
+function appleAudiences() {
+  const extra = process.env.APPLE_CLIENT_ID ?? "";
+  return [extra, "com.anonymous.shulchan"].filter(Boolean);
+}
+
+/** Apple only sends the email on the first sign-in, so later visits reuse the address saved for this Apple user. */
+async function appleProfile(sub: string, email: string | undefined, name: string | undefined) {
+  const key = `apple:${sub}`;
+  const saved = await redis.get(key);
+  const previous = saved ? JSON.parse(saved) as { email?: string; name?: string } : {};
+  const nextEmail = email || previous.email;
+  const nextName = name || previous.name;
+  if (!nextEmail) return null;
+  await redis.set(key, JSON.stringify({ email: nextEmail, ...(nextName ? { name: nextName } : {}) }));
+  return { email: nextEmail, ...(nextName ? { name: nextName } : {}) };
+}
+
+authRouter.post("/auth/apple", async (req, res) => {
+  const body = readSchema(appleBody, req.body);
+  if (!body) {
+    res.status(400).json({ error: "Sign-in expired. Try again." });
+    return;
+  }
+  if (!(await allowSignIn(req.ip ?? "unknown"))) {
+    res.status(429).json({ error: "Too many sign-in attempts. Try again in a few minutes." });
+    return;
+  }
+  const parts = body.identityToken.split(".");
+  if (parts.length !== 3) {
+    res.status(401).json({ error: "Apple did not confirm this sign-in" });
+    return;
+  }
+  let header: { kid?: string; alg?: string };
+  let claims: { iss?: string; aud?: string | string[]; exp?: number; sub?: string; email?: string; email_verified?: boolean | string };
+  try {
+    header = JSON.parse(Buffer.from(parts[0], "base64url").toString()) as typeof header;
+    claims = JSON.parse(Buffer.from(parts[1], "base64url").toString()) as typeof claims;
+  } catch {
+    res.status(401).json({ error: "Apple did not confirm this sign-in" });
+    return;
+  }
+  const audiences = new Set(appleAudiences());
+  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud ?? ""];
+  if (header.alg !== "RS256" || claims.iss !== "https://appleid.apple.com" || !claims.sub || !aud.some((value) => audiences.has(value)) || (claims.exp ?? 0) * 1000 < Date.now()) {
+    res.status(401).json({ error: "Apple did not confirm this sign-in" });
+    return;
+  }
+  const verified = claims.email_verified === true || claims.email_verified === "true" || !claims.email;
+  if (!verified) {
+    res.status(401).json({ error: "Apple did not confirm this sign-in" });
+    return;
+  }
+  try {
+    const jwk = (await applePublicKeys()).find((key) => key.kid === header.kid);
+    if (!jwk) {
+      res.status(401).json({ error: "Apple did not confirm this sign-in" });
+      return;
+    }
+    const key = createPublicKey({ key: jwk, format: "jwk" });
+    const signatureOk = verify("RSA-SHA256", Buffer.from(`${parts[0]}.${parts[1]}`), key, Buffer.from(parts[2], "base64url"));
+    if (!signatureOk) {
+      res.status(401).json({ error: "Apple did not confirm this sign-in" });
+      return;
+    }
+  } catch {
+    res.status(503).json({ error: "Apple sign-in is unavailable" });
+    return;
+  }
+  const profile = await appleProfile(claims.sub, claims.email, body.name);
+  if (!profile) {
+    res.status(401).json({ error: "Apple did not share an email. Try again and allow email." });
+    return;
+  }
+  const hostToken = randomBytes(32).toString("hex");
+  await redis.set(
+    `host:${hostToken}`,
+    JSON.stringify({ sub: `apple:${claims.sub}`, email: profile.email, ...(profile.name ? { name: profile.name } : {}) }),
+    { EX: hostTokenSeconds() },
+  );
+  res.json({ token: hostToken, email: profile.email, ...(profile.name ? { name: profile.name } : {}) });
+});
+
 authRouter.post("/auth/session", async (req, res) => {
   const body = readSchema(sessionBody, req.body);
   if (!body) {
@@ -187,7 +282,7 @@ authRouter.delete("/auth/account", async (req, res) => {
   const header = req.get("authorization");
   const host = await readHost(header);
   if (!host) {
-    res.status(401).json({ error: "Sign in with Google to open a table" });
+    res.status(401).json({ error: "Sign in to open a table" });
     return;
   }
   const token = header?.startsWith("Bearer ") ? header.slice(7) : "";
@@ -198,7 +293,7 @@ authRouter.delete("/auth/account", async (req, res) => {
 authRouter.get("/auth/host", async (req, res) => {
   const host = await readHost(req.get("authorization"));
   if (!host) {
-    res.status(401).json({ error: "Sign in with Google to open a table" });
+    res.status(401).json({ error: "Sign in to open a table" });
     return;
   }
   res.json({ email: host.email, ...(host.name ? { name: host.name } : {}) });
@@ -221,7 +316,7 @@ export async function readHost(authorization: string | undefined) {
     body: "{}",
   });
   if (response.status !== 400) return null;
-  const host = { sub: "upstream", email: "signed-in" };
+  const host: { sub: string; email: string; name?: string } = { sub: "upstream", email: "signed-in" };
   await redis.set(`host:${token}`, JSON.stringify(host), { EX: hostTokenSeconds() });
   return host;
 }

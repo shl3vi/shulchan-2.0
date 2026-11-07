@@ -10,6 +10,7 @@ import { debugConfig } from "./debug.js";
 import { allowSocketEvent } from "./http.js";
 import { removeFromRoom } from "./livekit.js";
 import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, playerBody, readSchema, rebuyBody } from "./schema.js";
+import { blockedSeatIds } from "./safety.js";
 import { publishTable, readTable, subscriber, withTable, type SeatPlayer, type TableRecord } from "./store.js";
 
 class LeftTable extends Error {
@@ -18,10 +19,16 @@ class LeftTable extends Error {
   }
 }
 
+async function personal(table: TableRecord, viewerId: string) {
+  const view = await readPoker(table);
+  const viewer = table.players.find((player) => player.id === viewerId);
+  const blocked = await blockedSeatIds(viewer?.personKey, table.players).catch(() => new Set<string>());
+  return snapshot(table, view, viewerId, blocked);
+}
+
 async function broadcast(io: Server, tableId: string) {
   const table = await readTable(tableId);
   if (!table) return;
-  const view = await readPoker(table);
   const room = io.of("/table").adapter.rooms.get(tableId);
   if (!room) return;
   for (const socketId of room) {
@@ -33,7 +40,7 @@ async function broadcast(io: Server, tableId: string) {
       socket.disconnect(true);
       continue;
     }
-    socket.emit("state", snapshot(table, view, viewer));
+    socket.emit("state", await personal(table, viewer));
   }
 }
 
@@ -64,7 +71,7 @@ export function attachSockets(io: Server) {
     const kind = table.kind ?? "poker";
 
     socket.join(tableId);
-    socket.emit("state", snapshot(table, await readPoker(table), playerId));
+    socket.emit("state", await personal(table, playerId));
 
     async function change<T>(fallback: string, run: (current: TableRecord, seat: SeatPlayer) => Promise<T>) {
       try {
@@ -90,7 +97,7 @@ export function attachSockets(io: Server) {
 
     async function resync() {
       const current = await readTable(tableId);
-      if (current) socket.emit("state", snapshot(current, await readPoker(current), playerId));
+      if (current) socket.emit("state", await personal(current, playerId));
     }
 
     function requireAdmin(current: TableRecord) {

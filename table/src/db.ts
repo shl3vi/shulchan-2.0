@@ -19,6 +19,26 @@ export async function connectPostgres() {
     )
   `);
   await pool.query("CREATE INDEX IF NOT EXISTS tables_expires_at ON tables (expires_at)");
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS blocks (
+      blocker text NOT NULL,
+      blocked text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (blocker, blocked)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id text PRIMARY KEY,
+      table_id text NOT NULL,
+      reporter_key text NOT NULL,
+      reporter_name text NOT NULL,
+      reported_key text NOT NULL,
+      reported_name text NOT NULL,
+      reason text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
   const column = await pool.query<{ exists: boolean }>(`
     SELECT EXISTS (
       SELECT 1 FROM information_schema.columns

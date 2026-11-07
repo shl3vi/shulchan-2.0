@@ -19,6 +19,7 @@ export type TableSnapshot = {
     inHand: boolean;
     sittingOut: boolean;
     bought: number;
+    blocked?: boolean;
   }[];
   you: {
     id: string;
@@ -37,7 +38,12 @@ export type TableSnapshot = {
   shownCards: { seat: number; cards: EngineView["communityCards"] }[];
 };
 
-export function snapshot(table: TableRecord, view: EngineView, viewerId?: string): TableSnapshot {
+export function snapshot(
+  table: TableRecord,
+  view: EngineView,
+  viewerId?: string,
+  blockedIds?: Set<string>,
+): TableSnapshot {
   const bySeat = new Map(table.players.map((player) => [player.seat, player]));
   const actor = view.playerToActSeat == null ? null : bySeat.get(view.playerToActSeat);
   const viewer = viewerId ? table.players.find((player) => player.id === viewerId) : undefined;
@@ -62,6 +68,7 @@ export function snapshot(table: TableRecord, view: EngineView, viewerId?: string
         inHand: seat?.inHand ?? false,
         sittingOut: false,
         bought: player.bought ?? table.buyIn,
+        ...(blockedIds?.has(player.id) ? { blocked: true } : {}),
       }];
     }),
     you: viewer

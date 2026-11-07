@@ -17,6 +17,20 @@ export const joinBody = z.object({
   name: z.string().min(1).max(24),
   password: z.string().regex(/^\d{6}$/),
   adminSecret: z.string().regex(uuid).optional(),
+  personKey: z.string().regex(uuid),
+}).strict();
+
+export const reportBody = z.object({
+  playerId: z.string().min(1),
+  secret: z.string().min(1),
+  targetId: z.string().min(1),
+  reason: z.enum(["name", "camera", "microphone"]),
+}).strict();
+
+export const blockBody = z.object({
+  playerId: z.string().min(1),
+  secret: z.string().min(1),
+  targetId: z.string().min(1),
 }).strict();
 
 export const liveKitBody = z.object({
@@ -27,6 +41,11 @@ export const liveKitBody = z.object({
 export const sessionBody = z.object({
   code: z.string().regex(/^[a-f0-9]{64}$/),
   verifier: z.string().regex(/^[A-Za-z0-9._~-]{43,128}$/),
+}).strict();
+
+export const appleBody = z.object({
+  identityToken: z.string().min(20).max(8000),
+  name: z.string().trim().min(1).max(80).optional(),
 }).strict();
 
 const point = z.number().int().min(1).max(24);

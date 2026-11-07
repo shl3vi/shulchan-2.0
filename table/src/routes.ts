@@ -4,9 +4,11 @@ import { createPokerTable, readPoker, seatPoker } from "./engine.js";
 import { liveKitToken, VideoUnavailable } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
-import { playerName } from "./name.js";
+import { nameProblem, playerName } from "./name.js";
+import { chooseSeat } from "./seats.js";
+import { avoidSeats, blockPerson, blockedSeatIds, storeReport, unblockPerson } from "./safety.js";
 import { openingBackgammon } from "./backgammon.js";
-import { createBody, joinBody, liveKitBody, readSchema } from "./schema.js";
+import { blockBody, createBody, joinBody, liveKitBody, readSchema, reportBody } from "./schema.js";
 import { openTable, noteJoinRefused, notePlayers, noteVideo } from "./events/ledger.js";
 import { reportError, reportCaught } from "./events/report.js";
 import { sameSecret, seatedCount, tablePassword } from "./players.js";
@@ -14,7 +16,6 @@ import { clearPasswordFailures, noteWrongPassword, passwordRetryAfter } from "./
 import { insertTable, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
-const MAX_SEATS = 9;
 // No 0/O or 1/I, so a code read aloud or copied by hand still matches.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -26,7 +27,7 @@ router.post("/", async (req, res) => {
   const host = await readHost(req.get("authorization"));
   if (!host) {
     reportError({ area: "auth", route: "create" });
-    res.status(401).json({ error: "Sign in with Google to open a table" });
+    res.status(401).json({ error: "Sign in to open a table" });
     return;
   }
   const body = readSchema(createBody, req.body);
@@ -89,13 +90,15 @@ router.post("/:id/join", async (req, res) => {
     res.status(400).json({ error: "Invalid request" });
     return;
   }
+  const problem = nameProblem(body.name);
   const name = playerName(body.name);
   const password = body.password;
   const adminSecret = body.adminSecret ?? "";
+  const personKey = body.personKey;
   const ip = req.ip ?? "unknown";
-  if (!name) {
+  if (!name || problem) {
     await noteJoinRefused(id);
-    res.status(400).json({ error: "Name must be 1 to 24 characters" });
+    res.status(400).json({ error: problem === "blocked" ? "Choose another name" : "Name must be 1 to 24 characters" });
     return;
   }
   try {
@@ -103,10 +106,11 @@ router.post("/:id/join", async (req, res) => {
     if (retry > 0) throw new JoinRefused(429, "Too many password attempts", retry);
     const joined = await withTable(id, async (table) => {
       if (!sameSecret(password, table.password)) throw new JoinRefused(403, "Wrong password");
-      const taken = new Set(table.players.map((player) => player.seat));
-      const seat = Array.from({ length: MAX_SEATS }, (_, index) => index).find((index) => !taken.has(index));
+      const taken = table.players.map((player) => player.seat);
+      const avoid = await avoidSeats(personKey, table.players).catch(() => []);
+      const seat = chooseSeat(taken, avoid, table.kind === "backgammon" ? "backgammon" : "poker");
       if (seat === undefined) throw new JoinRefused(400, "Table is full");
-      const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), seat, bought: table.buyIn };
+      const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), personKey, seat, bought: table.buyIn };
       await seatPoker(table, seat, table.buyIn);
       table.players.push(player);
       if (table.adminSecret && sameSecret(adminSecret, table.adminSecret)) {
@@ -171,6 +175,92 @@ router.post("/:id/livekit", async (req, res) => {
   }
 });
 
+async function seatedPlayer(tableId: string, playerId: string, secret: string) {
+  const table = await readTable(tableId);
+  if (!table) return null;
+  const player = table.players.find((seat) => sameSecret(playerId, seat.id) && sameSecret(secret, seat.secret));
+  if (!player?.personKey) return null;
+  return { table, player: { ...player, personKey: player.personKey } };
+}
+
+router.post("/:id/report", async (req, res) => {
+  const id = String(req.params.id);
+  const body = readSchema(reportBody, req.body);
+  if (!body) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+  const seated = await seatedPlayer(id, body.playerId, body.secret);
+  const target = seated?.table.players.find((seat) => seat.id === body.targetId && seat.id !== seated.player.id);
+  if (!seated || !target?.personKey) {
+    res.status(401).json({ error: "Invalid player" });
+    return;
+  }
+  try {
+    await storeReport({
+      tableId: id,
+      reporterKey: seated.player.personKey,
+      reporterName: seated.player.name,
+      reportedKey: target.personKey,
+      reportedName: target.name,
+      reason: body.reason,
+    });
+  } catch (error) {
+    reportCaught(id, error, "report", seated.table.kind ?? "poker");
+    res.status(500).json({ error: "Could not store the report" });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+router.post("/:id/block", async (req, res) => {
+  const id = String(req.params.id);
+  const body = readSchema(blockBody, req.body);
+  if (!body) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+  const seated = await seatedPlayer(id, body.playerId, body.secret);
+  const target = seated?.table.players.find((seat) => seat.id === body.targetId && seat.id !== seated.player.id);
+  if (!seated || !target?.personKey) {
+    res.status(401).json({ error: "Invalid player" });
+    return;
+  }
+  try {
+    await blockPerson(seated.player.personKey, target.personKey);
+  } catch (error) {
+    reportCaught(id, error, "block", seated.table.kind ?? "poker");
+    res.status(500).json({ error: "Could not update the block" });
+    return;
+  }
+  await publishTable(id);
+  res.json({ ok: true });
+});
+
+router.post("/:id/unblock", async (req, res) => {
+  const id = String(req.params.id);
+  const body = readSchema(blockBody, req.body);
+  if (!body) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+  const seated = await seatedPlayer(id, body.playerId, body.secret);
+  const target = seated?.table.players.find((seat) => seat.id === body.targetId && seat.id !== seated.player.id);
+  if (!seated || !target?.personKey) {
+    res.status(401).json({ error: "Invalid player" });
+    return;
+  }
+  try {
+    await unblockPerson(seated.player.personKey, target.personKey);
+  } catch (error) {
+    reportCaught(id, error, "unblock", seated.table.kind ?? "poker");
+    res.status(500).json({ error: "Could not update the block" });
+    return;
+  }
+  await publishTable(id);
+  res.json({ ok: true });
+});
+
 router.get("/:id", async (req, res) => {
   const id = String(req.params.id);
   if (id.length > 64) {
@@ -207,5 +297,6 @@ router.get("/:id", async (req, res) => {
     res.status(401).json({ error: "Sign in to this table" });
     return;
   }
-  res.json(snapshot(table, await readPoker(table), viewer?.id));
+  const blocked = await blockedSeatIds(viewer?.personKey, table.players).catch(() => new Set<string>());
+  res.json(snapshot(table, await readPoker(table), viewer?.id, blocked));
 });

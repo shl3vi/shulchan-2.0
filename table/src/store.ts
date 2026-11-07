@@ -6,6 +6,8 @@ export type SeatPlayer = {
   id: string;
   name: string;
   secret: string;
+  /** Stable across tables, so a block still applies the next time these two sit together. */
+  personKey?: string;
   seat: number;
   bought: number;
   pendingRemoval?: boolean;
