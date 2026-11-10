@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

@@ -52,13 +52,13 @@ app.get("/health", async (_req, res) => {
 app.get("/support", (_req, res) => {
   res.type("html").send(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shulchan support</title>
+<title>LOOCHKA support</title>
 <style>
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #07110d; color: #fafaf9; font-family: sans-serif; }
   a { color: #f6d36b; }
 </style>
 <main>
-  <h1>Shulchan</h1>
+  <h1>LOOCHKA</h1>
   <p>Questions and player reports go to <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
 </main>`);
 });

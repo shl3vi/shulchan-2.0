@@ -1,7 +1,9 @@
 export const SUPPORT_EMAIL = "support@shulchan.win";
+/** Address shown to players on Support and Legal. */
+export const CONTACT_EMAIL = "support@loochka.com";
 
 export function supportMail(tableId?: string, name?: string, reason?: string) {
-  const subject = tableId ? `Shulchan report ${tableId}` : "Shulchan";
+  const subject = tableId ? `LOOCHKA report ${tableId}` : "LOOCHKA";
   const lines = [
     tableId ? `Table: ${tableId}` : "",
     name ? `Player: ${name}` : "",

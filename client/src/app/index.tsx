@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Image } from "expo-image";
 import * as Linking from "expo-linking";
@@ -212,7 +212,7 @@ export default function HomeScreen() {
     await saveHost(null);
   }
 
-  function openSettingsPage(path: "/profile" | "/support") {
+  function openSettingsPage(path: "/profile" | "/support" | "/legal") {
     setSettingsOpen(false);
     router.push(path);
   }
@@ -309,7 +309,7 @@ export default function HomeScreen() {
           <View style={styles.brandIcon}>
             <Ionicons name="game-controller" size={20} color="#171b35" />
           </View>
-          <Text style={styles.mark}>SHULCHAN</Text>
+          <Text style={styles.mark}>LOOCHKA</Text>
         </View>
         <Text style={styles.tag}>{t("tagline")}</Text>
         <View style={styles.heroArt}>
@@ -591,6 +591,15 @@ export default function HomeScreen() {
               >
                 <Ionicons name="chatbubble-ellipses-outline" size={20} color="#a8b2ff" />
                 <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("support")}</Text>
+                <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
+              </Pressable>
+              <View style={styles.accountDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+                onPress={() => openSettingsPage("/legal")}
+              >
+                <Ionicons name="document-text-outline" size={20} color="#a8b2ff" />
+                <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("legal")}</Text>
                 <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
               </Pressable>
             </View>
