@@ -1,6 +1,8 @@
 import express from "express";
 import helmet from "helmet";
 import { createServer } from "node:http";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
 import { APP_SCHEME, authRouter } from "./auth.js";
 import { SUPPORT_EMAIL } from "./safety.js";
@@ -40,6 +42,10 @@ async function answers(run: () => Promise<unknown>) {
   }
 }
 
+const home = join(dirname(fileURLToPath(import.meta.url)), "../public/index.html");
+app.get("/", (_req, res) => {
+  res.sendFile(home);
+});
 app.get("/health", async (_req, res) => {
   const [redisOk, postgresOk, engines] = await Promise.all([
     answers(() => redis.ping()),
