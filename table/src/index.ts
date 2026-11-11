@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type Request, type Response } from "express";
 import helmet from "helmet";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
@@ -42,10 +42,15 @@ async function answers(run: () => Promise<unknown>) {
   }
 }
 
-const home = join(dirname(fileURLToPath(import.meta.url)), "../public/index.html");
-app.get("/", (_req, res) => {
-  res.sendFile(home);
-});
+const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
+function page(file: string) {
+  return (_req: Request, res: Response) => {
+    res.sendFile(join(publicDir, file));
+  };
+}
+app.get("/", page("index.html"));
+app.get("/privacy", page("privacy.html"));
+app.get("/account", page("account.html"));
 app.get("/health", async (_req, res) => {
   const [redisOk, postgresOk, engines] = await Promise.all([
     answers(() => redis.ping()),
@@ -58,13 +63,13 @@ app.get("/health", async (_req, res) => {
 app.get("/support", (_req, res) => {
   res.type("html").send(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shulchan support</title>
+<title>LOOCHKA support</title>
 <style>
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #07110d; color: #fafaf9; font-family: sans-serif; }
   a { color: #f6d36b; }
 </style>
 <main>
-  <h1>Shulchan</h1>
+  <h1>LOOCHKA</h1>
   <p>Questions and player reports go to <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
 </main>`);
 });
@@ -73,7 +78,7 @@ app.get("/join", (req, res) => {
   const password = String(req.query.password ?? "");
   const query = new URLSearchParams({ game, password }).toString();
   const appUrl = `${APP_SCHEME}://join?${query}`;
-  const intentUrl = `intent://join?${query}#Intent;scheme=${APP_SCHEME};package=com.anonymous.shulchan;end`;
+  const intentUrl = `intent://join?${query}#Intent;scheme=${APP_SCHEME};package=com.loochka;end`;
   res.type("html").send(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Join the table</title>

@@ -1,7 +1,7 @@
 import * as Crypto from "expo-crypto";
 import { loadPersonKey } from "@/game/personKey";
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://shulchan.win";
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://loochka.com";
 
 async function post<T>(path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {

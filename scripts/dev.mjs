@@ -91,7 +91,7 @@ start("npm", ["run", "dev", "--prefix", "backgammon-engine"], "backgammon", { ..
 start("npm", ["run", "dev", "--prefix", "table"], "table", {
   ...process.env,
   ENGINE_TOKEN: engineToken,
-  AUTH_UPSTREAM: "https://shulchan.win",
+  AUTH_UPSTREAM: "https://loochka.com",
   LIVEKIT_URL: cloud?.URL ?? `ws://${ip}:7880`,
   LIVEKIT_API_KEY: cloud?.APIKey ?? "devkey",
   LIVEKIT_API_SECRET: cloud?.APISecret ?? "secret",

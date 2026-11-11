@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Shulchan",
+    "name": "LOOCHKA",
     "slug": "shulchan",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
         "NSMicrophoneUsageDescription": "Talk at the table."
       },
       "bitcode": false,
-      "bundleIdentifier": "com.anonymous.shulchan",
+      "bundleIdentifier": "com.loochka",
       "usesAppleSignIn": true
     },
     "android": {
@@ -37,7 +37,7 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.shulchan"
+      "package": "com.loochka"
     },
     "web": {
       "output": "static",

@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import * as Linking from "expo-linking";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CONTACT_EMAIL } from "@/game/support";
 import { isRtl, t } from "@/i18n";
 
 const categories = ["bug", "suggestion", "complaint"] as const;
@@ -13,6 +15,7 @@ export default function SupportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const align = isRtl() ? "right" : "left";
+  const textWidth = useWindowDimensions().width - 44;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [category, setCategory] = useState<(typeof categories)[number]>("bug");
@@ -31,9 +34,15 @@ export default function SupportScreen() {
         </Pressable>
         <Text style={styles.title}>{t("support")}</Text>
       </View>
-      {sent ? (
-        <Text style={[styles.thanks, { textAlign: align }]}>{t("supportThanks")}</Text>
-      ) : (
+      <ScrollView
+        style={{ width: textWidth }}
+        contentContainerStyle={[styles.form, { width: textWidth }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {sent ? (
+          <Text style={[styles.thanks, { textAlign: align }]}>{t("supportThanks")}</Text>
+        ) : (
         <>
           <Text style={[styles.label, { textAlign: align }]}>{t("supportName")}</Text>
           <TextInput style={[styles.input, { textAlign: align }]} value={name} onChangeText={setName} placeholderTextColor="#78716c" />
@@ -83,14 +92,26 @@ export default function SupportScreen() {
             <Text style={styles.sendText}>{t("supportSend")}</Text>
           </Pressable>
         </>
-      )}
+        )}
+        <Text style={[styles.also, { textAlign: align }]}>
+          {t("supportAlso")}{" "}
+          <Text
+            style={styles.alsoLink}
+            onPress={() => void Linking.openURL(`mailto:${CONTACT_EMAIL}`)}
+            accessibilityRole="link"
+          >
+            {CONTACT_EMAIL}
+          </Text>
+        </Text>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#090b16", paddingHorizontal: 22 },
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 22 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  form: { paddingBottom: 12 },
   headerRtl: { flexDirection: "row-reverse" },
   title: { color: "#f7f7fc", fontSize: 22, fontWeight: "900" },
   label: { color: "#a6a8b8", fontSize: 13, fontWeight: "700", marginBottom: 6, marginTop: 12 },
@@ -134,4 +155,6 @@ const styles = StyleSheet.create({
   sendText: { color: "#2a130a", fontSize: 17, fontWeight: "900" },
   pressed: { opacity: 0.8 },
   thanks: { color: "#f7f7fc", fontSize: 18, fontWeight: "700", lineHeight: 26 },
+  also: { color: "#a6a8b8", fontSize: 15, lineHeight: 22, marginTop: 22, width: "100%" },
+  alsoLink: { color: "#a8b2ff", fontWeight: "800" },
 });

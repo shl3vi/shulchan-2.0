@@ -60,6 +60,7 @@ function AppStack() {
       <Stack.Screen name="auth" />
       <Stack.Screen name="profile" />
       <Stack.Screen name="support" />
+      <Stack.Screen name="legal" />
     </Stack>
   );
 }
