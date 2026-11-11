@@ -205,6 +205,13 @@
 
     footer p { margin: 0; max-width: 22rem; }
 
+    footer .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.85rem 1.25rem;
+      justify-content: flex-end;
+    }
+
     footer a {
       color: var(--link);
       letter-spacing: 0.04em;
@@ -228,6 +235,7 @@
         padding-bottom: 1.6rem;
       }
       footer p { max-width: 18rem; }
+      footer .links { justify-content: center; }
     }
   </style>
 </head>
@@ -248,7 +256,11 @@
   </main>
   <footer>
     <p>Camera and microphone stay off until you turn them on.</p>
-    <a href="mailto:support@loochka.com">support@loochka.com</a>
+    <p class="links">
+      <a href="/privacy">Privacy</a>
+      <a href="/account">Account</a>
+      <a href="mailto:support@loochka.com">support@loochka.com</a>
+    </p>
   </footer>
 </body>
 </html>

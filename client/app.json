@@ -14,7 +14,7 @@
         "NSMicrophoneUsageDescription": "Talk at the table."
       },
       "bitcode": false,
-      "bundleIdentifier": "com.loochka.com",
+      "bundleIdentifier": "com.loochka",
       "usesAppleSignIn": true
     },
     "android": {
@@ -37,7 +37,7 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.loochka.com"
+      "package": "com.loochka"
     },
     "web": {
       "output": "static",
