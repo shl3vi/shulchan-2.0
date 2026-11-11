@@ -28,4 +28,4 @@ An installable APK, from `client/`:
 npx eas-cli@latest build --platform android --profile preview
 ```
 
-That build talks to `https://shulchan.win`. Sideload the APK; it does not need Metro or this Mac.
+That build talks to `https://loochka.com`. Sideload the APK; it does not need Metro or this Mac.

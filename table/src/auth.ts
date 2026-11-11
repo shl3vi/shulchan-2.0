@@ -171,7 +171,7 @@ async function applePublicKeys() {
 
 function appleAudiences() {
   const extra = process.env.APPLE_CLIENT_ID ?? "";
-  return [extra, "com.anonymous.shulchan"].filter(Boolean);
+  return [extra, "com.loochka.com"].filter(Boolean);
 }
 
 /** Apple only sends the email on the first sign-in, so later visits reuse the address saved for this Apple user. */

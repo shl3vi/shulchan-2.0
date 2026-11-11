@@ -1,4 +1,4 @@
-export const SUPPORT_EMAIL = "support@shulchan.win";
+export const SUPPORT_EMAIL = "support@loochka.com";
 /** Address shown to players on Support and Legal. */
 export const CONTACT_EMAIL = "support@loochka.com";
 

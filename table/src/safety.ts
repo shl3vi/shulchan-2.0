@@ -1,7 +1,7 @@
 import { pool } from "./db.js";
 import type { SeatPlayer } from "./store.js";
 
-export const SUPPORT_EMAIL = "support@shulchan.win";
+export const SUPPORT_EMAIL = "support@loochka.com";
 
 export async function avoidSeats(personKey: string, players: SeatPlayer[]) {
   const others = players.filter((player) => player.personKey && player.personKey !== personKey);

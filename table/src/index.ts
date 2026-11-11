@@ -67,7 +67,7 @@ app.get("/join", (req, res) => {
   const password = String(req.query.password ?? "");
   const query = new URLSearchParams({ game, password }).toString();
   const appUrl = `${APP_SCHEME}://join?${query}`;
-  const intentUrl = `intent://join?${query}#Intent;scheme=${APP_SCHEME};package=com.anonymous.shulchan;end`;
+  const intentUrl = `intent://join?${query}#Intent;scheme=${APP_SCHEME};package=com.loochka.com;end`;
   res.type("html").send(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Join the table</title>
