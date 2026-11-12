@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { StyleSheet, View } from "react-native";
 import { DarkTheme, Stack, ThemeProvider } from "expo-router";
 import { GameSessionProvider, useGameSession } from "@/game/GameSession";
+import { loadRemoteConfig } from "@/game/remoteConfig";
 import { loadLocale, subscribeLocale, locale } from "@/i18n";
 
 const navigationTheme = {
@@ -33,6 +34,7 @@ function Shell() {
   useSyncExternalStore(subscribeLocale, locale, locale);
   useEffect(() => {
     void loadLocale().finally(() => setLangReady(true));
+    void loadRemoteConfig();
   }, []);
   // Keep the native splash image visible until the seat check finishes.
   // A painted view here would cover that image with another color.

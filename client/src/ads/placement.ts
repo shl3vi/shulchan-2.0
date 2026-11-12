@@ -1,8 +1,7 @@
 import type { TableSnapshot } from "@/game/types";
+import { useRemoteConfig } from "@/game/UpdateNotice";
 
-export const adsEnabled = process.env.EXPO_PUBLIC_ADS_ENABLED !== "false";
-
-// Ads never appear during a hand: not on your turn, not over a seat, not while cards are live.
-export function tableAdAllowed(state: TableSnapshot | null) {
-  return adsEnabled && state?.round == null;
+export function useTableAdAllowed(state: TableSnapshot | null) {
+  const config = useRemoteConfig();
+  return config.ads.enabled && state?.round == null;
 }

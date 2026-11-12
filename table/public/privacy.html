@@ -2,113 +2,129 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Privacy — LOOCHKA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Privacy and legal — LOOCHKA</title>
   <meta name="description" content="How LOOCHKA works, what we keep, and how to ask for an adjustment.">
   <meta name="theme-color" content="#070912">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23070912'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23f3a66f' stroke-width='1.4'/%3E%3Ccircle cx='16' cy='16' r='2.2' fill='%23f3a66f'/%3E%3C/svg%3E">
+  <link rel="canonical" href="https://loochka.com/privacy">
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,620&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --night: #070912;
-      --cream: #f7f2e8;
-      --muted: #c9c4d8;
-      --apricot: #f3a66f;
-      --link: #ffd3ad;
-      --lilac: #a8b2ff;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      color: var(--cream);
-      background:
-        radial-gradient(ellipse at 50% 0%, rgba(92, 77, 216, 0.22), transparent 42%),
-        var(--night);
-      font-family: Fraunces, Palatino, "Iowan Old Style", serif;
-    }
-    a { color: var(--link); }
-    a:focus-visible { outline: 2px solid var(--lilac); outline-offset: 4px; }
-    header, footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      padding: 1.5rem 7vw;
-    }
-    .mark, header nav a, footer a {
-      font-family: Syne, "Avenir Next", "Segoe UI", sans-serif;
-      font-weight: 700;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      font-size: 0.72rem;
-      text-decoration: none;
-      color: var(--cream);
-    }
-    .mark { color: var(--apricot); letter-spacing: 0.22em; }
-    header nav { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; }
-    main { max-width: 40rem; margin: 0 auto; padding: 1rem 1.4rem 4rem; }
-    h1 {
-      margin: 0.4rem 0 0.6rem;
-      font-family: Syne, "Avenir Next", sans-serif;
-      font-weight: 800;
-      font-size: clamp(2.4rem, 7vw, 4.2rem);
-      letter-spacing: 0.08em;
-      line-height: 0.95;
-    }
-    .lead { color: var(--muted); font-size: 1.2rem; line-height: 1.45; margin: 0 0 2rem; }
-    section { margin: 0 0 1.8rem; }
-    h2 {
-      margin: 0 0 0.45rem;
-      font-size: 1.35rem;
-      font-weight: 620;
-      color: var(--apricot);
-    }
-    p { margin: 0; font-size: 1.08rem; line-height: 1.55; }
-    footer { color: var(--muted); font-size: 0.95rem; }
-    footer a { color: var(--link); letter-spacing: 0.04em; text-transform: none; font-size: 0.95rem; }
-    ::selection { background: var(--apricot); color: #1c120c; }
-    @media (max-width: 720px) {
-      header, footer { padding-inline: 1.25rem; align-items: flex-start; flex-direction: column; }
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,560&family=Manrope:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/site.css">
+  <script src="/assets/site.js" defer></script>
 </head>
 <body>
-  <header>
-    <a class="mark" href="/">LOOCHKA</a>
-    <nav>
-      <a href="/privacy" aria-current="page">Privacy</a>
-      <a href="/account">Account</a>
-      <a href="/support">Support</a>
-    </nav>
+  <a class="skip" href="#content">Skip to content</a>
+
+  <header class="nav">
+    <div class="wrap nav-row">
+      <a class="brand" href="/" aria-label="LOOCHKA home">
+        <img class="brand-mark" src="/assets/apple-touch-icon.png" alt="" width="34" height="34">
+        <span>LOOCHKA</span>
+      </a>
+      <nav class="nav-links" id="nav-links" aria-label="Main">
+        <a href="/#how">How it works</a>
+        <a href="/#games">Games</a>
+        <a href="/#features">Features</a>
+        <a href="/support">Support</a>
+      </nav>
+      <a class="btn btn-sm" href="/#get">Get the app</a>
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><span></span><span></span></button>
+    </div>
   </header>
-  <main>
-    <h1>Legal</h1>
-    <p class="lead">The short version of how the table works, what we keep, and how to ask for an adjustment.</p>
-    <section>
-      <h2>Playing</h2>
-      <p>Chips are for the game. They are not money, and nothing here can be cashed out. A table is private: you need its ID and password. The name beside a seat is the one that player chose. You can report a name, a camera, or a microphone, and you can block a seat. We can close a table or remove a player who is making it unusable.</p>
+
+  <main id="content">
+    <section class="page-hero">
+      <div class="wrap">
+        <p class="eyebrow">Legal</p>
+        <h1 class="display-2">Privacy and <em>table rules</em>.</h1>
+        <p class="lede">The short version of how the table works, what we keep, and how to ask for an adjustment.</p>
+      </div>
     </section>
-    <section>
-      <h2>Your account</h2>
-      <p>Opening a table needs a Google or Apple sign-in. Joining a friend’s table does not. You can delete the account from Settings. Deleting it signs you out and closes every table you opened. The steps, and what is removed or kept, are on the <a href="/account">account page</a>.</p>
-    </section>
-    <section>
-      <h2>Privacy</h2>
-      <p>If you sign in, we keep the email and name your Google or Apple account gives us, so we can recognize you the next time you open a table. At a table we keep the name you chose, the chips, and the moves, so the game can continue. Camera and microphone stay off until you turn them on, and they are only for the people at that table. A report includes the table, the seat, and the reason you picked. A note to support is used to answer you. A banner ad may appear at the table, and the ad network can tell that it was shown. We may record that a table was opened or a hand was played, tied to that table, so we can see when the game breaks. We don’t sell this information.</p>
-    </section>
-    <section>
-      <h2>Accessibility statement</h2>
-      <p>If something in the app gets in the way, tell us what you were trying to do. We will answer, and when the screen itself cannot do it, we will arrange another way to get the same thing done. The standard we are working toward is Israeli Standard 5568, which follows WCAG 2.0 at level AA. A formal audit is not finished, so this is not a claim that every screen already meets that level. A few places we already know are harder: the poker and backgammon boards are drawn as a game, so a screen reader may not announce every chip or checker; camera and microphone have no text equivalent; banner ads come from another company.</p>
-      <p>To ask for an adjustment, or to tell us something isn’t usable, write to <a href="mailto:support@loochka.com">support@loochka.com</a>.</p>
-    </section>
-    <p class="lead">Updated 10 November 2026.</p>
+
+    <div class="wrap doc">
+      <nav aria-label="On this page">
+        <ul class="toc">
+          <li><a href="#playing">Table rules</a></li>
+          <li><a href="#account">Your account</a></li>
+          <li><a href="#privacy">Privacy</a></li>
+          <li><a href="#accessibility">Accessibility</a></li>
+        </ul>
+      </nav>
+
+      <div class="prose">
+        <section id="playing">
+          <h2>Table rules</h2>
+          <p>Chips are for the game. They are not money, and nothing here can be cashed out. A table is private: you need its ID and password. The name beside a seat is the one that player chose. You can report a name, a camera, or a microphone, and you can block a seat. We can close a table or remove a player who is making it unusable.</p>
+        </section>
+        <section id="account">
+          <h2>Your account</h2>
+          <p>Opening a table needs a Google or Apple sign-in. Joining a friend’s table does not. You can delete the account from Settings. Deleting it signs you out and closes every table you opened. The steps, and what is removed or kept, are on the <a href="/account">account page</a>.</p>
+        </section>
+        <section id="privacy">
+          <h2>Privacy</h2>
+          <p>If you sign in, we keep the email and name your Google or Apple account gives us, so we can recognize you the next time you open a table. At a table we keep the name you chose, the chips, and the moves, so the game can continue. Camera and microphone stay off until you turn them on, and they are only for the people at that table. A report includes the table, the seat, and the reason you picked. A note to support is used to answer you. A banner ad may appear at the table, and the ad network can tell that it was shown. We may record that a table was opened or a hand was played, tied to that table, so we can see when the game breaks. We don’t sell this information.</p>
+        </section>
+        <section id="accessibility">
+          <h2>Accessibility statement</h2>
+          <p>If something in the app gets in the way, tell us what you were trying to do. We will answer, and when the screen itself cannot do it, we will arrange another way to get the same thing done. The standard we are working toward is Israeli Standard 5568, which follows WCAG 2.0 at level AA. A formal audit is not finished, so this is not a claim that every screen already meets that level. A few places we already know are harder: the poker and backgammon boards are drawn as a game, so a screen reader may not announce every chip or checker; camera and microphone have no text equivalent; banner ads come from another company.</p>
+          <p>To ask for an adjustment, or to tell us something isn’t usable, write to <a href="mailto:support@loochka.com">support@loochka.com</a>.</p>
+        </section>
+        <p class="updated">Updated 10 November 2026.</p>
+      </div>
+    </div>
   </main>
-  <footer>
-    <a href="/">LOOCHKA</a>
-    <a href="mailto:support@loochka.com">support@loochka.com</a>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a class="brand" href="/" aria-label="LOOCHKA home">
+            <img class="brand-mark" src="/assets/apple-touch-icon.png" alt="" width="34" height="34">
+            <span>LOOCHKA</span>
+          </a>
+          <p>Private poker and backgammon tables for the people you already know.</p>
+          <a class="footer-mail" href="mailto:support@loochka.com">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+            support@loochka.com
+          </a>
+        </div>
+        <nav class="footer-cols" aria-label="Footer">
+          <div>
+            <h2>Product</h2>
+            <ul>
+              <li><a href="/#how">How it works</a></li>
+              <li><a href="/#games">Poker and backgammon</a></li>
+              <li><a href="/#features">Features</a></li>
+              <li><a href="/#get">Get the app</a></li>
+            </ul>
+          </div>
+          <div>
+            <h2>Help</h2>
+            <ul>
+              <li><a href="/support">Support center</a></li>
+              <li><a href="/support#report">Report a player</a></li>
+              <li><a href="mailto:support@loochka.com">Contact us</a></li>
+              <li><a href="/privacy#accessibility">Accessibility</a></li>
+            </ul>
+          </div>
+          <div>
+            <h2>Legal</h2>
+            <ul>
+              <li><a href="/privacy#privacy">Privacy policy</a></li>
+              <li><a href="/privacy#playing">Table rules</a></li>
+              <li><a href="/account">Delete your account</a></li>
+            </ul>
+          </div>
+        </nav>
+      </div>
+      <div class="footer-bottom">
+        <p>© <span data-year>2026</span> LOOCHKA</p>
+        <p>Chips are for the game. They aren’t money.</p>
+      </div>
+    </div>
   </footer>
 </body>
 </html>
