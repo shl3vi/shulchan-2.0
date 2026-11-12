@@ -13,7 +13,7 @@ import { openTable, noteJoinRefused, notePlayers, noteVideo } from "./events/led
 import { reportError, reportCaught } from "./events/report.js";
 import { sameSecret, seatedCount, tablePassword } from "./players.js";
 import { clearPasswordFailures, noteWrongPassword, passwordRetryAfter } from "./password.js";
-import { insertTable, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
+import { HostTableLimit, insertHostTable, OPEN_TABLE_CAP, openTableCount, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
 // No 0/O or 1/I, so a code read aloud or copied by hand still matches.
@@ -48,6 +48,10 @@ router.post("/", async (req, res) => {
     res.status(400).json({ error: "buyIn must be at least two big blinds" });
     return;
   }
+  if (await openTableCount(host.email) >= OPEN_TABLE_CAP) {
+    res.status(429).json({ error: "You already have two tables open" });
+    return;
+  }
   const table: TableRecord = {
     id: tableCode(),
     adminSecret: crypto.randomUUID(),
@@ -62,9 +66,13 @@ router.post("/", async (req, res) => {
   const view = await createPokerTable(table, smallBlind);
   if (body.kind === "backgammon") table.backgammon = await openingBackgammon();
   try {
-    while (!(await insertTable(table))) table.id = tableCode();
+    while (!(await insertHostTable(table))) table.id = tableCode();
     await openTable(table.id, table.kind ?? "poker");
   } catch (error) {
+    if (error instanceof HostTableLimit) {
+      res.status(429).json({ error: error.message });
+      return;
+    }
     reportError({ area: "store", op: "create" });
     throw error;
   }

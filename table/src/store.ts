@@ -146,6 +146,50 @@ export async function writeTable(table: TableRecord) {
   if (saved.rowCount !== 1) throw new TableNotFound();
 }
 
+export const OPEN_TABLE_CAP = 2;
+
+export async function openTableCount(email: string) {
+  const open = await pool.query<{ count: string }>(
+    "SELECT count(*)::text AS count FROM tables WHERE expires_at > now() AND record->>'hostEmail' = $1",
+    [email],
+  );
+  return Number(open.rows[0]?.count ?? 0);
+}
+
+export class HostTableLimit extends Error {
+  constructor() {
+    super("You already have two tables open");
+  }
+}
+
+/** One host cannot pass the cap twice at the same moment. The lock covers the count and the insert. */
+export async function insertHostTable(table: TableRecord) {
+  const email = table.hostEmail ?? "";
+  const client = await pool.connect();
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtext($1))", [`open-tables:${email}`]);
+    if (await openTableCount(email) >= OPEN_TABLE_CAP) throw new HostTableLimit();
+    table.revision = 1;
+    const saved = await client.query(
+      `INSERT INTO tables (id, kind, record, expires_at)
+       VALUES ($1, $2, $3::jsonb, now() + make_interval(secs => $4::int))
+       ON CONFLICT (id) DO UPDATE
+         SET kind = EXCLUDED.kind,
+             record = EXCLUDED.record,
+             created_at = now(),
+             expires_at = EXCLUDED.expires_at,
+             updated_at = now()
+         WHERE tables.expires_at <= now()
+       RETURNING id`,
+      [table.id, table.kind ?? "poker", JSON.stringify(table), TABLE_TTL_MS / 1000],
+    );
+    return saved.rowCount === 1;
+  } finally {
+    await client.query("SELECT pg_advisory_unlock(hashtext($1))", [`open-tables:${email}`]).catch(() => undefined);
+    client.release();
+  }
+}
+
 export async function insertTable(table: TableRecord) {
   table.revision = 1;
   const saved = await pool.query(

@@ -114,7 +114,7 @@ export function attachSockets(io: Server) {
           handler(body);
         }).catch((error) => {
           reportCaught(tableId, error, event, kind);
-          handler(body);
+          socket.emit("error", { message: "Too many requests" });
         });
       });
     };
