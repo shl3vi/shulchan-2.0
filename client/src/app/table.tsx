@@ -6,7 +6,9 @@ import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AdBanner } from "@/ads/AdBanner";
-import { tableAdAllowed } from "@/ads/placement";
+import { useTableAdAllowed } from "@/ads/placement";
+import { UpdateNotice } from "@/game/UpdateNotice";
+import { updateMode } from "@/game/remoteConfig";
 import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
@@ -152,6 +154,7 @@ function BackgammonTable({
   const [rolling, setRolling] = useState(false);
   const [cupFaces, setCupFaces] = useState<number[]>([]);
   const [rollSent, setRollSent] = useState(false);
+  const showAd = useTableAdAllowed(null);
   const waiting = otherId == null;
   const actor: Color | null = waiting || game.phase === "over" ? null : game.phase === "offer" ? opponent(game.turn) : game.turn;
   const gameRef = useRef(game);
@@ -428,7 +431,7 @@ function BackgammonTable({
         {Platform.OS !== "web" ? <TalkButton on={micOn} onTalk={setMic} /> : null}
       </View>
       <View style={{ paddingBottom: insets.bottom, backgroundColor: "#090b16" }}>
-        <View style={styles.ad}>{tableAdAllowed(null) ? <AdBanner /> : null}</View>
+        {showAd ? <View style={styles.ad}><AdBanner /></View> : null}
       </View>
     </View>
   );
@@ -482,6 +485,8 @@ export default function TableScreen() {
   const insets = useSafeAreaInsets();
   const { credentials, state, error, dismissError, startHand, setAutoDeal, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
   const video = useTableVideo(credentials);
+  const showAd = useTableAdAllowed(state);
+  const mode = updateMode();
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
   const [info, setInfo] = useState(false);
   const [buying, setBuying] = useState(false);
@@ -528,6 +533,15 @@ export default function TableScreen() {
     holdStart.current = setTimeout(() => {
       hold.current = setInterval(() => setBuyChips((value) => Math.min(cap, Math.max(1, value + direction * buyStep))), 70);
     }, 320);
+  }
+
+  if (mode === "force") {
+    return (
+      <View style={[styles.screen, styles.updateHold]}>
+        <StatusBar style="light" />
+        <UpdateNotice mode="force" />
+      </View>
+    );
   }
 
   if (!credentials) {
@@ -844,7 +858,7 @@ export default function TableScreen() {
         onAction={(action, chips) => act(action, chips)}
       />
       <View style={{ paddingBottom: insets.bottom, backgroundColor: "#090b16" }}>
-        <View style={styles.ad}>{tableAdAllowed(state) ? <AdBanner /> : null}</View>
+        {showAd ? <View style={styles.ad}><AdBanner /></View> : null}
       </View>
     </View>
   );
@@ -852,6 +866,7 @@ export default function TableScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#090b16", ...(Platform.OS === "web" ? null : { direction: "ltr" as const }) },
+  updateHold: { justifyContent: "center", paddingHorizontal: 22 },
   players: { flex: 1, alignItems: "center", justifyContent: "space-between", paddingBottom: 28 },
   player: { alignItems: "center", gap: 8, maxWidth: 160 },
   bgColumn: { flex: 1, justifyContent: "space-between", paddingBottom: 64 },

@@ -14,7 +14,12 @@ import { router } from "./routes.js";
 import { attachCluster } from "./cluster.js";
 import { attachSockets } from "./sockets.js";
 import { installAnalytics, startAnalytics, stopAnalytics } from "./events/install.js";
+import { setNameExtras } from "./name.js";
+import { publicConfig } from "./publicConfig.js";
 import { connectRedis, flushTables, redis, stopStore, subscriber } from "./store.js";
+
+const config = publicConfig();
+setNameExtras(config.names.embedded, config.names.words);
 
 installAnalytics();
 await connectRedis();
@@ -95,6 +100,9 @@ app.get("/join", (req, res) => {
   if (/Android/i.test(navigator.userAgent)) open.href = intent;
   location.replace(/Android/i.test(navigator.userAgent) ? intent : app);
 </script>`);
+});
+app.get("/api/config", (_req, res) => {
+  res.json(publicConfig());
 });
 app.use("/api/games", router);
 

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import mobileAds, { BannerAd, BannerAdSize, TestIds } from "react-native-google-mobile-ads";
-
-const bannerUnitId = process.env.EXPO_PUBLIC_ADMOB_BANNER_ID ?? TestIds.BANNER;
+import { useRemoteConfig } from "@/game/UpdateNotice";
 
 let started: Promise<unknown> | null = null;
 
@@ -11,6 +10,8 @@ function startAds() {
 }
 
 export function AdBannerView() {
+  const config = useRemoteConfig();
+  const unitId = config.ads.bannerUnitId || process.env.EXPO_PUBLIC_ADMOB_BANNER_ID || TestIds.BANNER;
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -24,5 +25,5 @@ export function AdBannerView() {
   }, []);
 
   if (!ready) return null;
-  return <BannerAd unitId={bannerUnitId} size={BannerAdSize.BANNER} />;
+  return <BannerAd key={unitId} unitId={unitId} size={BannerAdSize.BANNER} />;
 }

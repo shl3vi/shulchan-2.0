@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nameProblem } from "./name.js";
+import { nameProblem, setNameExtras } from "./name.js";
 import { chooseSeat } from "./seats.js";
 
 test("a normal name is kept and a slur is refused", () => {
@@ -14,6 +14,15 @@ test("a normal name is kept and a slur is refused", () => {
   assert.equal(nameProblem("ass"), "blocked");
   assert.equal(nameProblem(""), "length");
   assert.equal(nameProblem("a".repeat(25)), "length");
+});
+
+test("a remote word is refused and a built-in word stays refused", () => {
+  setNameExtras(["watermelon"], ["zz"]);
+  assert.equal(nameProblem("watermelon"), "blocked");
+  assert.equal(nameProblem("zz"), "blocked");
+  assert.equal(nameProblem("Shahar"), null);
+  assert.equal(nameProblem("ass"), "blocked");
+  setNameExtras([], []);
 });
 
 test("a blocked neighbor is seated across the table when a chair is free", () => {

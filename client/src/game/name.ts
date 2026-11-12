@@ -8,6 +8,15 @@ const EMBEDDED = [
 
 const WORDS = ["ass", "sex", "cum", "fag", "tit", "hoe", "זין", "כוס"];
 
+let extraEmbedded: string[] = [];
+let extraWords: string[] = [];
+
+/** Words from remote config, checked the same way as the list above. */
+export function setNameExtras(embedded: string[], words: string[]) {
+  extraEmbedded = embedded.map(compact).filter((term) => term.length >= 2);
+  extraWords = words.map(compact).filter((term) => term.length >= 2);
+}
+
 function fold(value: string) {
   return value
     .normalize("NFKD")
@@ -37,8 +46,10 @@ export function blockedName(raw: string) {
   const flat = compact(raw);
   if (!flat) return false;
   if (EMBEDDED.some((term) => flat.includes(term))) return true;
+  if (extraEmbedded.some((term) => flat.includes(term))) return true;
   const parts = new Set(tokens(raw));
-  return WORDS.some((term) => parts.has(term) || flat === term);
+  return WORDS.some((term) => parts.has(term) || flat === term)
+    || extraWords.some((term) => parts.has(term) || flat === term);
 }
 
 export type NameProblem = "length" | "blocked";

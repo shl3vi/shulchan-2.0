@@ -6,6 +6,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useGameSession } from "@/game/GameSession";
 import { nameProblem, playerName } from "@/game/name";
+import { updateMode } from "@/game/remoteConfig";
+import { UpdateNotice, useRemoteConfig } from "@/game/UpdateNotice";
 import { isRtl, t } from "@/i18n";
 
 // Short codes are uppercase; older tables still use lowercase UUIDs.
@@ -26,14 +28,18 @@ export default function JoinScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const align = isRtl() ? "right" : "left";
+  useRemoteConfig();
+  const mode = updateMode();
   const seatedName = playerName(name);
   const ready = seatedName != null && game.trim().length > 0 && password.trim().length > 0;
 
   useEffect(() => {
+    if (mode === "force") return;
     if (session.ready && session.credentials) router.replace("/table");
-  }, [router, session.credentials, session.ready]);
+  }, [mode, router, session.credentials, session.ready]);
 
   async function sit() {
+    if (updateMode() === "force") return;
     if (session.credentials) {
       router.replace("/table");
       return;
@@ -64,6 +70,8 @@ export default function JoinScreen() {
         </Pressable>
       )}
       <Text style={styles.mark}>{invite ? t("invited") : t("joinTable")}</Text>
+      {mode === "force" ? <UpdateNotice mode="force" /> : (
+      <>
       <Text style={styles.tag}>{invite ? t("takeASeat") : t("joinWithCode")}</Text>
       <View style={styles.felt}>
         {invite ? null : (
@@ -104,6 +112,8 @@ export default function JoinScreen() {
         </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
+      </>
+      )}
     </View>
   );
 }

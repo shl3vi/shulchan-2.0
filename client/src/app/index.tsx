@@ -12,6 +12,8 @@ import { hostSession, redeemHostCode, signInUrl, signInWithApple } from "@/game/
 import { useGameSession } from "@/game/GameSession";
 import { loadHost, saveHost, type Host } from "@/game/hostStore";
 import { nameProblem, playerName } from "@/game/name";
+import { updateMode } from "@/game/remoteConfig";
+import { UpdateNotice, useRemoteConfig } from "@/game/UpdateNotice";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
 import { isRtl, t } from "@/i18n";
 
@@ -123,6 +125,12 @@ export default function HomeScreen() {
   const [joining, setJoining] = useState(false);
   const [kind, setKind] = useState<"poker" | "backgammon" | null>(null);
   const [autoDeal, setAutoDeal] = useState(true);
+  const autoDealTouched = useRef(false);
+  const config = useRemoteConfig();
+  const mode = updateMode();
+  useEffect(() => {
+    if (!autoDealTouched.current) setAutoDeal(config.poker.autoDealDefault);
+  }, [config]);
   const [joinGame, setJoinGame] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
   const [joinName, setJoinName] = useState("");
@@ -226,6 +234,7 @@ export default function HomeScreen() {
   }
 
   async function sit() {
+    if (updateMode() === "force") return;
     const seatedName = playerName(joinName);
     if (!seatedName || joinGame.trim().length === 0 || joinPassword.trim().length === 0) {
       setJoinError(nameProblem(joinName) === "blocked" ? t("nameRejected") : t("nameLength"));
@@ -245,6 +254,7 @@ export default function HomeScreen() {
   }
 
   async function create(nextKind: "poker" | "backgammon" = "poker") {
+    if (updateMode() === "force") return;
     const seatedName = playerName(name);
     if (!seatedName) {
       setNameMissing(true);
@@ -312,6 +322,7 @@ export default function HomeScreen() {
           <Text style={styles.mark}>LOOCHKA</Text>
         </View>
         <Text style={styles.tag}>{t("tagline")}</Text>
+        {config.announcement ? <Text style={styles.announcement}>{config.announcement}</Text> : null}
         <View style={styles.heroArt}>
           <View style={styles.heroHalo} />
           <View style={[styles.gameTile, styles.gameTileLeft]}>
@@ -341,7 +352,8 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       ) : null}
-      {seated ? (
+      {mode === "ok" ? null : <UpdateNotice mode={mode} />}
+      {mode === "force" ? null : seated ? (
         <Pressable
           style={({ pressed }) => [styles.return, pressed && styles.buttonPressed]}
           onPress={() => router.push("/table")}
@@ -357,6 +369,7 @@ export default function HomeScreen() {
           <Ionicons name={isRtl() ? "arrow-back" : "arrow-forward"} size={22} color="#2a130a" />
         </Pressable>
       ) : null}
+      {mode === "force" ? null : (
       <Pressable
         style={({ pressed }) => [
           styles.joinCode,
@@ -381,7 +394,8 @@ export default function HomeScreen() {
           style={styles.actionArrow}
         />
       </Pressable>
-      {creating && !host ? (
+      )}
+      {mode !== "force" && creating && !host ? (
         <View style={styles.signIn}>
           <Text style={[styles.signInHint, { textAlign: align }]}>{t("signInToCreate")}</Text>
           <View style={styles.signInChoices}>
@@ -409,7 +423,7 @@ export default function HomeScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : null}
-      {creating && host && kind == null ? (
+      {mode !== "force" && creating && host && kind == null ? (
         <View style={[styles.kindGrid, isRtl() && styles.kindGridRtl]}>
           <Pressable
             style={styles.kindCard}
@@ -428,7 +442,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       ) : null}
-      {creating && host && (kind === "poker" || kind === "backgammon") ? (
+      {mode !== "force" && creating && host && (kind === "poker" || kind === "backgammon") ? (
         <View style={[styles.felt, seated && styles.feltOff]}>
           <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
           <TextInput
@@ -452,7 +466,10 @@ export default function HomeScreen() {
           <ChipRow values={BUY_INS} selected={buyIn} minimum={11} onSelect={setBuyIn} onValidity={setBuyInOk} />
           <Pressable
             style={[styles.autoDeal, isRtl() && styles.autoDealRtl]}
-            onPress={() => setAutoDeal((on) => !on)}
+            onPress={() => {
+              autoDealTouched.current = true;
+              setAutoDeal((on) => !on);
+            }}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: autoDeal }}
           >
@@ -474,8 +491,8 @@ export default function HomeScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : null}
-      {error && !creating ? <Text style={styles.error}>{error}</Text> : null}
-      {seated ? null : (
+      {mode !== "force" && error && !creating ? <Text style={styles.error}>{error}</Text> : null}
+      {mode === "force" || seated ? null : (
         <Pressable
           style={({ pressed }) => [
             styles.joinCode,
@@ -502,7 +519,7 @@ export default function HomeScreen() {
           />
         </Pressable>
       )}
-      {joining && !seated ? (
+      {mode !== "force" && joining && !seated ? (
         <View style={styles.felt}>
           <Text style={[styles.label, { textAlign: align }]}>{t("tableId")}</Text>
           <TextInput
@@ -678,6 +695,14 @@ const styles = StyleSheet.create({
   },
   mark: { color: "#f7f7fc", fontSize: 31, fontWeight: "900", letterSpacing: 3.4, textAlign: "center" },
   tag: { color: "#a6a8b8", textAlign: "center", marginTop: 10, fontSize: 15, letterSpacing: 0.15 },
+  announcement: {
+    color: "#f6d36b",
+    textAlign: "center",
+    marginTop: 14,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "700",
+  },
   heroArt: { width: "100%", height: 118, marginTop: 16, alignItems: "center", justifyContent: "center" },
   heroHalo: {
     position: "absolute",
