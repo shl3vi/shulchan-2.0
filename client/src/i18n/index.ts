@@ -17,6 +17,7 @@ const catalogs = {
     hello: "Hello, {name}",
     logout: "Log out",
     settings: "Settings",
+    language: "Language",
     account: "Account",
     noAccountConnected: "No account connected",
     signInToManageAccount: "Sign in when opening a table to manage your account here.",
@@ -186,6 +187,7 @@ const catalogs = {
     hello: "שלום, {name}",
     logout: "יציאה",
     settings: "הגדרות",
+    language: "שפה",
     account: "חשבון",
     noAccountConnected: "אין חשבון מחובר",
     signInToManageAccount: "כדי לנהל כאן את החשבון, התחברו בזמן פתיחת שולחן.",
@@ -355,6 +357,7 @@ const catalogs = {
     hello: "Hola, {name}",
     logout: "Salir",
     settings: "Ajustes",
+    language: "Idioma",
     account: "Cuenta",
     noAccountConnected: "No hay ninguna cuenta conectada",
     signInToManageAccount: "Inicia sesión al abrir una mesa para gestionar tu cuenta aquí.",
@@ -524,6 +527,7 @@ const catalogs = {
     hello: "Здравствуйте, {name}",
     logout: "Выйти",
     settings: "Настройки",
+    language: "Язык",
     account: "Аккаунт",
     noAccountConnected: "Аккаунт не подключён",
     signInToManageAccount: "Войдите при открытии стола, чтобы управлять аккаунтом здесь.",
@@ -693,6 +697,7 @@ const catalogs = {
     hello: "مرحباً، {name}",
     logout: "تسجيل الخروج",
     settings: "الإعدادات",
+    language: "اللغة",
     account: "الحساب",
     noAccountConnected: "لا يوجد حساب متصل",
     signInToManageAccount: "سجّل الدخول عند فتح طاولة لإدارة حسابك من هنا.",
@@ -876,7 +881,16 @@ export function subscribeLocale(listener: () => void) {
 }
 
 export async function loadLocale() {
-  chosen = "en";
+  try {
+    const { default: AsyncStorage } = await import("@react-native-async-storage/async-storage");
+    const saved = await AsyncStorage.getItem("shulchan.locale");
+    if (saved && (LOCALES as readonly string[]).includes(saved)) {
+      chosen = saved as Locale;
+      listeners.forEach((listener) => listener());
+    }
+  } catch {
+    // Keep the default until the player chooses a language.
+  }
 }
 
 export async function setLocale(next: Locale) {

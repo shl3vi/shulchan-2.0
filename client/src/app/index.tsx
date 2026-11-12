@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as AppleAuthentication from "expo-apple-authentication";
@@ -15,7 +15,7 @@ import { nameProblem, playerName } from "@/game/name";
 import { updateMode } from "@/game/remoteConfig";
 import { UpdateNotice, useRemoteConfig } from "@/game/UpdateNotice";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
-import { isRtl, t } from "@/i18n";
+import { isRtl, LOCALES, LOCALE_LABEL, locale, setLocale, subscribeLocale, t } from "@/i18n";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -137,6 +137,8 @@ export default function HomeScreen() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const currentLocale = useSyncExternalStore(subscribeLocale, locale, locale);
   const nameInput = useRef<TextInput>(null);
 
   function normalizeCode(code: string) {
@@ -566,23 +568,44 @@ export default function HomeScreen() {
         transparent
         animationType="slide"
         statusBarTranslucent
-        onRequestClose={() => setSettingsOpen(false)}
+        onRequestClose={() => {
+          setLanguageOpen(false);
+          setSettingsOpen(false);
+        }}
       >
-        <Pressable style={styles.settingsBackdrop} onPress={() => setSettingsOpen(false)}>
+        <Pressable style={styles.settingsBackdrop} onPress={() => {
+          setLanguageOpen(false);
+          setSettingsOpen(false);
+        }}>
           <Pressable
             style={[styles.settingsSheet, { paddingBottom: Math.max(insets.bottom, 18) }]}
             onPress={() => {}}
           >
             <View style={[styles.settingsHeader, isRtl() && styles.settingsHeaderRtl]}>
               <View style={styles.settingsTitleRow}>
-                <View style={styles.settingsTitleIcon}>
-                  <Ionicons name="settings-outline" size={20} color="#c8ceff" />
-                </View>
-                <Text style={styles.settingsTitle}>{t("settings")}</Text>
+                {languageOpen ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.settingsClose, pressed && styles.buttonPressed]}
+                    onPress={() => setLanguageOpen(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("cancel")}
+                    hitSlop={8}
+                  >
+                    <Ionicons name={isRtl() ? "chevron-forward" : "chevron-back"} size={22} color="#c7c9d9" />
+                  </Pressable>
+                ) : (
+                  <View style={styles.settingsTitleIcon}>
+                    <Ionicons name="settings-outline" size={20} color="#c8ceff" />
+                  </View>
+                )}
+                <Text style={styles.settingsTitle}>{languageOpen ? t("language") : t("settings")}</Text>
               </View>
               <Pressable
                 style={({ pressed }) => [styles.settingsClose, pressed && styles.buttonPressed]}
-                onPress={() => setSettingsOpen(false)}
+                onPress={() => {
+                  setLanguageOpen(false);
+                  setSettingsOpen(false);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={t("cancel")}
                 hitSlop={8}
@@ -591,6 +614,21 @@ export default function HomeScreen() {
               </Pressable>
             </View>
             <View style={styles.accountCard}>
+              {languageOpen ? LOCALES.map((code, index) => (
+                <View key={code}>
+                  {index > 0 ? <View style={styles.accountDivider} /> : null}
+                  <Pressable
+                    style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+                    onPress={() => void setLocale(code)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: code === currentLocale }}
+                  >
+                    <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{LOCALE_LABEL[code]}</Text>
+                    {code === currentLocale ? <Ionicons name="checkmark" size={18} color="#a8b2ff" /> : null}
+                  </Pressable>
+                </View>
+              )) : null}
+              {languageOpen ? null : <>
               <Pressable
                 style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
                 onPress={() => openSettingsPage("/profile")}
@@ -619,6 +657,16 @@ export default function HomeScreen() {
                 <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("legal")}</Text>
                 <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
               </Pressable>
+              <View style={styles.accountDivider} />
+              <Pressable
+                style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+                onPress={() => setLanguageOpen(true)}
+              >
+                <Ionicons name="language-outline" size={20} color="#a8b2ff" />
+                <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("language")}</Text>
+                <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
+              </Pressable>
+              </>}
             </View>
           </Pressable>
         </Pressable>
