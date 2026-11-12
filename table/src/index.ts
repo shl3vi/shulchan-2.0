@@ -5,7 +5,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
 import { APP_SCHEME, authRouter } from "./auth.js";
-import { SUPPORT_EMAIL } from "./safety.js";
 import { debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
 import { pool } from "./db.js";
 import { enginesReady } from "./engine.js";
@@ -31,6 +30,9 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
+const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
+// Ahead of rateLimit: one page load fetches a dozen images, and they would spend the same budget as the app's API calls.
+app.use("/assets", express.static(join(publicDir, "assets"), { maxAge: "1d", fallthrough: false }));
 app.use(cors);
 app.use(rateLimit);
 app.use(express.json({ limit: "8kb" }));
@@ -47,7 +49,6 @@ async function answers(run: () => Promise<unknown>) {
   }
 }
 
-const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
 function page(file: string) {
   return (_req: Request, res: Response) => {
     res.sendFile(join(publicDir, file));
@@ -56,6 +57,7 @@ function page(file: string) {
 app.get("/", page("index.html"));
 app.get("/privacy", page("privacy.html"));
 app.get("/account", page("account.html"));
+app.get("/support", page("support.html"));
 app.get("/health", async (_req, res) => {
   const [redisOk, postgresOk, engines] = await Promise.all([
     answers(() => redis.ping()),
@@ -64,19 +66,6 @@ app.get("/health", async (_req, res) => {
   ]);
   const ok = redisOk && postgresOk && engines.poker && engines.backgammon;
   res.status(ok ? 200 : 503).json({ ok, redis: redisOk, postgres: postgresOk, ...engines });
-});
-app.get("/support", (_req, res) => {
-  res.type("html").send(`<!doctype html>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LOOCHKA support</title>
-<style>
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #07110d; color: #fafaf9; font-family: sans-serif; }
-  a { color: #f6d36b; }
-</style>
-<main>
-  <h1>LOOCHKA</h1>
-  <p>Questions and player reports go to <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
-</main>`);
 });
 app.get("/join", (req, res) => {
   const game = String(req.query.game ?? "");
