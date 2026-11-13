@@ -29,7 +29,7 @@ function cancelAutoDeal(tableId: string) {
 export async function considerAutoDeal(tableId: string) {
   try {
     const table = await readTable(tableId);
-    if (!table || table.kind === "backgammon" || table.autoDeal !== true) {
+    if (!table || table.kind === "backgammon" || table.autoDeal !== true || table.paused || table.closing || table.idleCloseAt) {
       cancelAutoDeal(tableId);
       return;
     }
@@ -47,7 +47,7 @@ export async function considerAutoDeal(tableId: string) {
 async function dealIfWaiting(tableId: string) {
   try {
     const mark = await withTable(tableId, async (current) => {
-      if (current.kind === "backgammon" || current.autoDeal !== true) return null;
+      if (current.kind === "backgammon" || current.autoDeal !== true || current.paused || current.closing || current.idleCloseAt) return null;
       const view = await readPoker(current);
       if (view.round) return null;
       const started = await startPoker(current);

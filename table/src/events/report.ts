@@ -25,7 +25,7 @@ export function reportCaught(tableId: string | undefined, error: unknown, route:
     reportError({ area: "forbidden", tableId, route, kind });
     return;
   }
-  if (message.startsWith("Buy-in")) {
+  if (message === "Table is paused" || message === "Table is closing" || message.startsWith("Buy-in")) {
     reportError({ area: "validation", tableId, route, kind });
     return;
   }

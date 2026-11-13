@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { considerAutoDeal } from "./autodeal.js";
 import { createPokerTable, readPoker, seatPoker } from "./engine.js";
-import { liveKitToken, VideoUnavailable } from "./livekit.js";
+import { liveKitToken, mediaRoom, VideoUnavailable } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
 import { nameProblem, playerName } from "./name.js";
@@ -13,7 +13,7 @@ import { openTable, noteJoinRefused, notePlayers, noteVideo } from "./events/led
 import { reportError, reportCaught } from "./events/report.js";
 import { sameSecret, seatedCount, tablePassword } from "./players.js";
 import { clearPasswordFailures, noteWrongPassword, passwordRetryAfter } from "./password.js";
-import { insertTable, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
+import { HostTableLimit, insertHostTable, OPEN_TABLE_CAP, openTableCount, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
 // No 0/O or 1/I, so a code read aloud or copied by hand still matches.
@@ -48,6 +48,10 @@ router.post("/", async (req, res) => {
     res.status(400).json({ error: "buyIn must be at least two big blinds" });
     return;
   }
+  if (await openTableCount(host.email) >= OPEN_TABLE_CAP) {
+    res.status(429).json({ error: "You already have two tables open" });
+    return;
+  }
   const table: TableRecord = {
     id: tableCode(),
     adminSecret: crypto.randomUUID(),
@@ -56,15 +60,20 @@ router.post("/", async (req, res) => {
     password: tablePassword(),
     hostEmail: host.email,
     kind: body.kind === "backgammon" ? "backgammon" : "poker",
+    lastActivityAt: Date.now(),
     ...(body.kind !== "backgammon" && body.autoDeal ? { autoDeal: true } : {}),
     players: [],
   };
   const view = await createPokerTable(table, smallBlind);
   if (body.kind === "backgammon") table.backgammon = await openingBackgammon();
   try {
-    while (!(await insertTable(table))) table.id = tableCode();
+    while (!(await insertHostTable(table))) table.id = tableCode();
     await openTable(table.id, table.kind ?? "poker");
   } catch (error) {
+    if (error instanceof HostTableLimit) {
+      res.status(429).json({ error: error.message });
+      return;
+    }
     reportError({ area: "store", op: "create" });
     throw error;
   }
@@ -105,6 +114,7 @@ router.post("/:id/join", async (req, res) => {
     const retry = await passwordRetryAfter(id, ip).catch(() => 0);
     if (retry > 0) throw new JoinRefused(429, "Too many password attempts", retry);
     const joined = await withTable(id, async (table) => {
+      if (table.closing) throw new JoinRefused(409, "Table is closing");
       if (!sameSecret(password, table.password)) throw new JoinRefused(403, "Wrong password");
       const taken = table.players.map((player) => player.seat);
       const avoid = await avoidSeats(personKey, table.players).catch(() => []);
@@ -164,8 +174,22 @@ router.post("/:id/livekit", async (req, res) => {
     res.status(401).json({ error: "Invalid player" });
     return;
   }
+  if (table.paused || table.closing) {
+    res.status(403).json({ error: "Table is paused" });
+    return;
+  }
   try {
-    res.json(await liveKitToken(table.id, player.id, player.name));
+    const fresh = await readTable(table.id);
+    const still = fresh?.players.find((seat) => sameSecret(playerId, seat.id) && sameSecret(secret, seat.secret));
+    if (!fresh || !still) {
+      res.status(401).json({ error: "Invalid player" });
+      return;
+    }
+    if (fresh.paused || fresh.closing) {
+      res.status(403).json({ error: "Table is paused" });
+      return;
+    }
+    res.json(await liveKitToken(mediaRoom(fresh.id, fresh.mediaEpoch), still.id, still.name));
     await noteVideo(table.id);
   } catch (error) {
     if (error instanceof VideoUnavailable) reportError({ area: "video", route: "livekit", tableId: table.id, kind: table.kind ?? "poker" });

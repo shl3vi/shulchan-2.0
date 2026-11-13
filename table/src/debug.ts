@@ -137,6 +137,11 @@ async function resetTable(config: DebugConfig) {
     table.players = [];
     delete table.adminId;
     delete table.adminSecret;
+    delete table.paused;
+    delete table.idleCarry;
+    delete table.idleCloseAt;
+    delete table.closing;
+    table.lastActivityAt = Date.now();
   });
   await publishTable(config.tableId);
 }

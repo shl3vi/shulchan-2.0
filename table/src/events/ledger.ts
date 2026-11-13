@@ -25,7 +25,7 @@ async function save(id: string, tally: Tally) {
   }
 }
 
-function summary(id: string, tally: Tally, endReason: "closed" | "expired") {
+function summary(id: string, tally: Tally, endReason: "closed" | "expired" | "idle") {
   publish({
     name: "session.summary",
     tableId: id,
@@ -43,7 +43,7 @@ function summary(id: string, tally: Tally, endReason: "closed" | "expired") {
   });
 }
 
-async function finish(id: string, tally: Tally, endReason: "closed" | "expired") {
+async function finish(id: string, tally: Tally, endReason: "closed" | "expired" | "idle") {
   summary(id, tally, endReason);
   try {
     await redis.del(key(id));
@@ -113,6 +113,11 @@ export async function summarizeExpired(ids: string[]) {
     const tally = await load(id);
     if (tally) await finish(id, tally, "expired");
   }
+}
+
+export async function summarizeIdle(id: string) {
+  const tally = await load(id);
+  if (tally) await finish(id, tally, "idle");
 }
 
 export async function dropLedger(id: string) {

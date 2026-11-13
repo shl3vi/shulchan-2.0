@@ -11,6 +11,7 @@ import { enginesReady } from "./engine.js";
 import { allowedOrigins, cors, rateLimit } from "./http.js";
 import { router } from "./routes.js";
 import { attachCluster } from "./cluster.js";
+import { startIdleWatch, stopIdleWatch } from "./idleWatch.js";
 import { attachSockets } from "./sockets.js";
 import { installAnalytics, startAnalytics, stopAnalytics } from "./events/install.js";
 import { setNameExtras } from "./name.js";
@@ -33,6 +34,19 @@ app.use(helmet({
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
 // Ahead of rateLimit: one page load fetches a dozen images, and they would spend the same budget as the app's API calls.
 app.use("/assets", express.static(join(publicDir, "assets"), { maxAge: "1d", fallthrough: false }));
+const icons = new Set([
+  "apple-touch-icon.png",
+  "favicon-96x96.png",
+  "favicon.ico",
+  "site.webmanifest",
+  "web-app-manifest-192x192.png",
+  "web-app-manifest-512x512.png",
+]);
+app.get([...icons].map((name) => `/${name}`), (req, res, next) => {
+  res.sendFile(join(publicDir, req.path.slice(1)), { maxAge: "7d" }, (err) => {
+    if (err) next(err);
+  });
+});
 app.use(cors);
 app.use(rateLimit);
 app.use(express.json({ limit: "8kb" }));
@@ -76,6 +90,9 @@ app.get("/join", (req, res) => {
   res.type("html").send(`<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Join the table</title>
+<link rel="icon" type="image/png" href="/assets/favicon-96x96.png" sizes="96x96">
+<link rel="shortcut icon" href="/assets/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon-kit.png">
 <style>
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #07110d; color: #fafaf9; font-family: sans-serif; }
   a { display: inline-block; margin-top: 16px; background: #f6d36b; color: #1c1917; text-decoration: none; font-weight: 800; padding: 14px 22px; border-radius: 999px; }
@@ -110,6 +127,7 @@ const io = new Server(httpServer, {
 });
 const closeCluster = await attachCluster(io);
 attachSockets(io);
+startIdleWatch(io);
 
 const port = Number(process.env.PORT ?? 4000);
 httpServer.listen(port, "0.0.0.0", () => {
@@ -125,6 +143,7 @@ async function shutdown() {
   io.close();
   await Promise.race([closed, new Promise((resolve) => setTimeout(resolve, 8000))]);
   await closeCluster();
+  stopIdleWatch();
   stopStore();
   await flushTables();
   await stopAnalytics();

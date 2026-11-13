@@ -30,6 +30,17 @@ export type TableRecord = {
   pokerView?: EngineView;
   /** Bumped on every saved change, so a restart cannot revive an older hand. */
   revision?: number;
+  /** Server time of the last real game action. The idle fuse is measured from here. */
+  lastActivityAt?: number;
+  /** Admin pause. Video is off and the idle fuse is frozen, not reset. */
+  paused?: boolean;
+  idleCarry?: number;
+  /** Server time at which an idle table closes. Absent unless the warning is showing. */
+  idleCloseAt?: number;
+  /** Set once the idle fuse has burned out, so a late action cannot save the table. */
+  closing?: boolean;
+  /** Bumped on each pause so a token issued before the pause cannot rejoin. */
+  mediaEpoch?: number;
   players: SeatPlayer[];
 };
 
@@ -146,6 +157,50 @@ export async function writeTable(table: TableRecord) {
   if (saved.rowCount !== 1) throw new TableNotFound();
 }
 
+export const OPEN_TABLE_CAP = 2;
+
+export async function openTableCount(email: string) {
+  const open = await pool.query<{ count: string }>(
+    "SELECT count(*)::text AS count FROM tables WHERE expires_at > now() AND record->>'hostEmail' = $1",
+    [email],
+  );
+  return Number(open.rows[0]?.count ?? 0);
+}
+
+export class HostTableLimit extends Error {
+  constructor() {
+    super("You already have two tables open");
+  }
+}
+
+/** One host cannot pass the cap twice at the same moment. The lock covers the count and the insert. */
+export async function insertHostTable(table: TableRecord) {
+  const email = table.hostEmail ?? "";
+  const client = await pool.connect();
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtext($1))", [`open-tables:${email}`]);
+    if (await openTableCount(email) >= OPEN_TABLE_CAP) throw new HostTableLimit();
+    table.revision = 1;
+    const saved = await client.query(
+      `INSERT INTO tables (id, kind, record, expires_at)
+       VALUES ($1, $2, $3::jsonb, now() + make_interval(secs => $4::int))
+       ON CONFLICT (id) DO UPDATE
+         SET kind = EXCLUDED.kind,
+             record = EXCLUDED.record,
+             created_at = now(),
+             expires_at = EXCLUDED.expires_at,
+             updated_at = now()
+         WHERE tables.expires_at <= now()
+       RETURNING id`,
+      [table.id, table.kind ?? "poker", JSON.stringify(table), TABLE_TTL_MS / 1000],
+    );
+    return saved.rowCount === 1;
+  } finally {
+    await client.query("SELECT pg_advisory_unlock(hashtext($1))", [`open-tables:${email}`]).catch(() => undefined);
+    client.release();
+  }
+}
+
 export async function insertTable(table: TableRecord) {
   table.revision = 1;
   const saved = await pool.query(
@@ -215,6 +270,26 @@ export async function deleteHostAccount(email: string, token: string) {
   if (ids.length > 0) await onExpired(ids);
 }
 
+export async function listOpenTables() {
+  const found = await pool.query<{ id: string; record: TableRecord }>(
+    "SELECT id, record FROM tables WHERE expires_at > now()",
+  );
+  return found.rows;
+}
+
+/** A paused table is meant to stay. Refresh it only as its existing lifetime runs down. */
+export async function extendPausedTables() {
+  await pool.query(
+    `UPDATE tables
+     SET expires_at = now() + make_interval(secs => $1::int)
+     WHERE expires_at > now()
+       AND expires_at < now() + interval '10 minutes'
+       AND record->>'paused' = 'true'
+       AND COALESCE(record->>'closing', '') <> 'true'`,
+    [TABLE_TTL_MS / 1000],
+  );
+}
+
 export async function removeTable(id: string) {
   const deleted = await pool.query<{ email: string | null }>(
     `DELETE FROM tables WHERE id = $1 RETURNING record->>'hostEmail' AS email`,
@@ -241,6 +316,9 @@ async function expireTables() {
   await onExpired(expired.rows.map((row) => row.id));
 }
 
+/** Returned from withTable's callback when the record must not be written. */
+export const TABLE_UNCHANGED = Symbol("table-unchanged");
+
 const releaseLock = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) end return 0`;
 
 export class TableNotFound extends Error {
@@ -259,6 +337,7 @@ export async function withTable<T>(id: string, run: (table: TableRecord) => Prom
         const table = await readTable(id);
         if (!table) throw new TableNotFound();
         const result = await run(table);
+        if (result === TABLE_UNCHANGED) return result;
         await writeTable(table);
         return result;
       } finally {

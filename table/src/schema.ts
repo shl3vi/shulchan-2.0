@@ -82,6 +82,10 @@ export const autoDealBody = z.object({
   enabled: z.boolean(),
 }).strict();
 
+export const pauseBody = z.object({
+  paused: z.boolean(),
+}).strict();
+
 export function readSchema<T>(schema: z.ZodType<T>, body: unknown): T | null {
   const parsed = schema.safeParse(body);
   return parsed.success ? parsed.data : null;

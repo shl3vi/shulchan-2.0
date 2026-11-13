@@ -31,7 +31,7 @@ export default function RootLayout() {
 function Shell() {
   const { ready } = useGameSession();
   const [langReady, setLangReady] = useState(false);
-  useSyncExternalStore(subscribeLocale, locale, locale);
+  const currentLocale = useSyncExternalStore(subscribeLocale, locale, locale);
   useEffect(() => {
     void loadLocale().finally(() => setLangReady(true));
     void loadRemoteConfig();
@@ -39,7 +39,7 @@ function Shell() {
   // Keep the native splash image visible until the seat check finishes.
   // A painted view here would cover that image with another color.
   if (!ready || !langReady) return <View style={styles.hold} />;
-  return <AppStack />;
+  return <AppStack key={currentLocale} />;
 }
 
 function AppStack() {

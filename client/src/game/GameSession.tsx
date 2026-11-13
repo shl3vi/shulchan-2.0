@@ -25,6 +25,7 @@ type GameSessionValue = {
   transferAdmin: (playerId: string) => void;
   startHand: () => void;
   setAutoDeal: (enabled: boolean) => void;
+  setPaused: (paused: boolean) => void;
   act: (action: string, amount?: number) => void;
   rebuy: (amount: number) => void;
   emit: (event: string, body: unknown) => void;
@@ -86,6 +87,11 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       remember(null);
       setState(null);
       setError(t("leftTable"));
+    });
+    next.on("closed", (payload: { reason?: string }) => {
+      remember(null);
+      setState(null);
+      setError(payload?.reason === "idle" ? t("tableClosedIdle") : t("leftTable"));
     });
     next.on("error", (payload: { message?: string }) => {
       if (payload.message === "Invalid connection") {
@@ -152,6 +158,10 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       setAutoDeal(enabled) {
         if (!state?.you?.isAdmin) return;
         socket?.emit("auto-deal", { enabled });
+      },
+      setPaused(paused) {
+        if (!state?.you?.isAdmin) return;
+        socket?.emit("pause", { paused });
       },
       act(action, amount) {
         socket?.emit("act", { action, amount });

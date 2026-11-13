@@ -17,6 +17,7 @@ const catalogs = {
     hello: "Hello, {name}",
     logout: "Log out",
     settings: "Settings",
+    language: "Language",
     account: "Account",
     noAccountConnected: "No account connected",
     signInToManageAccount: "Sign in when opening a table to manage your account here.",
@@ -165,6 +166,13 @@ const catalogs = {
     legalAccess: "If something in the app gets in the way, tell us what you were trying to do. We will answer, and when the screen itself cannot do it, we will arrange another way to get the same thing done. The standard we are working toward is Israeli Standard 5568, which follows WCAG 2.0 at level AA. A formal audit is not finished, so this is not a claim that every screen already meets that level. A few places we already know are harder: the poker and backgammon boards are drawn as a game, so a screen reader may not announce every chip or checker; camera and microphone have no text equivalent; banner ads come from another company.",
     legalAccessContact: "To ask for an adjustment, or to tell us something isn’t usable, write to",
     legalAccessUpdated: "Updated 10 November 2026.",
+    pauseTable: "Pause table",
+    resumeTable: "Resume",
+    tablePaused: "The table is paused. Cameras and microphones are off.",
+    tableClosing: "This table is closing.",
+    idleWarning: "No one has played for a while. Play a move, or the admin can pause the table. Otherwise it closes when the timer ends.",
+    idleClosesIn: "Closes in {time}",
+    tableClosedIdle: "This table was closed because nobody was playing.",
     updateTitle: "A newer version is ready",
     updateBody: "You can keep playing on this one.",
     updateForceTitle: "Update to play",
@@ -186,6 +194,7 @@ const catalogs = {
     hello: "שלום, {name}",
     logout: "יציאה",
     settings: "הגדרות",
+    language: "שפה",
     account: "חשבון",
     noAccountConnected: "אין חשבון מחובר",
     signInToManageAccount: "כדי לנהל כאן את החשבון, התחברו בזמן פתיחת שולחן.",
@@ -334,6 +343,13 @@ const catalogs = {
     legalAccess: "אם משהו באפליקציה מפריע, ספרו מה ניסיתם לעשות. נענה, וכשהמסך עצמו לא יכול לבצע את הפעולה, נסדר דרך אחרת להשיג את אותו דבר. התקן שאליו אנחנו עובדים הוא תקן ישראלי 5568, שמאמץ את WCAG 2.0 ברמה AA. ביקורת נגישות מסודרת עוד לא הושלמה, ולכן זו לא הצהרה שכל מסך כבר עומד ברמה הזו. כמה מקומות שכבר ידועים כקשים יותר: לוחות הפוקר והשש-בש מצוירים כמשחק, כך שקורא מסך עלול לא להקריא כל אסימון או אבן; למצלמה ולמיקרופון אין חלופת טקסט; באנר הפרסומת מגיע מחברה אחרת.",
     legalAccessContact: "כדי לבקש התאמה, או לספר שמשהו לא שמיש, כתבו אל",
     legalAccessUpdated: "עודכן ב-10 בנובמבר 2026.",
+    pauseTable: "השהיית השולחן",
+    resumeTable: "המשך",
+    tablePaused: "השולחן מושהה. המצלמות והמיקרופונים כבויים.",
+    tableClosing: "השולחן נסגר.",
+    idleWarning: "אף אחד לא שיחק כבר כמה דקות. עשו מהלך, או שהאדמין ישהה את השולחן. אחרת הוא ייסגר כשהטיימר ייגמר.",
+    idleClosesIn: "נסגר בעוד {time}",
+    tableClosedIdle: "השולחן נסגר כי אף אחד לא שיחק.",
     updateTitle: "יש גרסה חדשה",
     updateBody: "אפשר להמשיך לשחק בגרסה הזו.",
     updateForceTitle: "צריך לעדכן כדי לשחק",
@@ -355,6 +371,7 @@ const catalogs = {
     hello: "Hola, {name}",
     logout: "Salir",
     settings: "Ajustes",
+    language: "Idioma",
     account: "Cuenta",
     noAccountConnected: "No hay ninguna cuenta conectada",
     signInToManageAccount: "Inicia sesión al abrir una mesa para gestionar tu cuenta aquí.",
@@ -503,6 +520,13 @@ const catalogs = {
     legalAccess: "Si algo en la app se interpone, cuéntanos qué intentabas hacer. Responderemos y, cuando la pantalla misma no pueda hacerlo, buscaremos otra forma de conseguir lo mismo. El estándar al que apuntamos es la norma israelí 5568, que sigue WCAG 2.0 en el nivel AA. Aún no hay una auditoría formal, así que esto no afirma que cada pantalla ya alcance ese nivel. Algunos puntos que ya sabemos que son más difíciles: los tableros de póker y backgammon están dibujados como un juego, así que un lector de pantalla puede no anunciar cada ficha; la cámara y el micrófono no tienen equivalente en texto; los anuncios vienen de otra empresa.",
     legalAccessContact: "Para pedir un ajuste, o para decir que algo no se puede usar, escribe a",
     legalAccessUpdated: "Actualizado el 10 de noviembre de 2026.",
+    pauseTable: "Pausar la mesa",
+    resumeTable: "Reanudar",
+    tablePaused: "La mesa está en pausa. Las cámaras y los micrófonos están apagados.",
+    tableClosing: "La mesa se está cerrando.",
+    idleWarning: "Nadie ha jugado en un rato. Haced una jugada, o el admin puede pausar la mesa. Si no, se cierra cuando termine el tiempo.",
+    idleClosesIn: "Se cierra en {time}",
+    tableClosedIdle: "La mesa se cerró porque nadie estaba jugando.",
     updateTitle: "Hay una versión nueva",
     updateBody: "Puedes seguir jugando con esta.",
     updateForceTitle: "Actualiza para jugar",
@@ -524,6 +548,7 @@ const catalogs = {
     hello: "Здравствуйте, {name}",
     logout: "Выйти",
     settings: "Настройки",
+    language: "Язык",
     account: "Аккаунт",
     noAccountConnected: "Аккаунт не подключён",
     signInToManageAccount: "Войдите при открытии стола, чтобы управлять аккаунтом здесь.",
@@ -672,6 +697,13 @@ const catalogs = {
     legalAccess: "Если что-то в приложении мешает, напишите, что вы пытались сделать. Мы ответим, а если сам экран этого не позволяет, найдём другой способ получить тот же результат. Мы ориентируемся на израильский стандарт 5568, который следует WCAG 2.0 уровня AA. Формальный аудит не завершён, поэтому это не утверждение, что каждый экран уже соответствует этому уровню. Места, которые уже сложнее: доски покера и нардов нарисованы как игра, и программа чтения с экрана может не объявлять каждую фишку; у камеры и микрофона нет текстового аналога; баннеры приходят от другой компании.",
     legalAccessContact: "Чтобы попросить изменение или сообщить, что чем-то нельзя пользоваться, напишите на",
     legalAccessUpdated: "Обновлено 10 ноября 2026.",
+    pauseTable: "Пауза",
+    resumeTable: "Продолжить",
+    tablePaused: "Стол на паузе. Камеры и микрофоны выключены.",
+    tableClosing: "Стол закрывается.",
+    idleWarning: "Давно не было ходов. Сделайте ход, или админ может поставить стол на паузу. Иначе стол закроется, когда таймер дойдёт до нуля.",
+    idleClosesIn: "Закроется через {time}",
+    tableClosedIdle: "Стол закрыт, потому что никто не играл.",
     updateTitle: "Есть новая версия",
     updateBody: "На этой ещё можно играть.",
     updateForceTitle: "Обновите, чтобы играть",
@@ -693,6 +725,7 @@ const catalogs = {
     hello: "مرحباً، {name}",
     logout: "تسجيل الخروج",
     settings: "الإعدادات",
+    language: "اللغة",
     account: "الحساب",
     noAccountConnected: "لا يوجد حساب متصل",
     signInToManageAccount: "سجّل الدخول عند فتح طاولة لإدارة حسابك من هنا.",
@@ -841,6 +874,13 @@ const catalogs = {
     legalAccess: "إذا أعاقك شيء في التطبيق، أخبرنا بما كنت تحاول فعله. سنجيب، وإذا لم تستطع الشاشة نفسها ذلك سنرتّب طريقة أخرى للنتيجة نفسها. المعيار الذي نعمل نحوه هو المعيار الإسرائيلي 5568، الذي يتبع WCAG 2.0 بالمستوى AA. لم يكتمل تدقيق رسمي، لذا هذا ليس ادّعاءً بأن كل شاشة بلغت ذلك المستوى. أماكن نعرف أنها أصعب: لوحا البوكر والطاولة مرسومان كلعبة، وقد لا يعلن قارئ الشاشة كل رقاقة؛ الكاميرا والميكروفون بلا مقابل نصي؛ إعلانات الشريط تأتي من شركة أخرى.",
     legalAccessContact: "لطلب تعديل، أو للإخبار أن شيئاً غير قابل للاستخدام، اكتب إلى",
     legalAccessUpdated: "حُدّث في 10 نوفمبر 2026.",
+    pauseTable: "إيقاف مؤقت",
+    resumeTable: "استئناف",
+    tablePaused: "الطاولة متوقفة. الكاميرات والميكروفونات مغلقة.",
+    tableClosing: "الطاولة تُغلق.",
+    idleWarning: "لم يلعب أحد منذ مدة. العب حركة، أو يمكن للمشرف إيقاف الطاولة مؤقتًا. وإلا ستُغلق عندما ينتهي المؤقت.",
+    idleClosesIn: "تُغلق خلال {time}",
+    tableClosedIdle: "أُغلقت الطاولة لأن أحدًا لم يلعب.",
     updateTitle: "هناك إصدار أحدث",
     updateBody: "يمكنك متابعة اللعب بهذا الإصدار.",
     updateForceTitle: "حدّث التطبيق لتلعب",
@@ -876,7 +916,16 @@ export function subscribeLocale(listener: () => void) {
 }
 
 export async function loadLocale() {
-  chosen = "en";
+  try {
+    const { default: AsyncStorage } = await import("@react-native-async-storage/async-storage");
+    const saved = await AsyncStorage.getItem("shulchan.locale");
+    if (saved && (LOCALES as readonly string[]).includes(saved)) {
+      chosen = saved as Locale;
+      listeners.forEach((listener) => listener());
+    }
+  } catch {
+    // Keep the default until the player chooses a language.
+  }
 }
 
 export async function setLocale(next: Locale) {

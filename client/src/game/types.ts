@@ -37,6 +37,9 @@ export type TableSnapshot = {
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: Card[] }[];
   password?: string;
+  paused?: boolean;
+  idleCloseAt?: number;
+  serverNow?: number;
 };
 
 export type Credentials = {

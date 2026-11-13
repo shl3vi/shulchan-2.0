@@ -819,7 +819,7 @@ export function ActionDock({
   );
 }
 
-type MenuIcon = "info" | "share" | "leave" | "stats" | "admin" | "buy" | "restart";
+type MenuIcon = "info" | "share" | "leave" | "stats" | "admin" | "buy" | "restart" | "pause";
 
 function MenuGlyph({ kind }: { kind?: MenuIcon }) {
   if (kind === "info") return <Ionicons name="information-circle-outline" size={18} color="#c8ceff" />;
@@ -828,6 +828,7 @@ function MenuGlyph({ kind }: { kind?: MenuIcon }) {
   if (kind === "admin") return <Ionicons name="shield-checkmark-outline" size={18} color="#c8ceff" />;
   if (kind === "buy") return <Ionicons name="add-circle-outline" size={18} color="#c8ceff" />;
   if (kind === "restart") return <Ionicons name="refresh" size={18} color="#c8ceff" />;
+  if (kind === "pause") return <Ionicons name="pause-circle-outline" size={18} color="#c8ceff" />;
   return <Ionicons name="stats-chart" size={18} color="#c8ceff" />;
 }
 
