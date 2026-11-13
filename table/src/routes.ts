@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { considerAutoDeal } from "./autodeal.js";
 import { createPokerTable, readPoker, seatPoker } from "./engine.js";
-import { liveKitToken, VideoUnavailable } from "./livekit.js";
+import { liveKitToken, mediaRoom, VideoUnavailable } from "./livekit.js";
 import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
 import { nameProblem, playerName } from "./name.js";
@@ -60,6 +60,7 @@ router.post("/", async (req, res) => {
     password: tablePassword(),
     hostEmail: host.email,
     kind: body.kind === "backgammon" ? "backgammon" : "poker",
+    lastActivityAt: Date.now(),
     ...(body.kind !== "backgammon" && body.autoDeal ? { autoDeal: true } : {}),
     players: [],
   };
@@ -113,6 +114,7 @@ router.post("/:id/join", async (req, res) => {
     const retry = await passwordRetryAfter(id, ip).catch(() => 0);
     if (retry > 0) throw new JoinRefused(429, "Too many password attempts", retry);
     const joined = await withTable(id, async (table) => {
+      if (table.closing) throw new JoinRefused(409, "Table is closing");
       if (!sameSecret(password, table.password)) throw new JoinRefused(403, "Wrong password");
       const taken = table.players.map((player) => player.seat);
       const avoid = await avoidSeats(personKey, table.players).catch(() => []);
@@ -172,8 +174,22 @@ router.post("/:id/livekit", async (req, res) => {
     res.status(401).json({ error: "Invalid player" });
     return;
   }
+  if (table.paused || table.closing) {
+    res.status(403).json({ error: "Table is paused" });
+    return;
+  }
   try {
-    res.json(await liveKitToken(table.id, player.id, player.name));
+    const fresh = await readTable(table.id);
+    const still = fresh?.players.find((seat) => sameSecret(playerId, seat.id) && sameSecret(secret, seat.secret));
+    if (!fresh || !still) {
+      res.status(401).json({ error: "Invalid player" });
+      return;
+    }
+    if (fresh.paused || fresh.closing) {
+      res.status(403).json({ error: "Table is paused" });
+      return;
+    }
+    res.json(await liveKitToken(mediaRoom(fresh.id, fresh.mediaEpoch), still.id, still.name));
     await noteVideo(table.id);
   } catch (error) {
     if (error instanceof VideoUnavailable) reportError({ area: "video", route: "livekit", tableId: table.id, kind: table.kind ?? "poker" });

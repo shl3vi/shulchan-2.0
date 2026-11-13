@@ -6,14 +6,14 @@ import { allowCapture } from "@/media/capturePermission";
 import { videoSupported } from "@/media/videoSupport";
 
 type VideoHandle = {
-  disconnect: () => void;
-  setMic: (enabled: boolean) => Promise<void>;
-  setCamera: (enabled: boolean) => Promise<void>;
+  disconnect: (failed?: boolean) => void;
+  setMic: (enabled: boolean) => Promise<unknown>;
+  setCamera: (enabled: boolean) => Promise<unknown>;
   mute: (identity: string, muted: boolean) => void;
   hide: (identity: string, hidden: boolean) => void;
 };
 
-export function useTableVideo(credentials: Credentials | null) {
+export function useTableVideo(credentials: Credentials | null, suspended = false) {
   const [tracks, setTracks] = useState<Map<string, VideoTrack>>(new Map());
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
@@ -27,7 +27,9 @@ export function useTableVideo(credentials: Credentials | null) {
   const desired = useRef({ camera: false, mic: false });
   const held = useRef<Set<string>>(new Set());
   const credentialsRef = useRef(credentials);
+  const suspendedRef = useRef(suspended);
   credentialsRef.current = credentials;
+  suspendedRef.current = suspended;
 
   const gameId = credentials?.gameId;
   const playerId = credentials?.playerId;
@@ -44,6 +46,18 @@ export function useTableVideo(credentials: Credentials | null) {
     };
   }, [gameId, playerId, playerSecret]);
 
+  useEffect(() => {
+    if (!suspended) return;
+    desired.current = { camera: false, mic: false };
+    starting.current = false;
+    handle.current?.disconnect();
+    handle.current = null;
+    setTracks(new Map());
+    setMicOn(false);
+    setCameraOn(false);
+    setLive(false);
+  }, [suspended]);
+
   function reset() {
     desired.current = { camera: false, mic: false };
     held.current = new Set();
@@ -57,16 +71,20 @@ export function useTableVideo(credentials: Credentials | null) {
 
   function ensure() {
     const current = credentialsRef.current;
-    if (Platform.OS === "web" || !videoSupported || !current || handle.current || starting.current) return;
+    if (suspendedRef.current || Platform.OS === "web" || !videoSupported || !current || handle.current || starting.current) return;
     const ticket = generation.current;
     starting.current = true;
     void import("@/media/tableVideoSession").then((mod) => {
       starting.current = false;
-      if (ticket !== generation.current || handle.current) return;
+      if (ticket !== generation.current || handle.current || suspendedRef.current) return;
       const session = mod.startTableVideo(current, setTracks, setMicOn, () => {
         handle.current = null;
         reset();
       }, desired.current);
+      if (ticket !== generation.current || suspendedRef.current) {
+        session.disconnect();
+        return;
+      }
       handle.current = session;
       setLive(true);
     }).catch(() => {
@@ -96,9 +114,10 @@ export function useTableVideo(credentials: Credentials | null) {
     muted,
     hidden,
     setMic(enabled: boolean) {
-      if (!videoSupported) return;
+      if (suspendedRef.current || !videoSupported) return;
       void (async () => {
         if (enabled && !(await allowCapture("microphone"))) enabled = false;
+        if (suspendedRef.current) return;
         desired.current.mic = enabled;
         setMicOn(enabled);
         if (!enabled) {
@@ -115,12 +134,14 @@ export function useTableVideo(credentials: Credentials | null) {
       })();
     },
     setCamera(enabled: boolean) {
+      if (suspendedRef.current) return;
       if (!videoSupported) {
         if (enabled) setVideoNotice(true);
         return;
       }
       void (async () => {
         if (enabled && !(await allowCapture("camera"))) enabled = false;
+        if (suspendedRef.current) return;
         desired.current.camera = enabled;
         setCameraOn(enabled);
         if (!enabled) {

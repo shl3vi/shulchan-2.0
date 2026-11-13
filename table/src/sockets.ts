@@ -8,10 +8,11 @@ import { assignAdmin, dropRemovedPlayers, foldDeparted, releaseSeat, sameSecret,
 import { noteBackgammonWin, playBackgammon } from "./backgammon.js";
 import { debugConfig } from "./debug.js";
 import { allowSocketEvent } from "./http.js";
-import { removeFromRoom } from "./livekit.js";
-import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, playerBody, readSchema, rebuyBody } from "./schema.js";
+import { endRoom, mediaRoom, removeFromRoom } from "./livekit.js";
+import { assertPlaying, noteActivity, setPaused } from "./idle.js";
+import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, pauseBody, playerBody, readSchema, rebuyBody } from "./schema.js";
 import { blockedSeatIds } from "./safety.js";
-import { publishTable, readTable, subscriber, withTable, type SeatPlayer, type TableRecord } from "./store.js";
+import { publishTable, readTable, subscriber, TABLE_UNCHANGED, withTable, type SeatPlayer, type TableRecord } from "./store.js";
 
 class LeftTable extends Error {
   constructor() {
@@ -80,6 +81,7 @@ export function attachSockets(io: Server) {
           if (!seat) throw new LeftTable();
           return run(current, seat);
         });
+        if (result === TABLE_UNCHANGED) return undefined;
         await publishTable(tableId);
         void considerAutoDeal(tableId);
         return result;
@@ -138,10 +140,38 @@ export function attachSockets(io: Server) {
       });
     });
 
+    onEvent("pause", (body: unknown) => {
+      const parsed = readSchema(pauseBody, body);
+      if (!parsed) {
+        reportError({ area: "validation", route: "pause", tableId, kind });
+        socket.emit("error", { message: "Invalid request" });
+        return;
+      }
+      return change("Cannot pause the table", async (current) => {
+        requireAdmin(current);
+        if (Boolean(current.paused) === parsed.paused) return TABLE_UNCHANGED;
+        if (!parsed.paused) {
+          setPaused(current, false, Date.now());
+          return null;
+        }
+        setPaused(current, true, Date.now());
+        const previous = current.mediaEpoch ?? 0;
+        current.mediaEpoch = previous + 1;
+        return previous;
+      }).then(async (previous) => {
+        if (typeof previous !== "number") return;
+        await endRoom(mediaRoom(tableId, previous)).catch((error: unknown) => {
+          reportCaught(tableId, error, "livekit-silence", kind);
+        });
+      });
+    });
+
     onEvent("start-hand", () => {
       void change("Cannot start", async (current) => {
         requireAdmin(current);
+        assertPlaying(current);
         const view = await startPoker(current);
+        noteActivity(current, Date.now());
         await dropRemovedPlayers(current);
         return { round: view.round, seated: seatedCount(current) };
       }).then(async (mark) => {
@@ -224,6 +254,7 @@ export function attachSockets(io: Server) {
       }
       return change("Backgammon move failed", async (current) => {
         if (current.kind !== "backgammon") throw new Error("This table is not backgammon");
+        assertPlaying(current);
         if (seatedCount(current) < 2) {
           throw new Error("Waiting for a second player");
         }
@@ -232,6 +263,7 @@ export function attachSockets(io: Server) {
         const game = (await playBackgammon(current, connected.id, action)) as { phase?: unknown; turn?: unknown };
         noteBackgammonWin(current, game);
         current.backgammon = game;
+        noteActivity(current, Date.now());
         return { previous: previous ?? null, game, games: (current.backgammonLog?.length ?? 0) - before };
       }).then(async (mark) => {
         // A refused move leaves this phone showing its own guess, so send it the real board.
@@ -251,7 +283,9 @@ export function attachSockets(io: Server) {
         return;
       }
       return change("Action failed", async (current, seat) => {
+        assertPlaying(current);
         await actPoker(current, seat.seat, parsed.action, parsed.amount);
+        noteActivity(current, Date.now());
         await foldDeparted(current);
         await dropRemovedPlayers(current);
         const view = await readPoker(current);

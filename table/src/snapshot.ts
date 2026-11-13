@@ -34,6 +34,11 @@ export type TableSnapshot = {
   backgammon?: unknown;
   backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
   password?: string;
+  paused?: boolean;
+  /** Server epoch ms. Present only while the idle warning is up. */
+  idleCloseAt?: number;
+  /** Server epoch ms when this snapshot was built. */
+  serverNow: number;
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: EngineView["communityCards"] }[];
 };
@@ -86,6 +91,9 @@ export function snapshot(
       ? { backgammon: table.backgammon, backgammonLog: table.backgammonLog ?? [] }
       : { autoDeal: table.autoDeal === true }),
     ...(viewer && viewer.id === table.adminId ? { password: table.password } : {}),
+    paused: table.paused === true,
+    serverNow: Date.now(),
+    ...(table.idleCloseAt != null && table.paused !== true ? { idleCloseAt: table.idleCloseAt } : {}),
     shownCards: view.shownCards ?? [],
     lastWinners: view.lastWinners.flatMap((winner) => {
       const player = bySeat.get(winner.seat);

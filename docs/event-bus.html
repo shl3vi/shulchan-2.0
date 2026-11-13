@@ -199,7 +199,7 @@
     <li>The ledger updates inside the existing <code>change()</code> wrapper and the route handlers. PostHog is not called from there.</li>
     <li>The device does not send these events. A hand is counted once, on our server, inside the summary.</li>
     <li><code>games</code> is poker hands dealt, or backgammon matches finished. <code>rounds</code> is betting streets, or completed backgammon turns.</li>
-    <li><code>endReason</code> is <code>closed</code> when the last player leaves, or <code>expired</code> when the five-hour TTL sweep removes the table.</li>
+    <li><code>endReason</code> is <code>closed</code> when the last player leaves, <code>expired</code> when the TTL sweep removes the table, or <code>idle</code> when nobody plays and nobody pauses.</li>
   </ul>
 </section>
 
@@ -229,7 +229,7 @@
     <div class="card"><strong>joinRefusals</strong><span>Bad password, full table, join limit, or a rejected name.</span></div>
     <div class="card"><strong>errors</strong><span>Failures charged to this table.</span></div>
     <div class="card"><strong>videoUsed</strong><span>True once any LiveKit token for this table succeeds.</span></div>
-    <div class="card"><strong>endReason</strong><span><code>closed</code> or <code>expired</code>.</span></div>
+    <div class="card"><strong>endReason</strong><span><code>closed</code>, <code>expired</code>, or <code>idle</code>.</span></div>
     <div class="card"><strong>durationMs</strong><span>From table create until the summary.</span></div>
   </div>
 </section>

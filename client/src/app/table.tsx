@@ -20,6 +20,7 @@ import { move as playMove, newGame, opponent, type BackgammonAction, type Color,
 import { checkerPlace } from "@/game/diceSound";
 import { t } from "@/i18n";
 import { SeatSafety } from "@/game/SeatSafety";
+import { TableHold } from "@/game/TableHold";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 function WinnerSparkles() {
@@ -111,6 +112,12 @@ function BackgammonTable({
   videoNotice,
   onDismissVideo,
   isAdmin,
+  paused,
+  idleCloseAt,
+  serverNow,
+  onPause,
+  error,
+  onDismissError,
   myColor,
   serverGame,
   wins,
@@ -137,6 +144,12 @@ function BackgammonTable({
   videoNotice?: boolean;
   onDismissVideo?: () => void;
   isAdmin: boolean;
+  paused: boolean;
+  idleCloseAt?: number;
+  serverNow?: number;
+  onPause: (paused: boolean) => void;
+  error: string | null;
+  onDismissError: () => void;
   myColor: Color | null;
   serverGame?: unknown;
   wins?: TableSnapshot["backgammonLog"];
@@ -162,14 +175,14 @@ function BackgammonTable({
   const seenGame = useRef("");
 
   useEffect(() => {
-    const live = !waiting && game.phase !== "over";
+    const live = !paused && !waiting && game.phase !== "over";
     if (!live) return;
     void activateKeepAwakeAsync("backgammon");
     return () => {
       void deactivateKeepAwake("backgammon");
     };
-  }, [waiting, game.phase]);
-  const iPlay = !waiting && myColor != null && actor === myColor;
+  }, [paused, waiting, game.phase]);
+  const iPlay = !paused && !waiting && myColor != null && actor === myColor;
   const winnerName = game.winner == null ? "" : game.winner === myColor ? youName : otherName;
   const won = game.phase === "over" && game.winner != null;
 
@@ -232,6 +245,7 @@ function BackgammonTable({
   }
 
   function send(action: BackgammonAction) {
+    if (paused) return;
     emit("bg", action);
   }
 
@@ -241,6 +255,7 @@ function BackgammonTable({
   }, [serverGame]);
 
   function onMove(chosen: Move) {
+    if (paused) return;
     const next = playMove(game, chosen);
     if (next === game) return;
     checkerPlace();
@@ -273,7 +288,7 @@ function BackgammonTable({
             </Pressable>
           </View>
           <View style={styles.boardAnchor}>
-            <BackgammonBoard game={game} perspective={myColor} selected={selected} enabled={iPlay} bare={waiting} onShare={shareTable} onSelect={setSelected} onMove={onMove} onAgain={won ? () => send({ type: "restart" }) : undefined} />
+            <BackgammonBoard game={game} perspective={myColor} selected={selected} enabled={iPlay} bare={waiting} onShare={shareTable} onSelect={setSelected} onMove={onMove} onAgain={won && !paused ? () => send({ type: "restart" }) : undefined} />
             {won || waiting ? null : <View style={styles.diceCup}>
               <DiceCup
                 faces={rolling ? cupFaces : game.shown}
@@ -319,7 +334,12 @@ function BackgammonTable({
               { label: t("tableInfo"), icon: "info", onPress: () => setInfo(true) },
               { label: t("rules"), icon: "stats", onPress: () => setRules(true) },
               { label: t("winLog"), icon: "stats", onPress: () => setLogOpen(true) },
-              ...(isAdmin ? [{ label: t("restartGame"), icon: "restart" as const, onPress: restartGame }] : []),
+              ...(isAdmin
+                ? [
+                    { label: paused ? t("resumeTable") : t("pauseTable"), icon: "pause" as const, onPress: () => onPause(!paused) },
+                    { label: t("restartGame"), icon: "restart" as const, onPress: restartGame },
+                  ]
+                : []),
               { label: t("shareTable"), icon: "share", onPress: shareTable },
               {
                 label: t("leaveGame"),
@@ -422,9 +442,18 @@ function BackgammonTable({
             send({ type: "restart" });
           }}
         />
+        <TableHold top={insets.top + 56} paused={paused} idleCloseAt={idleCloseAt} serverNow={serverNow} isAdmin={isAdmin} onPause={onPause} />
+        {error ? (
+          <View style={styles.error}>
+            <Text style={styles.errorText}>{tableError(error)}</Text>
+            <Pressable onPress={onDismissError} hitSlop={8}>
+              <Ionicons name="close" size={18} color="#fecaca" />
+            </Pressable>
+          </View>
+        ) : null}
         {videoNotice ? <VideoNotice onClose={onDismissVideo} /> : null}
         {Platform.OS !== "web" ? (
-          <Pressable style={[styles.cameraToggle, cameraOn && styles.cameraToggleOn]} onPress={() => setCamera(!cameraOn)}>
+          <Pressable style={[styles.cameraToggle, cameraOn && styles.cameraToggleOn, paused && styles.held]} onPress={() => { if (!paused) setCamera(!cameraOn); }}>
             <Ionicons name={cameraOn ? "videocam" : "videocam-off"} size={22} color={cameraOn ? "#171b35" : "#c8ceff"} />
           </Pressable>
         ) : null}
@@ -435,6 +464,14 @@ function BackgammonTable({
       </View>
     </View>
   );
+}
+
+function tableError(message: string, range?: { min: number; max: number } | null) {
+  if (message === "Table is paused") return t("tablePaused");
+  if (message === "Table is closing") return t("tableClosing");
+  if (message === "Bet size is outside the allowed range" && range) return t("betOutOfRange", { min: range.min, max: range.max });
+  if (message === "At least two players need chips to deal.") return t("needTwoWithMoney");
+  return message;
 }
 
 function VideoNotice({ onClose }: { onClose?: () => void }) {
@@ -483,8 +520,8 @@ export default function TableScreen() {
   const router = useRouter();
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const insets = useSafeAreaInsets();
-  const { credentials, state, error, dismissError, startHand, setAutoDeal, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
-  const video = useTableVideo(credentials);
+  const { credentials, state, error, dismissError, startHand, setAutoDeal, setPaused, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
+  const video = useTableVideo(credentials, state?.paused === true);
   const showAd = useTableAdAllowed(state);
   const mode = updateMode();
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);
@@ -511,13 +548,13 @@ export default function TableScreen() {
 
   useEffect(() => {
     const backgammon = kind === "backgammon" || state?.kind === "backgammon";
-    const live = !backgammon && state?.round != null;
+    const live = !backgammon && state?.round != null && state?.paused !== true;
     if (!live) return;
     void activateKeepAwakeAsync("poker");
     return () => {
       void deactivateKeepAwake("poker");
     };
-  }, [kind, state?.kind, state?.round]);
+  }, [kind, state?.kind, state?.paused, state?.round]);
 
   function stopBuy() {
     if (holdStart.current) clearTimeout(holdStart.current);
@@ -551,7 +588,7 @@ export default function TableScreen() {
         <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.dismissTo("/")} hitSlop={8}>
           <Ionicons name="home" size={20} color="#c8ceff" />
         </Pressable>
-        <Text style={styles.meta}>{t("sitFirst")}</Text>
+        <Text style={styles.meta}>{error ?? t("sitFirst")}</Text>
       </View>
     );
   }
@@ -602,6 +639,12 @@ export default function TableScreen() {
         gameId={credentials?.gameId}
         password={state?.password}
         isAdmin={state?.you?.isAdmin === true}
+        paused={state?.paused === true}
+        idleCloseAt={state?.idleCloseAt}
+        serverNow={state?.serverNow}
+        onPause={setPaused}
+        error={error}
+        onDismissError={dismissError}
         videoNotice={video.videoNotice}
         onDismissVideo={video.dismissVideoNotice}
         onLeave={() => {
@@ -652,7 +695,7 @@ export default function TableScreen() {
           pot={pot}
           round={state?.round ?? null}
           winners={state?.round == null ? (state?.lastWinners ?? []) : []}
-          onDeal={state?.you?.isAdmin && state.round == null ? startHand : undefined}
+          onDeal={state?.you?.isAdmin && state.round == null && !state.paused ? startHand : undefined}
           onSeat={(index) => {
             const player = state?.players.find((seat) => seat.seat === index);
             if (!player || player.id === you?.id) return;
@@ -685,6 +728,9 @@ export default function TableScreen() {
                 )
               ) : (
                 <>
+                  <Pressable style={styles.statsRow} onPress={() => { setPaused(state?.paused !== true); setSheet(null); }}>
+                    <Text style={styles.statsLine}>{state?.paused ? t("resumeTable") : t("pauseTable")}</Text>
+                  </Pressable>
                   {state?.kind !== "backgammon" ? (
                     <Pressable style={styles.statsRow} onPress={() => setAutoDeal(state?.autoDeal !== true)}>
                       <Text style={styles.statsLine}>{t("autoDeal")}</Text>
@@ -757,16 +803,18 @@ export default function TableScreen() {
             </Pressable>
           </Pressable>
         </Modal>
+        <TableHold
+          top={insets.top + 56}
+          paused={state?.paused === true}
+          idleCloseAt={state?.idleCloseAt}
+          serverNow={state?.serverNow}
+          isAdmin={state?.you?.isAdmin === true}
+          onPause={setPaused}
+        />
         {video.videoNotice ? <VideoNotice onClose={video.dismissVideoNotice} /> : null}
         {error ? (
           <View style={styles.error}>
-            <Text style={styles.errorText}>
-              {error === "Bet size is outside the allowed range" && you?.chipRange
-                ? t("betOutOfRange", { min: you.chipRange.min, max: you.chipRange.max })
-                : error === "At least two players need chips to deal."
-                  ? t("needTwoWithMoney")
-                  : error}
-            </Text>
+            <Text style={styles.errorText}>{tableError(error, you?.chipRange)}</Text>
             <Pressable onPress={dismissError} hitSlop={8}>
               <Ionicons name="close" size={18} color="#fecaca" />
             </Pressable>
@@ -804,7 +852,7 @@ export default function TableScreen() {
           />
         </View>
         {Platform.OS !== "web" ? (
-          <Pressable style={[styles.cameraToggle, video.cameraOn && styles.cameraToggleOn]} onPress={() => video.setCamera(!video.cameraOn)}>
+          <Pressable style={[styles.cameraToggle, video.cameraOn && styles.cameraToggleOn, state?.paused && styles.held]} onPress={() => { if (!state?.paused) video.setCamera(!video.cameraOn); }}>
             <Ionicons name={video.cameraOn ? "videocam" : "videocam-off"} size={22} color={video.cameraOn ? "#171b35" : "#c8ceff"} />
           </Pressable>
         ) : null}
@@ -849,12 +897,12 @@ export default function TableScreen() {
         </Modal>
       </View>
       <ActionDock
-        yourTurn={(you?.legalActions.length ?? 0) > 0}
+        yourTurn={(you?.legalActions.length ?? 0) > 0 && state?.paused !== true}
         actions={you?.legalActions ?? []}
         chipRange={you?.chipRange ?? null}
         step={state?.bigBlind ?? 1}
         cards={you?.holeCards ?? []}
-        idleText={state?.round == null ? null : t("waitingTurn")}
+        idleText={state?.paused || state?.round == null ? null : t("waitingTurn")}
         onAction={(action, chips) => act(action, chips)}
       />
       <View style={{ paddingBottom: insets.bottom, backgroundColor: "#090b16" }}>
@@ -1008,4 +1056,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   cameraToggleOn: { backgroundColor: "#a8b2ff", borderColor: "#c8ceff" },
+  held: { opacity: 0.35 },
 });
