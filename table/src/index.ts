@@ -47,6 +47,11 @@ app.get([...icons].map((name) => `/${name}`), (req, res, next) => {
     if (err) next(err);
   });
 });
+// AdMob's crawler checks the developer website for this file before it serves ads in the app.
+const appAdsTxt = (process.env.APP_ADS_TXT || "google.com, pub-1060524753529308, DIRECT, f08c47fec0942fa0").replace(/\n?$/, "\n");
+app.get("/app-ads.txt", (_req, res) => {
+  res.type("text/plain; charset=utf-8").set("Cache-Control", "public, max-age=3600").send(appAdsTxt);
+});
 app.use(cors);
 app.use(rateLimit);
 app.use(express.json({ limit: "8kb" }));
