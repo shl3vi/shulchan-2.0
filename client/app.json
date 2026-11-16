@@ -10,8 +10,8 @@
     "ios": {
       "icon": "./assets/AppIcon.icon",
       "infoPlist": {
-        "NSCameraUsageDescription": "Show your seat at the table.",
-        "NSMicrophoneUsageDescription": "Talk at the table."
+        "NSCameraUsageDescription": "People at your table see your camera live. LOOCHKA does not record or store it.",
+        "NSMicrophoneUsageDescription": "People at your table hear you live. LOOCHKA does not record or store it."
       },
       "bitcode": false,
       "bundleIdentifier": "com.loochka",
