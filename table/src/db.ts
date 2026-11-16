@@ -5,7 +5,20 @@ export const TABLE_TTL_MS = 30 * 60 * 1000;
 
 const databaseUrl = process.env.DATABASE_URL ?? "postgres://shulchan:shulchan@127.0.0.1:5432/shulchan";
 
-export const pool = new pg.Pool({ connectionString: databaseUrl });
+/**
+ * A table change holds a 5 second lock, so no query may take longer than that.
+ * Without these limits a stuck query, or waiting for a free connection when all ten
+ * are busy, could hold the table until the lock expires.
+ */
+export const pool = new pg.Pool({
+  connectionString: databaseUrl,
+  // Postgres cancels a statement that runs longer than this, and releases what it locked.
+  statement_timeout: 3000,
+  // The client stops waiting a little later, in case the server never answers at all.
+  query_timeout: 4000,
+  // Waiting for a connection from the pool, or opening a new one.
+  connectionTimeoutMillis: 3000,
+});
 
 export async function connectPostgres() {
   await pool.query(`

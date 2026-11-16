@@ -1,3 +1,4 @@
+import { EngineTimeout } from "../engine.js";
 import { TableNotFound } from "../store.js";
 import { publish, type ErrorArea } from "./bus.js";
 import { noteError } from "./ledger.js";
@@ -33,7 +34,7 @@ export function reportCaught(tableId: string | undefined, error: unknown, route:
     reportError({ area: "store", tableId, op: "lock", kind });
     return;
   }
-  if (message === "Poker engine failed" || /fetch failed|ECONNREFUSED|EAI_AGAIN/i.test(message)) {
+  if (error instanceof EngineTimeout || message === "Poker engine failed" || /fetch failed|ECONNREFUSED|EAI_AGAIN/i.test(message)) {
     reportError({ area: "store", tableId, op: "engine", kind });
     return;
   }

@@ -38,15 +38,34 @@ export async function enginesReady() {
   return { poker, backgammon };
 }
 
+/**
+ * Well under the 5 second table lock. The engines answer in milliseconds, so a call
+ * this slow is stuck, and waiting longer would only hold the table for everyone.
+ */
+export const ENGINE_TIMEOUT_MS = 2000;
+
+export class EngineTimeout extends Error {
+  constructor() {
+    super("The game server is slow. Try again.");
+  }
+}
+
 export async function enginePost<T>(base: string, path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${base}${path}`, {
-    method: "POST",
-    headers: { ...engineHeaders, "content-type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
-  const payload = (await response.json()) as T & { error?: string };
-  if (!response.ok) throw new Error(payload.error ?? "Poker engine failed");
-  return payload;
+  try {
+    // The signal also covers reading the body, so a response that stalls halfway still ends.
+    const response = await fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { ...engineHeaders, "content-type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
+    });
+    const payload = (await response.json()) as T & { error?: string };
+    if (!response.ok) throw new Error(payload.error ?? "Poker engine failed");
+    return payload;
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") throw new EngineTimeout();
+    throw error;
+  }
 }
 
 type PokerPacket = { hand: unknown; view: EngineView };
