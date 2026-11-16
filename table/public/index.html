@@ -3,43 +3,61 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>LOOCHKA — Private poker and backgammon with your friends</title>
-  <meta name="description" content="Open a private poker or backgammon table on your phone, send the link to your friends, and play together. Friends join without an account.">
+  <script src="/assets/locale.js?v=3"></script>
+  <title data-i18n="home.title">LOOCHKA — Private poker and backgammon with your friends</title>
+  <meta name="description" content="Open a private poker or backgammon table on your phone, send the link to your friends, and play together. Friends join without an account." data-i18n-content="home.description">
   <meta name="theme-color" content="#070912">
   <link rel="canonical" href="https://loochka.com/">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://loochka.com/">
-  <meta property="og:title" content="LOOCHKA — Open a table. Send the link. Play.">
-  <meta property="og:description" content="Private poker and backgammon tables for the people you already know.">
+  <meta property="og:title" content="LOOCHKA — Open a table. Send the link. Play." data-i18n-content="home.ogTitle">
+  <meta property="og:description" content="Private poker and backgammon tables for the people you already know." data-i18n-content="home.ogDescription">
   <meta property="og:image" content="https://loochka.com/assets/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="icon" type="image/png" href="/assets/favicon.png">
-  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="/assets/favicon-96x96.png" sizes="96x96">
+  <link rel="shortcut icon" href="/assets/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon-kit.png">
+  <meta name="apple-mobile-web-app-title" content="LOOCHKA">
+  <link rel="manifest" href="/assets/site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,560&family=Manrope:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/site.css">
+  <link rel="stylesheet" href="/assets/site.css?v=5">
   <link rel="preload" as="image" href="/assets/shots/poker.webp">
-  <script src="/assets/site.js" defer></script>
+  <script src="/assets/i18n.js?v=3" defer></script>
+  <script src="/assets/site.js?v=3" defer></script>
 </head>
 <body>
-  <a class="skip" href="#content">Skip to content</a>
+  <a class="skip" href="#content" data-i18n="skip">Skip to content</a>
 
   <header class="nav">
     <div class="wrap nav-row">
-      <a class="brand" href="/" aria-label="LOOCHKA home">
-        <img class="brand-mark" src="/assets/apple-touch-icon.png" alt="" width="34" height="34">
+      <a class="brand" href="/" aria-label="LOOCHKA home" data-i18n-aria="nav.home">
+        <img class="brand-mark" src="/assets/apple-touch-icon-kit.png" alt="" width="34" height="34">
         <span>LOOCHKA</span>
       </a>
-      <nav class="nav-links" id="nav-links" aria-label="Main">
-        <a href="/#how">How it works</a>
-        <a href="/#games">Games</a>
-        <a href="/#features">Features</a>
-        <a href="/support">Support</a>
+      <nav class="nav-links" id="nav-links" aria-label="Main" data-i18n-aria="nav.main">
+        <a href="/#how" data-i18n="nav.how">How it works</a>
+        <a href="/#games" data-i18n="nav.games">Games</a>
+        <a href="/#features" data-i18n="nav.features">Features</a>
+        <a href="/support" data-i18n="nav.support">Support</a>
+        <a class="btn nav-cta" href="/#get" data-i18n="nav.get">Get the app</a>
       </nav>
-      <a class="btn btn-sm" href="/#get">Get the app</a>
+      <div class="lang">
+        <button class="lang-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="lang-menu" aria-label="Language" data-i18n-aria="lang.choose">
+          <span data-lang-current>EN</span>
+        </button>
+        <ul class="lang-menu" id="lang-menu" role="listbox" hidden>
+          <li role="none"><button type="button" role="option" lang="en" data-lang="en">English</button></li>
+          <li role="none"><button type="button" role="option" lang="he" dir="rtl" data-lang="he">עברית</button></li>
+          <li role="none"><button type="button" role="option" lang="es" data-lang="es">Español</button></li>
+          <li role="none"><button type="button" role="option" lang="ru" data-lang="ru">Русский</button></li>
+          <li role="none"><button type="button" role="option" lang="ar" dir="rtl" data-lang="ar">العربية</button></li>
+        </ul>
+      </div>
+      <a class="btn btn-sm" href="/#get" data-i18n="nav.get">Get the app</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><span></span><span></span></button>
     </div>
   </header>
@@ -48,40 +66,40 @@
     <section class="hero">
       <div class="wrap hero-grid">
         <div class="hero-head">
-          <p class="eyebrow reveal"><span class="dot"></span>Poker and backgammon with your people</p>
-          <h1 class="display reveal d1"><span class="l1">Open a table.</span> <span class="l2 accent">Send the link.</span> <span class="l3">Play.</span></h1>
+          <p class="eyebrow reveal"><span class="dot"></span><span data-i18n="hero.eyebrow">Poker and backgammon with your people</span></p>
+          <h1 class="display reveal d1"><span class="l1" data-i18n="hero.l1">Open a table.</span> <span class="l2 accent" data-i18n="hero.l2">Send the link.</span> <span class="l3" data-i18n="hero.l3">Play.</span></h1>
         </div>
         <div class="hero-copy">
-          <p class="lede reveal d2">LOOCHKA is a private game table on your phone. Open one for Texas Hold’em or backgammon, drop the link in the group chat, and play together, cameras on if you like.</p>
+          <p class="lede reveal d2" data-i18n="hero.lede">LOOCHKA is a private game table on your phone. Open one for Texas Hold’em or backgammon, drop the link in the group chat, and play together, cameras on if you like.</p>
           <div class="actions reveal d3">
-            <a class="btn" href="#get">Get the app
+            <a class="btn" href="#get"><span data-i18n="hero.get">Get the app</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </a>
-            <a class="btn btn-ghost" href="#how">See how it works</a>
+            <a class="btn btn-ghost" href="#how" data-i18n="hero.how">See how it works</a>
           </div>
           <ul class="ticks reveal d3">
-            <li>Friends join without an account</li>
-            <li>Up to nine seats</li>
-            <li>Play chips, not money</li>
+            <li data-i18n="hero.tick1">Friends join without an account</li>
+            <li data-i18n="hero.tick2">Up to nine seats</li>
+            <li data-i18n="hero.tick3">Play chips, not money</li>
           </ul>
         </div>
 
         <div class="hero-art reveal d2">
-          <figure class="phone p1"><div class="screen"><img src="/assets/shots/create.webp" width="600" height="1238" alt="Opening a poker table in LOOCHKA: a name, the small blind and the buy-in."></div></figure>
-          <figure class="phone p2"><div class="screen"><img src="/assets/shots/poker.webp" width="600" height="1238" alt="A poker table with six friends seated and the flop dealt."></div></figure>
-          <figure class="phone p3"><div class="screen"><img src="/assets/shots/backgammon.webp" width="600" height="1238" alt="A backgammon game between Maya and Noa."></div></figure>
+          <figure class="phone p1"><div class="screen"><img src="/assets/shots/create.webp" width="600" height="1238" alt="Opening a poker table in LOOCHKA: a name, the small blind and the buy-in." data-i18n-alt="hero.altCreate"></div></figure>
+          <figure class="phone p2"><div class="screen"><img src="/assets/shots/poker.webp" width="600" height="1238" alt="A poker table with six friends seated and the flop dealt." data-i18n-alt="hero.altPoker"></div></figure>
+          <figure class="phone p3"><div class="screen"><img src="/assets/shots/backgammon.webp" width="600" height="1238" alt="A backgammon game between Maya and Noa." data-i18n-alt="hero.altBg"></div></figure>
 
           <div class="float f-join" aria-hidden="true">
-            <span class="avatar">N</span>
-            <span>Noa sat down<small>Seat 2 · 100 chips</small></span>
+            <span class="avatar" data-i18n="float.joinInitial">N</span>
+            <span data-i18n-html="float.join">Noa sat down<small>Seat 2 · 100 chips</small></span>
           </div>
           <div class="float f-cards" aria-hidden="true">
             <span class="mini-card red">6♦</span><span class="mini-card">2♣</span><span class="mini-card">8♠</span>
-            <span class="pot">Pot 12</span>
+            <span class="pot" data-i18n="float.pot">Pot 12</span>
           </div>
           <div class="float bubble f-link" aria-hidden="true">
-            Pull up a chair at my <b>LOOCHKA</b> table.
-            <span class="url">loochka.com/join?game=K7P2QX</span>
+            <span data-i18n-html="float.link">Pull up a chair at my <b>LOOCHKA</b> table.</span>
+            <span class="url" dir="ltr">loochka.com/join?game=K7P2QX</span>
             <span class="meta">21:04 ✓✓</span>
           </div>
         </div>
@@ -90,17 +108,17 @@
 
     <div class="marquee" aria-hidden="true">
       <div class="marquee-track">
-        <span>Texas Hold’em <i>♠</i> Backgammon <i class="red">♥</i> Private tables <i>♣</i> Share by link <i class="red">♦</i> Camera and mic <i>♠</i> Up to nine seats <i class="red">♥</i> Five languages <i>♣</i> Doubling cube <i class="red">♦</i></span>
-        <span>Texas Hold’em <i>♠</i> Backgammon <i class="red">♥</i> Private tables <i>♣</i> Share by link <i class="red">♦</i> Camera and mic <i>♠</i> Up to nine seats <i class="red">♥</i> Five languages <i>♣</i> Doubling cube <i class="red">♦</i></span>
+        <span data-i18n-html="marquee">Texas Hold’em <i>♠</i> Backgammon <i class="red">♥</i> Private tables <i>♣</i> Share by link <i class="red">♦</i> Camera and mic <i>♠</i> Up to nine seats <i class="red">♥</i> Five languages <i>♣</i> Doubling cube <i class="red">♦</i></span>
+        <span data-i18n-html="marquee">Texas Hold’em <i>♠</i> Backgammon <i class="red">♥</i> Private tables <i>♣</i> Share by link <i class="red">♦</i> Camera and mic <i>♠</i> Up to nine seats <i class="red">♥</i> Five languages <i>♣</i> Doubling cube <i class="red">♦</i></span>
       </div>
     </div>
 
     <section class="section" id="how">
       <div class="wrap">
         <header class="section-head reveal">
-          <p class="eyebrow">How it works</p>
-          <h2 class="display-2">Game night in <em>four taps</em>.</h2>
-          <p>One person opens the table. Everyone else just needs the link.</p>
+          <p class="eyebrow" data-i18n="how.eyebrow">How it works</p>
+          <h2 class="display-2" data-i18n-html="how.title">Game night in <em>four taps</em>.</h2>
+          <p data-i18n="how.lede">One person opens the table. Everyone else just needs the link.</p>
         </header>
 
         <div class="stories" data-stories>
@@ -108,28 +126,28 @@
             <figure class="phone story-phone">
               <div class="story-bars" aria-hidden="true"><span><i></i></span><span><i></i></span><span><i></i></span><span><i></i></span></div>
               <div class="screen">
-                <img class="story-shot is-active" src="/assets/shots/create.webp" width="600" height="1238" loading="lazy" decoding="async" alt="The Create a new table form with Maya’s name, blinds and buy-in.">
-                <img class="story-shot" src="/assets/shots/invite.webp" width="600" height="1238" loading="lazy" decoding="async" alt="Table info showing the table ID, the password and a Share table button.">
-                <img class="story-shot" src="/assets/shots/join.webp" width="600" height="1238" loading="lazy" decoding="async" alt="The Join a table form asking for the table ID, password and a name.">
-                <img class="story-shot" src="/assets/shots/poker-turn.webp" width="600" height="1238" loading="lazy" decoding="async" alt="Maya’s turn at the poker table with fold, call, all in and raise.">
+                <img class="story-shot is-active" src="/assets/shots/create.webp" width="600" height="1238" loading="lazy" decoding="async" alt="The Create a new table form with Maya’s name, blinds and buy-in." data-i18n-alt="story.alt1">
+                <img class="story-shot" src="/assets/shots/invite.webp" width="600" height="1238" loading="lazy" decoding="async" alt="Table info showing the table ID, the password and a Share table button." data-i18n-alt="story.alt2">
+                <img class="story-shot" src="/assets/shots/join.webp" width="600" height="1238" loading="lazy" decoding="async" alt="The Join a table form asking for the table ID, password and a name." data-i18n-alt="story.alt3">
+                <img class="story-shot" src="/assets/shots/poker-turn.webp" width="600" height="1238" loading="lazy" decoding="async" alt="Maya’s turn at the poker table with fold, call, all in and raise." data-i18n-alt="story.alt4">
               </div>
             </figure>
             <div class="float story-note n-signin" data-step="0" aria-hidden="true">
-              <span class="avatar">M</span>
-              <span>Only the host signs in<small>Google or Apple</small></span>
+              <span class="avatar" data-i18n="story.hostInitial">M</span>
+              <span data-i18n-html="story.host">Only the host signs in<small>Google or Apple</small></span>
             </div>
             <div class="float bubble story-note n-link" data-step="1" aria-hidden="true">
-              Pull up a chair at my <b>LOOCHKA</b> table.
-              <span class="url">loochka.com/join?game=K7P2QX</span>
+              <span data-i18n-html="float.link">Pull up a chair at my <b>LOOCHKA</b> table.</span>
+              <span class="url" dir="ltr">loochka.com/join?game=K7P2QX</span>
               <span class="meta">21:04 ✓✓</span>
             </div>
             <div class="float story-note n-join" data-step="2" aria-hidden="true">
-              <span class="avatar">D</span>
-              <span>Daniel sat down<small>No account needed</small></span>
+              <span class="avatar" data-i18n="story.friendInitial">D</span>
+              <span data-i18n-html="story.friend">Daniel sat down<small>No account needed</small></span>
             </div>
             <div class="float story-note n-play" data-step="3" aria-hidden="true">
               <span class="mini-card">4♠</span><span class="mini-card red">10♦</span>
-              <span class="pot">Your turn</span>
+              <span class="pot" data-i18n="story.turn">Your turn</span>
             </div>
           </div>
 
@@ -137,23 +155,23 @@
             <ol class="story-steps">
               <li><button class="story-step is-active" type="button">
                 <span class="num">01</span>
-                <span class="title">Open a table</span>
-                <span class="desc">Sign in with Google or Apple, pick poker or backgammon, and set the blinds and the buy-in.</span>
+                <span class="title" data-i18n="step1.title">Open a table</span>
+                <span class="desc" data-i18n="step1.desc">Sign in with Google or Apple, pick poker or backgammon, and set the blinds and the buy-in.</span>
               </button></li>
               <li><button class="story-step" type="button">
                 <span class="num">02</span>
-                <span class="title">Send the link</span>
-                <span class="desc">Every table gets its own ID and six-digit password. Share table sends both as one link.</span>
+                <span class="title" data-i18n="step2.title">Send the link</span>
+                <span class="desc" data-i18n="step2.desc">Every table gets its own ID and six-digit password. Share table sends both as one link.</span>
               </button></li>
               <li><button class="story-step" type="button">
                 <span class="num">03</span>
-                <span class="title">Friends sit down</span>
-                <span class="desc">The link opens LOOCHKA at your table. No link? Join a table with the ID and password. No account needed.</span>
+                <span class="title" data-i18n="step3.title">Friends sit down</span>
+                <span class="desc" data-i18n="step3.desc">The link opens LOOCHKA at your table. No link? Join a table with the ID and password. No account needed.</span>
               </button></li>
               <li><button class="story-step" type="button">
                 <span class="num">04</span>
-                <span class="title">Play</span>
-                <span class="desc">Deal, bet, roll. The table keeps the chips and every move, so nobody has to.</span>
+                <span class="title" data-i18n="step4.title">Play</span>
+                <span class="desc" data-i18n="step4.desc">Deal, bet, roll. The table keeps the chips and every move, so nobody has to.</span>
               </button></li>
             </ol>
             <div class="story-controls">
@@ -161,7 +179,7 @@
                 <svg data-icon-pause viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
                 <svg data-icon-play viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" hidden><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.2-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>
               </button>
-              <small>Real screens from the app. Tap a step, or tap the phone to skip ahead.</small>
+              <small data-i18n="story.hint">Real screens from the app. Tap a step, or tap the phone to skip ahead.</small>
             </div>
           </div>
         </div>
@@ -171,37 +189,37 @@
     <section class="section" id="games">
       <div class="wrap">
         <header class="section-head reveal">
-          <p class="eyebrow">Games</p>
-          <h2 class="display-2">Two classics. <em>One table.</em></h2>
+          <p class="eyebrow" data-i18n="games.eyebrow">Games</p>
+          <h2 class="display-2" data-i18n-html="games.title">Two classics. <em>One table.</em></h2>
         </header>
 
         <div class="game-cards">
           <article class="game-card poker reveal">
             <span class="watermark" aria-hidden="true">♠</span>
-            <span class="kind">Up to 9 players</span>
-            <h3>Texas Hold’em</h3>
-            <p>A proper home game. Real seats, real blinds, and a dealer who never forgets whose turn it is.</p>
+            <span class="kind" data-i18n="poker.kind">Up to 9 players</span>
+            <h3 data-i18n="poker.title">Texas Hold’em</h3>
+            <p data-i18n="poker.body">A proper home game. Real seats, real blinds, and a dealer who never forgets whose turn it is.</p>
             <ul>
-              <li>Pick the small blind and the buy-in</li>
-              <li>Deal automatically, or when you’re ready</li>
-              <li>Buy back in when you run dry</li>
-              <li>See every stack in Statistics</li>
+              <li data-i18n="poker.li1">Pick the small blind and the buy-in</li>
+              <li data-i18n="poker.li2">Deal automatically, or when you’re ready</li>
+              <li data-i18n="poker.li3">Buy back in when you run dry</li>
+              <li data-i18n="poker.li4">See every stack in Statistics</li>
             </ul>
-            <figure class="phone"><div class="screen"><img src="/assets/shots/poker-turn.webp" width="600" height="1238" loading="lazy" decoding="async" alt="Poker table on your turn, with your two hole cards and the betting buttons."></div></figure>
+            <figure class="phone"><div class="screen"><img src="/assets/shots/poker-turn.webp" width="600" height="1238" loading="lazy" decoding="async" alt="Poker table on your turn, with your two hole cards and the betting buttons." data-i18n-alt="poker.alt"></div></figure>
           </article>
 
           <article class="game-card backgammon reveal d1">
             <svg class="watermark" viewBox="0 0 100 100" aria-hidden="true"><path fill-rule="evenodd" d="M22 4h56a18 18 0 0 1 18 18v56a18 18 0 0 1-18 18H22A18 18 0 0 1 4 78V22A18 18 0 0 1 22 4zm8 18a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm40 0a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM50 42a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM30 62a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm40 0a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"/></svg>
-            <span class="kind">One on one</span>
-            <h3>Backgammon</h3>
-            <p>Shesh-besh, tavla, tavli: whatever you call it, the board is set and the dice are warm.</p>
+            <span class="kind" data-i18n="bg.kind">One on one</span>
+            <h3 data-i18n="bg.title">Backgammon</h3>
+            <p data-i18n="bg.body">Shesh-besh, tavla, tavli: whatever you call it, the board is set and the dice are warm.</p>
             <ul>
-              <li>Tap a checker to see where it can go</li>
-              <li>Doubling cube, gammons and backgammons</li>
-              <li>The rules are one tap away</li>
-              <li>A win log for the rematch</li>
+              <li data-i18n="bg.li1">Tap a checker to see where it can go</li>
+              <li data-i18n="bg.li2">Doubling cube, gammons and backgammons</li>
+              <li data-i18n="bg.li3">The rules are one tap away</li>
+              <li data-i18n="bg.li4">A win log for the rematch</li>
             </ul>
-            <figure class="phone"><div class="screen"><img src="/assets/shots/backgammon.webp" width="600" height="1238" loading="lazy" decoding="async" alt="Backgammon board with a checker selected and its move highlighted."></div></figure>
+            <figure class="phone"><div class="screen"><img src="/assets/shots/backgammon.webp" width="600" height="1238" loading="lazy" decoding="async" alt="Backgammon board with a checker selected and its move highlighted." data-i18n-alt="bg.alt"></div></figure>
           </article>
         </div>
       </div>
@@ -210,14 +228,14 @@
     <section class="section" id="features">
       <div class="wrap">
         <header class="section-head reveal">
-          <p class="eyebrow">Features</p>
-          <h2 class="display-2">Everything a home game <em>needs</em>.</h2>
+          <p class="eyebrow" data-i18n="feat.eyebrow">Features</p>
+          <h2 class="display-2" data-i18n-html="feat.title">Everything a home game <em>needs</em>.</h2>
         </header>
 
         <div class="bento">
           <article class="tile wide video reveal">
-            <h3>See who’s bluffing</h3>
-            <p>Every seat has its own camera and mic. Turn them on and the table feels like the same room.</p>
+            <h3 data-i18n="feat.videoTitle">See who’s bluffing</h3>
+            <p data-i18n="feat.videoBody">Every seat has its own camera and mic. Turn them on and the table feels like the same room.</p>
             <div class="art">
               <div class="cams" aria-hidden="true">
                 <div class="cam talking" style="--c1:#f3c5a0;--c2:#4b3a8c"><span>Noa</span></div>
@@ -233,29 +251,29 @@
           </article>
 
           <article class="tile reveal d1">
-            <h3>Private by default</h3>
-            <p>A table is only for people who have its ID and password.</p>
+            <h3 data-i18n="feat.privateTitle">Private by default</h3>
+            <p data-i18n="feat.privateBody">A table is only for people who have its ID and password.</p>
             <div class="art code-chips" aria-hidden="true">
-              <span class="code-chip"><small>TABLE ID</small><b>K7P2QX</b></span>
-              <span class="code-chip"><small>PASSWORD</small><b>••••••</b></span>
+              <span class="code-chip"><small data-i18n="feat.tableId">TABLE ID</small><b dir="ltr">K7P2QX</b></span>
+              <span class="code-chip"><small data-i18n="feat.password">PASSWORD</small><b dir="ltr">••••••</b></span>
             </div>
           </article>
 
           <article class="tile reveal">
-            <h3>You run the table</h3>
-            <p>Set the blinds and buy-in, let players buy back in, remove a seat, or hand admin to someone else.</p>
-            <div class="crop menu"><img src="/assets/shots/menu.webp" width="600" height="1238" loading="lazy" decoding="async" alt="The table menu: Table info, Statistics, Buy in, Admin options, Share table, Leave game."></div>
+            <h3 data-i18n="feat.runTitle">You run the table</h3>
+            <p data-i18n="feat.runBody">Set the blinds and buy-in, let players buy back in, remove a seat, or hand admin to someone else.</p>
+            <div class="crop menu"><img src="/assets/shots/menu.webp" width="600" height="1238" loading="lazy" decoding="async" alt="The table menu: Table info, Statistics, Buy in, Admin options, Share table, Leave game." data-i18n-alt="feat.runAlt"></div>
           </article>
 
           <article class="tile reveal d1">
-            <h3>The table keeps score</h3>
-            <p>Statistics shows every player’s stack and how much they put in.</p>
-            <div class="crop stats"><img src="/assets/shots/stats.webp" width="600" height="1238" loading="lazy" decoding="async" alt="The Statistics sheet listing each player’s stack and buy-ins."></div>
+            <h3 data-i18n="feat.scoreTitle">The table keeps score</h3>
+            <p data-i18n="feat.scoreBody">Statistics shows every player’s stack and how much they put in.</p>
+            <div class="crop stats"><img src="/assets/shots/stats.webp" width="600" height="1238" loading="lazy" decoding="async" alt="The Statistics sheet listing each player’s stack and buy-ins." data-i18n-alt="feat.scoreAlt"></div>
           </article>
 
           <article class="tile reveal d2">
-            <h3>Fair cards, fair dice</h3>
-            <p>Cards are dealt and dice are rolled on our server, and every move is checked there too.</p>
+            <h3 data-i18n="feat.fairTitle">Fair cards, fair dice</h3>
+            <p data-i18n="feat.fairBody">Cards are dealt and dice are rolled on our server, and every move is checked there too.</p>
             <div class="art fair" aria-hidden="true">
               <span class="die five"><i></i><i></i><i></i><i></i><i></i></span>
               <span class="die two"><i></i><i></i></span>
@@ -264,24 +282,24 @@
           </article>
 
           <article class="tile reveal">
-            <h3>Chips, not money</h3>
-            <p>Chips are for the game. They aren’t money, and nothing can be cashed out.</p>
+            <h3 data-i18n="feat.chipsTitle">Chips, not money</h3>
+            <p data-i18n="feat.chipsBody">Chips are for the game. They aren’t money, and nothing can be cashed out.</p>
             <div class="art chip-stack" aria-hidden="true">
               <span class="chip">100</span><span class="chip lilac">25</span><span class="chip mint">5</span>
             </div>
           </article>
 
           <article class="tile reveal d1">
-            <h3>Report or block a seat</h3>
-            <p>If a name, a camera or a mic crosses the line, report it from the seat, or block that seat.</p>
+            <h3 data-i18n="feat.reportTitle">Report or block a seat</h3>
+            <p data-i18n="feat.reportBody">If a name, a camera or a mic crosses the line, report it from the seat, or block that seat.</p>
             <div class="art pills" aria-hidden="true">
-              <span>Name</span><span>Camera</span><span>Microphone</span><span class="warn">Block</span>
+              <span data-i18n="feat.pillName">Name</span><span data-i18n="feat.pillCamera">Camera</span><span data-i18n="feat.pillMic">Microphone</span><span class="warn" data-i18n="feat.pillBlock">Block</span>
             </div>
           </article>
 
           <article class="tile reveal d2">
-            <h3>Speaks your language</h3>
-            <p>Five languages, right-to-left included.</p>
+            <h3 data-i18n="feat.langTitle">Speaks your language</h3>
+            <p data-i18n="feat.langBody">Five languages, right-to-left included.</p>
             <div class="art langs">
               <span lang="en">English</span><span lang="he" dir="rtl">עברית</span><span lang="es">Español</span><span lang="ru">Русский</span><span lang="ar" dir="rtl">العربية</span>
             </div>
@@ -292,7 +310,7 @@
 
     <section class="statement">
       <div class="wrap">
-        <p class="reveal">Friday night. <em>Five different couches.</em> One table.</p>
+        <p class="reveal" data-i18n-html="statement">Friday night. <em>Five different couches.</em> One table.</p>
       </div>
     </section>
 
@@ -300,20 +318,20 @@
       <div class="wrap">
         <div class="cta reveal">
           <div class="ring" aria-hidden="true"></div>
-          <img class="cta-icon" src="/assets/app-icon.webp" width="120" height="120" alt="The LOOCHKA app icon: a little game table with dice and chips.">
-          <h2 class="display-2">Pull up a <em>chair</em>.</h2>
-          <p>Get LOOCHKA on your phone, open a table, and send the link to the group chat.</p>
+          <img class="cta-icon" src="/assets/app-icon.webp" width="120" height="120" alt="The LOOCHKA app icon: a little game table with dice and chips." data-i18n-alt="cta.alt">
+          <h2 class="display-2" data-i18n-html="cta.title">Pull up a <em>chair</em>.</h2>
+          <p data-i18n="cta.body">Get LOOCHKA on your phone, open a table, and send the link to the group chat.</p>
           <div class="stores">
             <a class="store" href="https://play.google.com/store/apps/details?id=com.loochka">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M4 2.6 13.5 12 4 21.4z"/><path fill="#34A853" d="M4 2.6 16.8 8.8 13.5 12z"/><path fill="#EA4335" d="M4 21.4 13.5 12l3.3 3.2z"/><path fill="#FBBC04" d="m16.8 8.8 3.6 2c1 .6 1 1.8 0 2.4l-3.6 2L13.5 12z"/></svg>
-              <span><small>Get it on</small><b>Google Play</b></span>
+              <span><small data-i18n="cta.googleSmall">Get it on</small><b>Google Play</b></span>
             </a>
             <a class="store" href="https://apps.apple.com/app/loochka">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.47.83-.72 0-1.82-.81-2.99-.79-1.54.02-2.96.9-3.75 2.27-1.6 2.78-.41 6.88 1.15 9.13.76 1.1 1.67 2.33 2.86 2.29 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.76-2.22.87-1.27 1.23-2.51 1.25-2.57-.03-.01-2.39-.92-2.4-3.66zM14.1 5.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.28z"/></svg>
-              <span><small>Download on the</small><b>App Store</b></span>
+              <span><small data-i18n="cta.appleSmall">Download on the</small><b>App Store</b></span>
             </a>
           </div>
-          <p class="hint">Got a link from a friend? Open it on your phone and LOOCHKA takes you straight to the table.</p>
+          <p class="hint" data-i18n="cta.hint">Got a link from a friend? Open it on your phone and LOOCHKA takes you straight to the table.</p>
         </div>
       </div>
     </section>
@@ -323,49 +341,49 @@
     <div class="wrap">
       <div class="footer-top">
         <div class="footer-brand">
-          <a class="brand" href="/" aria-label="LOOCHKA home">
-            <img class="brand-mark" src="/assets/apple-touch-icon.png" alt="" width="34" height="34">
+          <a class="brand" href="/" aria-label="LOOCHKA home" data-i18n-aria="nav.home">
+            <img class="brand-mark" src="/assets/apple-touch-icon-kit.png" alt="" width="34" height="34">
             <span>LOOCHKA</span>
           </a>
-          <p>Private poker and backgammon tables for the people you already know.</p>
-          <a class="footer-mail" href="mailto:support@loochka.com">
+          <p data-i18n="footer.blurb">Private poker and backgammon tables for the people you already know.</p>
+          <a class="footer-mail" href="mailto:support@loochka.com" dir="ltr">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
             support@loochka.com
           </a>
         </div>
-        <nav class="footer-cols" aria-label="Footer">
+        <nav class="footer-cols" aria-label="Footer" data-i18n-aria="footer.label">
           <div>
-            <h2>Product</h2>
+            <h2 data-i18n="footer.product">Product</h2>
             <ul>
-              <li><a href="/#how">How it works</a></li>
-              <li><a href="/#games">Poker and backgammon</a></li>
-              <li><a href="/#features">Features</a></li>
-              <li><a href="/#get">Get the app</a></li>
+              <li><a href="/#how" data-i18n="footer.how">How it works</a></li>
+              <li><a href="/#games" data-i18n="footer.games">Poker and backgammon</a></li>
+              <li><a href="/#features" data-i18n="footer.features">Features</a></li>
+              <li><a href="/#get" data-i18n="footer.get">Get the app</a></li>
             </ul>
           </div>
           <div>
-            <h2>Help</h2>
+            <h2 data-i18n="footer.help">Help</h2>
             <ul>
-              <li><a href="/support">Support center</a></li>
-              <li><a href="/support#report">Report a player</a></li>
-              <li><a href="mailto:support@loochka.com">Contact us</a></li>
-              <li><a href="/privacy#accessibility">Accessibility</a></li>
+              <li><a href="/support" data-i18n="footer.support">Support center</a></li>
+              <li><a href="/support#report" data-i18n="footer.report">Report a player</a></li>
+              <li><a href="mailto:support@loochka.com" data-i18n="footer.contact">Contact us</a></li>
+              <li><a href="/privacy#accessibility" data-i18n="footer.a11y">Accessibility</a></li>
             </ul>
           </div>
           <div>
-            <h2>Legal</h2>
+            <h2 data-i18n="footer.legal">Legal</h2>
             <ul>
-              <li><a href="/privacy#privacy">Privacy policy</a></li>
-              <li><a href="/terms">Terms of Use</a></li>
-              <li><a href="/privacy#playing">Table rules</a></li>
-              <li><a href="/account">Delete your account</a></li>
+              <li><a href="/privacy#privacy" data-i18n="footer.privacy">Privacy policy</a></li>
+              <li><a href="/terms" data-i18n="footer.terms">Terms of Use</a></li>
+              <li><a href="/privacy#playing" data-i18n="footer.rules">Table rules</a></li>
+              <li><a href="/account" data-i18n="footer.delete">Delete your account</a></li>
             </ul>
           </div>
         </nav>
       </div>
       <div class="footer-bottom">
         <p>© <span data-year>2026</span> LOOCHKA</p>
-        <p>Chips are for the game. They aren’t money.</p>
+        <p data-i18n="footer.chips">Chips are for the game. They aren’t money.</p>
       </div>
     </div>
   </footer>

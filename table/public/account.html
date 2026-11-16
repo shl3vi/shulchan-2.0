@@ -3,34 +3,52 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Delete your account — LOOCHKA</title>
-  <meta name="description" content="How to delete a LOOCHKA account, and what is removed or kept.">
+  <script src="/assets/locale.js?v=3"></script>
+  <title data-i18n="account.title">Delete your account — LOOCHKA</title>
+  <meta name="description" content="How to delete a LOOCHKA account, and what is removed or kept." data-i18n-content="account.description">
   <meta name="theme-color" content="#070912">
   <link rel="canonical" href="https://loochka.com/account">
-  <link rel="icon" type="image/png" href="/assets/favicon.png">
-  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="/assets/favicon-96x96.png" sizes="96x96">
+  <link rel="shortcut icon" href="/assets/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon-kit.png">
+  <meta name="apple-mobile-web-app-title" content="LOOCHKA">
+  <link rel="manifest" href="/assets/site.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@1,9..144,560&family=Manrope:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/assets/site.css">
-  <script src="/assets/site.js" defer></script>
+  <link rel="stylesheet" href="/assets/site.css?v=5">
+  <script src="/assets/i18n.js?v=3" defer></script>
+  <script src="/assets/site.js?v=3" defer></script>
 </head>
 <body>
-  <a class="skip" href="#content">Skip to content</a>
+  <a class="skip" href="#content" data-i18n="skip">Skip to content</a>
 
   <header class="nav">
     <div class="wrap nav-row">
-      <a class="brand" href="/" aria-label="LOOCHKA home">
-        <img class="brand-mark" src="/assets/apple-touch-icon.png" alt="" width="34" height="34">
+      <a class="brand" href="/" aria-label="LOOCHKA home" data-i18n-aria="nav.home">
+        <img class="brand-mark" src="/assets/apple-touch-icon-kit.png" alt="" width="34" height="34">
         <span>LOOCHKA</span>
       </a>
-      <nav class="nav-links" id="nav-links" aria-label="Main">
-        <a href="/#how">How it works</a>
-        <a href="/#games">Games</a>
-        <a href="/#features">Features</a>
-        <a href="/support">Support</a>
+      <nav class="nav-links" id="nav-links" aria-label="Main" data-i18n-aria="nav.main">
+        <a href="/#how" data-i18n="nav.how">How it works</a>
+        <a href="/#games" data-i18n="nav.games">Games</a>
+        <a href="/#features" data-i18n="nav.features">Features</a>
+        <a href="/support" data-i18n="nav.support">Support</a>
+        <a class="btn nav-cta" href="/#get" data-i18n="nav.get">Get the app</a>
       </nav>
-      <a class="btn btn-sm" href="/#get">Get the app</a>
+      <div class="lang">
+        <button class="lang-btn" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="lang-menu" aria-label="Language" data-i18n-aria="lang.choose">
+          <span data-lang-current>EN</span>
+        </button>
+        <ul class="lang-menu" id="lang-menu" role="listbox" hidden>
+          <li role="none"><button type="button" role="option" lang="en" data-lang="en">English</button></li>
+          <li role="none"><button type="button" role="option" lang="he" dir="rtl" data-lang="he">עברית</button></li>
+          <li role="none"><button type="button" role="option" lang="es" data-lang="es">Español</button></li>
+          <li role="none"><button type="button" role="option" lang="ru" data-lang="ru">Русский</button></li>
+          <li role="none"><button type="button" role="option" lang="ar" dir="rtl" data-lang="ar">العربية</button></li>
+        </ul>
+      </div>
+      <a class="btn btn-sm" href="/#get" data-i18n="nav.get">Get the app</a>
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><span></span><span></span></button>
     </div>
   </header>
@@ -38,44 +56,44 @@
   <main id="content">
     <section class="page-hero">
       <div class="wrap">
-        <p class="eyebrow">Account</p>
-        <h1 class="display-2">Delete your <em>account</em>.</h1>
-        <p class="lede">This is the LOOCHKA account used to open a table. Joining a friend’s table does not create one.</p>
+        <p class="eyebrow" data-i18n="account.eyebrow">Account</p>
+        <h1 class="display-2" data-i18n-html="account.h1">Delete your <em>account</em>.</h1>
+        <p class="lede" data-i18n="account.lede">This is the LOOCHKA account used to open a table. Joining a friend’s table does not create one.</p>
       </div>
     </section>
 
     <div class="wrap doc">
-      <nav aria-label="On this page">
+      <nav aria-label="On this page" data-i18n-aria="account.toc">
         <ul class="toc">
-          <li><a href="#in-app">In the app</a></li>
-          <li><a href="#by-email">By email</a></li>
-          <li><a href="#deleted">What is deleted</a></li>
-          <li><a href="#kept">What is kept</a></li>
+          <li><a href="#in-app" data-i18n="account.navInApp">In the app</a></li>
+          <li><a href="#by-email" data-i18n="account.navEmail">By email</a></li>
+          <li><a href="#deleted" data-i18n="account.navDeleted">What is deleted</a></li>
+          <li><a href="#kept" data-i18n="account.navKept">What is kept</a></li>
         </ul>
       </nav>
 
       <div class="prose">
         <section id="in-app">
-          <h2>In the app</h2>
+          <h2 data-i18n="account.inAppTitle">In the app</h2>
           <ol class="steps">
-            <li><span>Open LOOCHKA and sign in with the Google or Apple account that opens your tables.</span></li>
-            <li><span>Open Settings, then Account.</span></li>
-            <li><span>Choose Delete account and confirm.</span></li>
+            <li><span data-i18n="account.step1">Open LOOCHKA and sign in with the Google or Apple account that opens your tables.</span></li>
+            <li><span data-i18n="account.step2">Open Settings, then Account.</span></li>
+            <li><span data-i18n="account.step3">Choose Delete account and confirm.</span></li>
           </ol>
-          <p>Deleting it signs you out and closes every table you opened. You can sign in again later.</p>
+          <p data-i18n="account.inAppBody">Deleting it signs you out and closes every table you opened. You can sign in again later.</p>
         </section>
         <section id="by-email">
-          <h2>If you cannot open the app</h2>
-          <p>Write to <a href="mailto:support@loochka.com?subject=Delete%20my%20LOOCHKA%20account">support@loochka.com</a> from the email on the account and ask us to delete it. We close every table that account opened and sign it out.</p>
-          <a class="btn" href="mailto:support@loochka.com?subject=Delete%20my%20LOOCHKA%20account">Ask us to delete it</a>
+          <h2 data-i18n="account.emailTitle">If you cannot open the app</h2>
+          <p data-i18n-html="account.emailBody">Write to <a href="mailto:support@loochka.com?subject=Delete%20my%20LOOCHKA%20account">support@loochka.com</a> from the email on the account and ask us to delete it. We close every table that account opened and sign it out.</p>
+          <a class="btn" href="mailto:support@loochka.com?subject=Delete%20my%20LOOCHKA%20account" data-i18n="account.emailBtn">Ask us to delete it</a>
         </section>
         <section id="deleted">
-          <h2>What is deleted</h2>
-          <p>The sign-in for that account, including the email and name Apple gave us if you signed in with Apple (we also revoke the Sign in with Apple connection), and every table it still has open, including the names, chips, and moves on those tables. This happens when you confirm in the app, or when we handle the email request.</p>
+          <h2 data-i18n="account.deletedTitle">What is deleted</h2>
+          <p data-i18n="account.deletedBody">The sign-in for that account, including the email and name Apple gave us if you signed in with Apple (we also revoke the Sign in with Apple connection), and every table it still has open, including the names, chips, and moves on those tables. This happens when you confirm in the app, or when we handle the email request.</p>
         </section>
         <section id="kept">
-          <h2>What is kept</h2>
-          <p>A Google sign-in asks Google again; we do not keep a separate copy of that sign-in after deletion. A report stays, with the table, the seat, and the reason. A note sent to support stays so we can answer it. We may keep a record that a table was opened or a hand was played, tied to that table, so we can see when the game breaks. The ad network can keep that an ad was shown. We don’t sell this information. There is no extra retention period: what is deleted is removed at deletion, and what is kept stays for the reason above.</p>
+          <h2 data-i18n="account.keptTitle">What is kept</h2>
+          <p data-i18n="account.keptBody">A Google sign-in asks Google again; we do not keep a separate copy of that sign-in after deletion. A report stays, with the table, the seat, and the reason. A note sent to support stays so we can answer it. We may keep a record that a table was opened or a hand was played, tied to that table, so we can see when the game breaks. The ad network can keep that an ad was shown. We don’t sell this information. There is no extra retention period: what is deleted is removed at deletion, and what is kept stays for the reason above.</p>
         </section>
       </div>
     </div>
@@ -85,49 +103,49 @@
     <div class="wrap">
       <div class="footer-top">
         <div class="footer-brand">
-          <a class="brand" href="/" aria-label="LOOCHKA home">
-            <img class="brand-mark" src="/assets/apple-touch-icon.png" alt="" width="34" height="34">
+          <a class="brand" href="/" aria-label="LOOCHKA home" data-i18n-aria="nav.home">
+            <img class="brand-mark" src="/assets/apple-touch-icon-kit.png" alt="" width="34" height="34">
             <span>LOOCHKA</span>
           </a>
-          <p>Private poker and backgammon tables for the people you already know.</p>
-          <a class="footer-mail" href="mailto:support@loochka.com">
+          <p data-i18n="footer.blurb">Private poker and backgammon tables for the people you already know.</p>
+          <a class="footer-mail" href="mailto:support@loochka.com" dir="ltr">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
             support@loochka.com
           </a>
         </div>
-        <nav class="footer-cols" aria-label="Footer">
+        <nav class="footer-cols" aria-label="Footer" data-i18n-aria="footer.label">
           <div>
-            <h2>Product</h2>
+            <h2 data-i18n="footer.product">Product</h2>
             <ul>
-              <li><a href="/#how">How it works</a></li>
-              <li><a href="/#games">Poker and backgammon</a></li>
-              <li><a href="/#features">Features</a></li>
-              <li><a href="/#get">Get the app</a></li>
+              <li><a href="/#how" data-i18n="footer.how">How it works</a></li>
+              <li><a href="/#games" data-i18n="footer.games">Poker and backgammon</a></li>
+              <li><a href="/#features" data-i18n="footer.features">Features</a></li>
+              <li><a href="/#get" data-i18n="footer.get">Get the app</a></li>
             </ul>
           </div>
           <div>
-            <h2>Help</h2>
+            <h2 data-i18n="footer.help">Help</h2>
             <ul>
-              <li><a href="/support">Support center</a></li>
-              <li><a href="/support#report">Report a player</a></li>
-              <li><a href="mailto:support@loochka.com">Contact us</a></li>
-              <li><a href="/privacy#accessibility">Accessibility</a></li>
+              <li><a href="/support" data-i18n="footer.support">Support center</a></li>
+              <li><a href="/support#report" data-i18n="footer.report">Report a player</a></li>
+              <li><a href="mailto:support@loochka.com" data-i18n="footer.contact">Contact us</a></li>
+              <li><a href="/privacy#accessibility" data-i18n="footer.a11y">Accessibility</a></li>
             </ul>
           </div>
           <div>
-            <h2>Legal</h2>
+            <h2 data-i18n="footer.legal">Legal</h2>
             <ul>
-              <li><a href="/privacy#privacy">Privacy policy</a></li>
-              <li><a href="/terms">Terms of Use</a></li>
-              <li><a href="/privacy#playing">Table rules</a></li>
-              <li><a href="/account" aria-current="page">Delete your account</a></li>
+              <li><a href="/privacy#privacy" data-i18n="footer.privacy">Privacy policy</a></li>
+              <li><a href="/terms" data-i18n="footer.terms">Terms of Use</a></li>
+              <li><a href="/privacy#playing" data-i18n="footer.rules">Table rules</a></li>
+              <li><a href="/account" aria-current="page" data-i18n="footer.delete">Delete your account</a></li>
             </ul>
           </div>
         </nav>
       </div>
       <div class="footer-bottom">
         <p>© <span data-year>2026</span> LOOCHKA</p>
-        <p>Chips are for the game. They aren’t money.</p>
+        <p data-i18n="footer.chips">Chips are for the game. They aren’t money.</p>
       </div>
     </div>
   </footer>

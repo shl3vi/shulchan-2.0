@@ -13,16 +13,61 @@ if (nav) {
 }
 
 if (toggle && links) {
+  const menuLabel = (open) => {
+    const label = window.loochkaI18n?.t(open ? "nav.close" : "nav.menu");
+    if (label) toggle.setAttribute("aria-label", label);
+  };
   const setOpen = (open) => {
     toggle.setAttribute("aria-expanded", String(open));
     links.classList.toggle("is-open", open);
+    menuLabel(open);
+    if (open) setLangOpen(false);
   };
   toggle.addEventListener("click", () => setOpen(toggle.getAttribute("aria-expanded") !== "true"));
   links.addEventListener("click", (event) => {
     if (event.target.closest("a")) setOpen(false);
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setOpen(false);
+    if (event.key === "Escape") {
+      setOpen(false);
+      setLangOpen(false);
+    }
+  });
+  document.addEventListener("loochka:locale", () => menuLabel(toggle.getAttribute("aria-expanded") === "true"));
+  menuLabel(false);
+}
+
+const langRoot = document.querySelector(".lang");
+const langBtn = langRoot?.querySelector(".lang-btn");
+const langMenu = langRoot?.querySelector(".lang-menu");
+
+function setLangOpen(open) {
+  if (!langBtn || !langMenu) return;
+  langBtn.setAttribute("aria-expanded", String(open));
+  langMenu.hidden = !open;
+}
+
+if (langRoot && langBtn && langMenu) {
+  langBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const open = langBtn.getAttribute("aria-expanded") !== "true";
+    setLangOpen(open);
+    if (open && toggle && links) {
+      toggle.setAttribute("aria-expanded", "false");
+      links.classList.remove("is-open");
+      const label = window.loochkaI18n?.t("nav.menu");
+      if (label) toggle.setAttribute("aria-label", label);
+    }
+  });
+  langMenu.addEventListener("click", (event) => {
+    const choice = event.target.closest("[data-lang]");
+    if (!choice) return;
+    window.loochkaI18n?.setLocale(choice.getAttribute("data-lang"));
+    setLangOpen(false);
+    langBtn.focus();
+  });
+  document.addEventListener("click", (event) => {
+    if (!langRoot.contains(event.target)) setLangOpen(false);
   });
 }
 
@@ -63,7 +108,7 @@ if (stories) {
     stories.classList.toggle("is-paused", paused);
     if (pause) {
       pause.setAttribute("aria-pressed", String(userPaused));
-      pause.setAttribute("aria-label", userPaused ? "Play the walkthrough" : "Pause the walkthrough");
+      pause.setAttribute("aria-label", window.loochkaI18n?.t(userPaused ? "story.play" : "story.pause") || (userPaused ? "Play the walkthrough" : "Pause the walkthrough"));
       pause.querySelector("[data-icon-pause]").hidden = userPaused;
       pause.querySelector("[data-icon-play]").hidden = !userPaused;
     }
@@ -122,6 +167,7 @@ if (stories) {
 
   show(0);
   syncPause();
+  document.addEventListener("loochka:locale", syncPause);
 }
 
 const toc = document.querySelectorAll(".toc a[href^='#']");

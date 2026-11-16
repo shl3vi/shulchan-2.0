@@ -94,31 +94,67 @@ app.get("/health", async (_req, res) => {
   const ok = redisOk && postgresOk && engines.poker && engines.backgammon;
   res.status(ok ? 200 : 503).json({ ok, redis: redisOk, postgres: postgresOk, ...engines });
 });
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char: string) => {
+    const escaped: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" };
+    return escaped[char] ?? char;
+  });
+}
+
+const JOIN_COPY = {
+  en: { title: "Join the table", opening: "Opening the table…", sit: "Sit down" },
+  he: { title: "הצטרפות לשולחן", opening: "פותחים את השולחן…", sit: "לשבת" },
+  es: { title: "Unirse a la mesa", opening: "Abriendo la mesa…", sit: "Sentarse" },
+  ru: { title: "Сесть за стол", opening: "Открываем стол…", sit: "Сесть" },
+  ar: { title: "الانضمام إلى طاولة", opening: "جارٍ فتح الطاولة…", sit: "اجلس" },
+};
+
+function joinLocale(req: Request) {
+  const header = req.get("accept-language") ?? "";
+  for (const part of header.split(",")) {
+    const code = part.split(";")[0]?.trim().toLowerCase().split("-")[0];
+    if (code && Object.hasOwn(JOIN_COPY, code)) return code as keyof typeof JOIN_COPY;
+  }
+  return "en" as const;
+}
+
 app.get("/join", (req, res) => {
   const game = String(req.query.game ?? "");
   const password = String(req.query.password ?? "");
   const query = new URLSearchParams({ game, password }).toString();
   const appUrl = `${APP_SCHEME}://join?${query}`;
   const intentUrl = `intent://join?${query}#Intent;scheme=${APP_SCHEME};package=com.loochka;end`;
+  const lang = joinLocale(req);
+  const copy = JOIN_COPY[lang];
+  const dir = lang === "he" || lang === "ar" ? "rtl" : "ltr";
+  const href = escapeHtml(appUrl);
   res.type("html").send(`<!doctype html>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Join the table</title>
+<html lang="${lang}" dir="${dir}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>${escapeHtml(copy.title)}</title>
 <link rel="icon" type="image/png" href="/assets/favicon-96x96.png" sizes="96x96">
 <link rel="shortcut icon" href="/assets/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon-kit.png">
 <style>
-  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #07110d; color: #fafaf9; font-family: sans-serif; }
-  a { display: inline-block; margin-top: 16px; background: #f6d36b; color: #1c1917; text-decoration: none; font-weight: 800; padding: 14px 22px; border-radius: 999px; }
+  body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; align-content: center; gap: 0.4rem; padding: max(1.5rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left)); background: #07110d; color: #fafaf9; font-family: -apple-system, "Segoe UI", sans-serif; text-align: center; }
+  p { margin: 0; font-size: 1.15rem; line-height: 1.4; }
+  a { display: inline-flex; align-items: center; justify-content: center; min-height: 3rem; min-width: 8rem; margin-top: 0.8rem; background: #f6d36b; color: #1c1917; text-decoration: none; font-weight: 800; padding: 0.8rem 1.4rem; border-radius: 999px; }
 </style>
-<p>Opening the table…</p>
-<p><a id="open" href="${appUrl}">Sit down</a></p>
+</head>
+<body>
+<p>${escapeHtml(copy.opening)}</p>
+<p><a id="open" href="${href}">${escapeHtml(copy.sit)}</a></p>
 <script>
   var app = ${JSON.stringify(appUrl)};
   var intent = ${JSON.stringify(intentUrl)};
   var open = document.getElementById("open");
   if (/Android/i.test(navigator.userAgent)) open.href = intent;
   location.replace(/Android/i.test(navigator.userAgent) ? intent : app);
-</script>`);
+</script>
+</body>
+</html>`);
 });
 app.get("/api/config", (req, res) => {
   res.json(publicConfigFor(regionOf(req.query.region)));
