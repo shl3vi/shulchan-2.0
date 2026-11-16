@@ -11,6 +11,7 @@ type VideoHandle = {
   setCamera: (enabled: boolean) => Promise<unknown>;
   mute: (identity: string, muted: boolean) => void;
   hide: (identity: string, hidden: boolean) => void;
+  block: (ids: string[]) => void;
 };
 
 export function useTableVideo(credentials: Credentials | null, suspended = false) {
@@ -85,6 +86,7 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
         session.disconnect();
         return;
       }
+      session.block([...held.current]);
       handle.current = session;
       setLive(true);
     }).catch(() => {
@@ -162,6 +164,7 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
       const next = new Set(ids);
       const released = [...held.current].filter((id) => !next.has(id));
       held.current = next;
+      handle.current?.block([...next]);
       for (const id of released) {
         handle.current?.mute(id, false);
         handle.current?.hide(id, false);

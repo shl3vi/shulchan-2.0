@@ -13,6 +13,40 @@ export function startTableVideo(
 ) {
   const room = new Room();
   let stopped = false;
+  let connected = false;
+  let blocked = new Set<string>();
+
+  /**
+   * Enforced by the LiveKit server: a blocked identity cannot subscribe to this
+   * phone's camera or mic. It is an allowlist, so it is rebuilt when someone joins.
+   */
+  const applyPermissions = () => {
+    if (!connected || stopped) return;
+    try {
+      if (blocked.size === 0) {
+        room.localParticipant.setTrackSubscriptionPermissions(true);
+        return;
+      }
+      const allowed = [...room.remoteParticipants.keys()]
+        .filter((identity) => !blocked.has(identity))
+        .map((identity) => ({ participantIdentity: identity, allowAll: true }));
+      room.localParticipant.setTrackSubscriptionPermissions(false, allowed);
+    } catch {
+      // The signal is gone. The next connect applies it again.
+    }
+  };
+
+  /** Stop receiving a blocked player's camera and mic, not only hiding them. */
+  const applySubscriptions = (identity: string) => {
+    const participant = room.remoteParticipants.get(identity);
+    if (!participant) return;
+    const off = blocked.has(identity);
+    for (const source of [Track.Source.Camera, Track.Source.Microphone]) {
+      const publication = participant.getTrackPublication(source) as { setSubscribed?: (subscribed: boolean) => void; isSubscribed?: boolean } | undefined;
+      if (off && publication?.isSubscribed !== false) publication?.setSubscribed?.(false);
+      else if (!off && source === Track.Source.Microphone && publication?.isSubscribed === false) publication?.setSubscribed?.(true);
+    }
+  };
 
   const sync = () => {
     const videos = new Map<string, VideoTrack>();
@@ -42,7 +76,14 @@ export function startTableVideo(
     })();
   };
 
-  room.on(RoomEvent.TrackSubscribed, sync);
+  room.on(RoomEvent.TrackSubscribed, (_track, _publication, participant) => {
+    if (blocked.has(participant.identity)) applySubscriptions(participant.identity);
+    sync();
+  });
+  room.on(RoomEvent.ParticipantConnected, (participant) => {
+    applyPermissions();
+    if (blocked.has(participant.identity)) applySubscriptions(participant.identity);
+  });
   room.on(RoomEvent.TrackUnsubscribed, sync);
   room.on(RoomEvent.LocalTrackPublished, sync);
   room.on(RoomEvent.LocalTrackUnpublished, sync);
@@ -62,6 +103,9 @@ export function startTableVideo(
         room.disconnect();
         return;
       }
+      connected = true;
+      applyPermissions();
+      blocked.forEach(applySubscriptions);
       if (desired.camera && (await allowCapture("camera"))) {
         await room.localParticipant.setCameraEnabled(true);
       }
@@ -94,6 +138,13 @@ export function startTableVideo(
     },
     mute(identity: string, muted: boolean) {
       room.remoteParticipants.get(identity)?.setVolume(muted ? 0 : 1);
+    },
+    block(ids: string[]) {
+      const previous = blocked;
+      blocked = new Set(ids);
+      if (stopped || !connected) return;
+      applyPermissions();
+      for (const identity of new Set([...previous, ...blocked])) applySubscriptions(identity);
     },
     hide(identity: string, hidden: boolean) {
       const publication = room.remoteParticipants.get(identity)?.getTrackPublication(Track.Source.Camera) as { setSubscribed?: (subscribed: boolean) => void } | undefined;
