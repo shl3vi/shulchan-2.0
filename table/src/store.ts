@@ -149,15 +149,31 @@ export async function flushTables() {
   return;
 }
 
+/** The table changed after this copy was read. The copy must be dropped, not saved. */
+export class TableConflict extends Error {
+  constructor() {
+    super("Table changed while saving");
+  }
+}
+
+/**
+ * Saves only if the stored record is still the revision this copy was read at.
+ * The Redis lock can expire under a slow engine call, and without this check a late
+ * write would erase whatever was saved in between.
+ */
 export async function writeTable(table: TableRecord) {
-  table.revision = (table.revision ?? 0) + 1;
+  const read = table.revision ?? 0;
+  table.revision = read + 1;
   const saved = await pool.query(
     `UPDATE tables
      SET record = $2::jsonb, updated_at = now(), expires_at = now() + make_interval(secs => $3::int)
-     WHERE id = $1 AND expires_at > now()`,
-    [table.id, JSON.stringify(table), TABLE_TTL_MS / 1000],
+     WHERE id = $1 AND expires_at > now() AND COALESCE((record->>'revision')::int, 0) = $4`,
+    [table.id, JSON.stringify(table), TABLE_TTL_MS / 1000, read],
   );
-  if (saved.rowCount !== 1) throw new TableNotFound();
+  if (saved.rowCount === 1) return;
+  table.revision = read;
+  if (await readTable(table.id)) throw new TableConflict();
+  throw new TableNotFound();
 }
 
 export const OPEN_TABLE_CAP = 2;
@@ -330,12 +346,19 @@ export class TableNotFound extends Error {
   }
 }
 
+const LOCK_MS = 5000;
+/** A save refused on revision runs the change again on the newer table, this many times in all. */
+const CONFLICT_TRIES = 3;
+
 // Every change to a table record goes through here, so concurrent joins, leaves, and admin moves cannot overwrite each other.
+// The lock keeps changes in line; the revision check in writeTable is what makes a lost update impossible.
+// `run` can be called again after a conflict, so it must only change the table it is given.
 export async function withTable<T>(id: string, run: (table: TableRecord) => Promise<T>): Promise<T> {
   const lock = `lock:table:${id}`;
-  const token = crypto.randomUUID();
+  let conflicts = 0;
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (await redis.set(lock, token, { NX: true, PX: 5000 })) {
+    const token = crypto.randomUUID();
+    if (await redis.set(lock, token, { NX: true, PX: LOCK_MS })) {
       try {
         const table = await readTable(id);
         if (!table) throw new TableNotFound();
@@ -343,6 +366,12 @@ export async function withTable<T>(id: string, run: (table: TableRecord) => Prom
         if (result === TABLE_UNCHANGED) return result;
         await writeTable(table);
         return result;
+      } catch (error) {
+        if (!(error instanceof TableConflict)) throw error;
+        conflicts += 1;
+        console.error("Table save conflict", id, `try ${conflicts} of ${CONFLICT_TRIES}`);
+        if (conflicts >= CONFLICT_TRIES) throw new Error("Table is busy");
+        continue;
       } finally {
         await redis.eval(releaseLock, { keys: [lock], arguments: [token] });
       }
