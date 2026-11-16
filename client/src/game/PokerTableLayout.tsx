@@ -12,6 +12,10 @@ export type SeatSlot = {
   stack: number;
   bet: number;
   toAct: boolean;
+  /** Time left to act when the snapshot was built. Only on the seat to act. */
+  turnLeftMs?: number;
+  /** Server time of that snapshot, so the clock restarts on each one. */
+  turnStamp?: number;
   isYou: boolean;
   winner?: boolean;
   video?: ReactNode;
@@ -263,6 +267,44 @@ function SeatCurtain({ open }: { open: boolean }) {
   );
 }
 
+/** Seconds left for the seat to act. The server acts when it reaches zero. Remount per snapshot. */
+function TurnClock({ leftMs, scale }: { leftMs: number; scale: number }) {
+  const u = (n: number) => n * scale;
+  const [start] = useState(() => Date.now());
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, []);
+  const seconds = Math.max(0, Math.ceil((leftMs - (now - start)) / 1000));
+  const urgent = seconds <= 10;
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityLabel={t("turnSecondsLeft", { seconds })}
+      style={{
+        position: "absolute",
+        top: u(4),
+        right: u(4),
+        minWidth: u(22),
+        height: u(18),
+        paddingHorizontal: u(4),
+        borderRadius: u(9),
+        backgroundColor: urgent ? "#dc2626" : "rgba(12,10,9,0.85)",
+        borderWidth: u(1),
+        borderColor: urgent ? "#fecaca" : "#f6d36b",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 5,
+      }}
+    >
+      <Text style={{ color: urgent ? "#fff" : "#f6d36b", fontSize: u(10), fontWeight: "900", fontVariant: ["tabular-nums"] }}>
+        {seconds}
+      </Text>
+    </View>
+  );
+}
+
 function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
   const u = (n: number) => n * scale;
   const occupied = player != null;
@@ -291,6 +333,9 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
         </Text>
       )}
       {occupied ? <SeatCurtain open={cameraOn} /> : null}
+      {player?.toAct && player.turnLeftMs != null ? (
+        <TurnClock key={player.turnStamp} leftMs={player.turnLeftMs} scale={scale} />
+      ) : null}
     </>
   );
   return (

@@ -534,6 +534,9 @@ export default function TableScreen() {
   const you = state?.you;
   const pot = state?.pots.reduce((sum, entry) => sum + entry.size, 0) ?? 0;
   const buyStep = Math.max(1, state?.bigBlind ?? 1);
+  // Time left as the server saw it, so a wrong phone clock does not matter.
+  const turnLeftMs =
+    state?.turnDeadline != null && state.serverNow != null ? Math.max(0, state.turnDeadline - state.serverNow) : undefined;
 
   useEffect(() => {
     setSeatId(null);
@@ -665,6 +668,7 @@ export default function TableScreen() {
       stack: player.stack,
       bet: player.betSize,
       toAct: state?.playerToActId === player.id,
+      ...(state?.playerToActId === player.id && turnLeftMs != null ? { turnLeftMs, turnStamp: state.serverNow } : {}),
       isYou,
       winner: winnerSeats.has(player.seat),
       video: track ? <SeatVideo track={track} /> : undefined,

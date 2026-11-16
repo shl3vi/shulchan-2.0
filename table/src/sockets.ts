@@ -12,6 +12,8 @@ import { endRoom, mediaRoom, mediaRooms, removeFromRoom } from "./livekit.js";
 import { assertPlaying, noteActivity, setPaused } from "./idle.js";
 import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, pauseBody, playerBody, readSchema, rebuyBody } from "./schema.js";
 import { blockedSeatIds } from "./safety.js";
+import { restartTurn } from "./turn.js";
+import { armTurn } from "./turnWatch.js";
 import { publishTable, readTable, subscriber, TABLE_UNCHANGED, withTable, type SeatPlayer, type TableRecord } from "./store.js";
 
 class LeftTable extends Error {
@@ -30,6 +32,7 @@ async function personal(table: TableRecord, viewerId: string) {
 async function broadcast(io: Server, tableId: string) {
   const table = await readTable(tableId);
   if (!table) return;
+  armTurn(table);
   const room = io.of("/table").adapter.rooms.get(tableId);
   if (!room) return;
   for (const socketId of room) {
@@ -152,6 +155,7 @@ export function attachSockets(io: Server) {
         if (Boolean(current.paused) === parsed.paused) return TABLE_UNCHANGED;
         if (!parsed.paused) {
           setPaused(current, false, Date.now());
+          restartTurn(current, Date.now());
           return null;
         }
         setPaused(current, true, Date.now());

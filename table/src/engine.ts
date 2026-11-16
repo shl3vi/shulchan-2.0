@@ -1,4 +1,5 @@
 import type { TableRecord } from "./store.js";
+import { stampTurn } from "./turn.js";
 
 const engineUrl = process.env.POKER_ENGINE_URL ?? "http://127.0.0.1:4001";
 const engineToken = process.env.ENGINE_TOKEN;
@@ -67,9 +68,10 @@ function handOf(table: TableRecord) {
   return table.poker;
 }
 
-function keep(table: TableRecord, result: PokerPacket) {
+function keep(table: TableRecord, result: PokerPacket, fresh = false) {
   table.poker = result.hand;
   table.pokerView = result.view;
+  stampTurn(table, result.view, Date.now(), fresh);
   return result.view;
 }
 
@@ -79,7 +81,8 @@ export async function createPokerTable(table: TableRecord, smallBlind: number) {
 }
 
 async function apply(table: TableRecord, action: PokerAction) {
-  return keep(table, await post("/apply", { hand: handOf(table), action }));
+  const fresh = action.type === "act" || action.type === "start";
+  return keep(table, await post("/apply", { hand: handOf(table), action }), fresh);
 }
 
 export function seatPoker(table: TableRecord, seat: number, stack: number) {

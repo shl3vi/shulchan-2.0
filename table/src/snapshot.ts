@@ -37,6 +37,8 @@ export type TableSnapshot = {
   paused?: boolean;
   /** Server epoch ms. Present only while the idle warning is up. */
   idleCloseAt?: number;
+  /** Server epoch ms when the player to act runs out of time. Absent while paused or between hands. */
+  turnDeadline?: number;
   /** Server epoch ms when this snapshot was built. */
   serverNow: number;
   lastWinners: { seat: number; name: string; amount: number }[];
@@ -94,6 +96,9 @@ export function snapshot(
     paused: table.paused === true,
     serverNow: Date.now(),
     ...(table.idleCloseAt != null && table.paused !== true ? { idleCloseAt: table.idleCloseAt } : {}),
+    ...(table.turn && actor && table.paused !== true && table.closing !== true && table.kind !== "backgammon"
+      ? { turnDeadline: table.turn.deadline }
+      : {}),
     shownCards: view.shownCards ?? [],
     lastWinners: view.lastWinners.flatMap((winner) => {
       const player = bySeat.get(winner.seat);

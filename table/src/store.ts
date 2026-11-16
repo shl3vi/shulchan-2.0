@@ -1,6 +1,7 @@
 import { createClient, type RedisClientType } from "redis";
 import type { EngineView } from "./engine.js";
 import { connectPostgres, pool, TABLE_TTL_MS } from "./db.js";
+import type { TurnClock } from "./turn.js";
 
 export type SeatPlayer = {
   id: string;
@@ -41,6 +42,8 @@ export type TableRecord = {
   closing?: boolean;
   /** Bumped on each pause so a token issued before the pause cannot rejoin. */
   mediaEpoch?: number;
+  /** Poker only. The seat to act and when the server acts for them. */
+  turn?: TurnClock;
   players: SeatPlayer[];
 };
 

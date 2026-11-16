@@ -39,6 +39,8 @@ export type TableSnapshot = {
   password?: string;
   paused?: boolean;
   idleCloseAt?: number;
+  /** Server epoch ms when the player to act runs out of time. */
+  turnDeadline?: number;
   serverNow?: number;
 };
 

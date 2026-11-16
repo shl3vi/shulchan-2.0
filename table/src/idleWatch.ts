@@ -4,6 +4,7 @@ import { summarizeIdle } from "./events/ledger.js";
 import { reportCaught } from "./events/report.js";
 import { needsIdleWrite, sweepIdle } from "./idle.js";
 import { stopMedia } from "./livekit.js";
+import { expireTurn, overdueTurn } from "./turnWatch.js";
 import { extendPausedTables, listOpenTables, publishTable, removeTable, TABLE_UNCHANGED, TableNotFound, withTable } from "./store.js";
 
 const SWEEP_MS = 10_000;
@@ -30,6 +31,7 @@ async function watch(io: Server) {
     if (row.id === debugId) continue;
     const now = Date.now();
     try {
+      if (overdueTurn(row.record, now)) await expireTurn(row.id);
       if (row.record.paused) {
         await stopMedia(row.id, row.record.mediaEpoch, false);
         continue;
