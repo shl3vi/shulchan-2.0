@@ -14,8 +14,9 @@ let started: Promise<boolean> | null = null;
 let privacyRequired = false;
 
 /**
- * Google's consent form decides who must be asked (EEA, UK and Switzerland, and the iOS
- * tracking prompt), shows it, and only then may the SDK start and request ads.
+ * Google's consent form decides who must be asked (EEA, UK and Switzerland), shows it,
+ * and only then may the SDK start and request ads. The app never asks iOS for tracking:
+ * there is no NSUserTrackingUsageDescription, so ads are not personalized by ad ID.
  */
 export function prepareAds() {
   started ??= (async () => {
