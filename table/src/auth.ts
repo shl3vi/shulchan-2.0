@@ -1,4 +1,4 @@
-import { createHash, createPublicKey, randomBytes, timingSafeEqual, verify } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, randomBytes, sign, timingSafeEqual, verify } from "node:crypto";
 import { Router } from "express";
 import { appleBody, readSchema, sessionBody } from "./schema.js";
 import { deleteHostAccount, redis } from "./store.js";
@@ -174,16 +174,76 @@ function appleAudiences() {
   return [extra, "com.loochka"].filter(Boolean);
 }
 
+type AppleRecord = { email?: string; name?: string; refreshToken?: string };
+
 /** Apple only sends the email on the first sign-in, so later visits reuse the address saved for this Apple user. */
-async function appleProfile(sub: string, email: string | undefined, name: string | undefined) {
+async function appleProfile(sub: string, email: string | undefined, name: string | undefined, refreshToken?: string) {
   const key = `apple:${sub}`;
   const saved = await redis.get(key);
-  const previous = saved ? JSON.parse(saved) as { email?: string; name?: string } : {};
+  const previous = saved ? JSON.parse(saved) as AppleRecord : {};
   const nextEmail = email || previous.email;
   const nextName = name || previous.name;
+  const nextRefresh = refreshToken || previous.refreshToken;
   if (!nextEmail) return null;
-  await redis.set(key, JSON.stringify({ email: nextEmail, ...(nextName ? { name: nextName } : {}) }));
+  await redis.set(
+    key,
+    JSON.stringify({ email: nextEmail, ...(nextName ? { name: nextName } : {}), ...(nextRefresh ? { refreshToken: nextRefresh } : {}) }),
+  );
   return { email: nextEmail, ...(nextName ? { name: nextName } : {}) };
+}
+
+/** The client secret Apple asks for is a short ES256 JWT signed with the Sign in with Apple key (.p8). */
+function appleClientSecret() {
+  const teamId = process.env.APPLE_TEAM_ID;
+  const keyId = process.env.APPLE_KEY_ID;
+  const pem = process.env.APPLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  if (!teamId || !keyId || !pem) return null;
+  const clientId = appleAudiences()[0];
+  const now = Math.floor(Date.now() / 1000);
+  const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const input = `${encode({ alg: "ES256", kid: keyId })}.${encode({ iss: teamId, iat: now, exp: now + 300, aud: "https://appleid.apple.com", sub: clientId })}`;
+  const signature = sign("sha256", Buffer.from(input), { key: createPrivateKey(pem), dsaEncoding: "ieee-p1363" });
+  return { clientId, secret: `${input}.${signature.toString("base64url")}` };
+}
+
+async function appleForm(path: string, fields: Record<string, string>) {
+  const credentials = appleClientSecret();
+  if (!credentials) return null;
+  const response = await fetch(`https://appleid.apple.com/auth/${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: credentials.clientId, client_secret: credentials.secret, ...fields }),
+  });
+  return response;
+}
+
+/** Trades the one-time authorization code for a refresh token, so the sign-in can be revoked later. */
+async function appleRefreshToken(code: string) {
+  try {
+    const response = await appleForm("token", { code, grant_type: "authorization_code" });
+    if (!response?.ok) return undefined;
+    const body = (await response.json()) as { refresh_token?: string };
+    return body.refresh_token;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Removes everything kept for this Apple user and revokes the sign-in at Apple. */
+export async function deleteAppleAccount(sub: string | undefined) {
+  if (!sub?.startsWith("apple:")) return;
+  const key = sub;
+  const saved = await redis.get(key);
+  const record = saved ? JSON.parse(saved) as AppleRecord : {};
+  if (record.refreshToken) {
+    try {
+      const response = await appleForm("revoke", { token: record.refreshToken, token_type_hint: "refresh_token" });
+      if (response && !response.ok) console.error("apple revoke failed", response.status);
+    } catch (error) {
+      console.error("apple revoke failed", error);
+    }
+  }
+  await redis.del(key);
 }
 
 authRouter.post("/auth/apple", async (req, res) => {
@@ -237,7 +297,7 @@ authRouter.post("/auth/apple", async (req, res) => {
     res.status(503).json({ error: "Apple sign-in is unavailable" });
     return;
   }
-  const profile = await appleProfile(claims.sub, claims.email, body.name);
+  const profile = await appleProfile(claims.sub, claims.email, body.name, body.authorizationCode ? await appleRefreshToken(body.authorizationCode) : undefined);
   if (!profile) {
     res.status(401).json({ error: "Apple did not share an email. Try again and allow email." });
     return;
@@ -286,6 +346,7 @@ authRouter.delete("/auth/account", async (req, res) => {
     return;
   }
   const token = header?.startsWith("Bearer ") ? header.slice(7) : "";
+  await deleteAppleAccount(host.sub);
   await deleteHostAccount(host.email, token);
   res.json({ ok: true });
 });

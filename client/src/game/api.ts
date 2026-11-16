@@ -32,9 +32,10 @@ export async function signInUrl(back: string) {
 }
 
 /** The redirect carries a one-time code. Two screens can redeem the same code; only one request is sent. */
-export function signInWithApple(identityToken: string, name?: string) {
+export function signInWithApple(identityToken: string, name?: string, authorizationCode?: string) {
   return post<{ token: string; email: string; name?: string }>("/auth/apple", {
     identityToken,
+    ...(authorizationCode ? { authorizationCode } : {}),
     ...(name ? { name } : {}),
   });
 }

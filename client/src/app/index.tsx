@@ -203,7 +203,7 @@ export default function HomeScreen() {
       });
       if (!credential.identityToken) throw new Error(t("serverUnreachable"));
       const given = [credential.fullName?.givenName, credential.fullName?.familyName].filter(Boolean).join(" ");
-      const next = await signInWithApple(credential.identityToken, given || undefined);
+      const next = await signInWithApple(credential.identityToken, given || undefined, credential.authorizationCode ?? undefined);
       setHost(next);
       await saveHost(next);
     } catch (cause) {

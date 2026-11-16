@@ -45,6 +45,7 @@ export const sessionBody = z.object({
 
 export const appleBody = z.object({
   identityToken: z.string().min(20).max(8000),
+  authorizationCode: z.string().min(1).max(2000).optional(),
   name: z.string().trim().min(1).max(80).optional(),
 }).strict();
 
