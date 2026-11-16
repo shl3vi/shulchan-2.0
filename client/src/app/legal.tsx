@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { adPrivacyAction } from "@/ads/AdBanner";
+import { API_URL } from "@/game/api";
 import { CONTACT_EMAIL } from "@/game/support";
 import { isRtl, t } from "@/i18n";
 
@@ -70,6 +71,13 @@ export default function LegalScreen() {
           >
             {CONTACT_EMAIL}
           </Text>
+        </Text>
+        <Text
+          style={[styles.copy, styles.link, { textAlign: align, marginTop: 14 }]}
+          onPress={() => void Linking.openURL(`${API_URL}/terms`)}
+          accessibilityRole="link"
+        >
+          {t("termsLink")}
         </Text>
         <Text style={[styles.updated, { textAlign: align }]}>{t("legalAccessUpdated")}</Text>
         {privacyChoices ? (

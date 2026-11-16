@@ -82,6 +82,7 @@ function page(file: string) {
 }
 app.get("/", page("index.html"));
 app.get("/privacy", page("privacy.html"));
+app.get("/terms", page("terms.html"));
 app.get("/account", page("account.html"));
 app.get("/support", page("support.html"));
 app.get("/health", async (_req, res) => {

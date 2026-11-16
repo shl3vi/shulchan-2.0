@@ -4,7 +4,9 @@ import { DarkTheme, Stack, ThemeProvider } from "expo-router";
 import { GameSessionProvider, useGameSession } from "@/game/GameSession";
 import { warmUpAds } from "@/ads/AdBanner";
 import { loadRemoteConfig } from "@/game/remoteConfig";
+import { acceptTerms, hasAcceptedTerms } from "@/game/terms";
 import { loadLocale, subscribeLocale, locale } from "@/i18n";
+import { TermsGate } from "@/ui/TermsGate";
 
 const navigationTheme = {
   ...DarkTheme,
@@ -32,14 +34,27 @@ export default function RootLayout() {
 function Shell() {
   const { ready } = useGameSession();
   const [langReady, setLangReady] = useState(false);
+  const [terms, setTerms] = useState<boolean | null>(null);
   const currentLocale = useSyncExternalStore(subscribeLocale, locale, locale);
   useEffect(() => {
     void loadLocale().finally(() => setLangReady(true));
+    void hasAcceptedTerms().then(setTerms);
     void loadRemoteConfig().then(() => warmUpAds()).catch(() => undefined);
   }, []);
   // Keep the native splash image visible until the seat check finishes.
   // A painted view here would cover that image with another color.
-  if (!ready || !langReady) return <View style={styles.hold} />;
+  if (!ready || !langReady || terms === null) return <View style={styles.hold} />;
+  if (!terms) {
+    return (
+      <TermsGate
+        key={currentLocale}
+        onAccept={() => {
+          void acceptTerms();
+          setTerms(true);
+        }}
+      />
+    );
+  }
   return <AppStack key={currentLocale} />;
 }
 
