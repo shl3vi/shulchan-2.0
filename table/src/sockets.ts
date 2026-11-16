@@ -8,7 +8,7 @@ import { assignAdmin, dropRemovedPlayers, foldDeparted, releaseSeat, sameSecret,
 import { noteBackgammonWin, playBackgammon } from "./backgammon.js";
 import { debugConfig } from "./debug.js";
 import { allowSocketEvent } from "./http.js";
-import { endRoom, mediaRoom, removeFromRoom } from "./livekit.js";
+import { endRoom, mediaRoom, mediaRooms, removeFromRoom } from "./livekit.js";
 import { assertPlaying, noteActivity, setPaused } from "./idle.js";
 import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, pauseBody, playerBody, readSchema, rebuyBody } from "./schema.js";
 import { blockedSeatIds } from "./safety.js";
@@ -218,13 +218,17 @@ export function attachSockets(io: Server) {
         await releaseSeat(current, parsed.playerId);
         // The removed player still knows the old password, so it must not let them back in.
         if (debugConfig()?.tableId !== tableId) current.password = tablePassword();
-        return seatedCount(current);
-      }).then(async (seated) => {
-        if (seated === undefined) return;
-        await notePlayers(tableId, seated);
-        await removeFromRoom(tableId, parsed.playerId).catch((error: unknown) => {
-          reportCaught(tableId, error, "livekit-remove", kind);
-        });
+        return { seated: seatedCount(current), epoch: current.mediaEpoch };
+      }).then(async (result) => {
+        if (result === undefined) return;
+        await notePlayers(tableId, result.seated);
+        // After a pause the video room is `tableId:epoch`. Drop them from the current
+        // room, the bare table room and the previous epoch, in case a pause is mid-flight.
+        for (const room of mediaRooms(tableId, result.epoch, true)) {
+          await removeFromRoom(room, parsed.playerId).catch((error: unknown) => {
+            reportCaught(tableId, error, "livekit-remove", kind);
+          });
+        }
       });
     });
 
