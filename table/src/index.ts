@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
-import { APP_SCHEME, authRouter } from "./auth.js";
+import { APP_SCHEME, assertSafeAuthConfig, authRouter } from "./auth.js";
 import { debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
 import { pool } from "./db.js";
 import { enginesReady } from "./engine.js";
@@ -17,6 +17,13 @@ import { installAnalytics, startAnalytics, stopAnalytics } from "./events/instal
 import { setNameExtras } from "./name.js";
 import { allNameTerms, publicConfigFor, regionOf } from "./publicConfig.js";
 import { connectRedis, flushTables, redis, stopStore, subscriber } from "./store.js";
+
+try {
+  assertSafeAuthConfig();
+} catch (error) {
+  console.error((error as Error).message);
+  process.exit(1);
+}
 
 const nameTerms = allNameTerms();
 setNameExtras(nameTerms.embedded, nameTerms.words);

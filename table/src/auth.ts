@@ -80,6 +80,13 @@ function redirectUri() {
   return process.env.GOOGLE_OAUTH_REDIRECT_URI ?? "";
 }
 
+/** AUTH_UPSTREAM turns any token the upstream accepts into a signed-in host, so it must never reach production. */
+export function assertSafeAuthConfig(env: NodeJS.ProcessEnv = process.env) {
+  if (env.NODE_ENV === "production" && env.AUTH_UPSTREAM) {
+    throw new Error("AUTH_UPSTREAM must not be set when NODE_ENV=production");
+  }
+}
+
 export const authRouter = Router();
 
 authRouter.get("/auth/google", async (req, res) => {
