@@ -10,9 +10,15 @@ import { CONTACT_EMAIL } from "@/game/support";
 import { isRtl, t } from "@/i18n";
 
 const sections = [
+  ["legalControllerTitle", "legalController"],
   ["legalPlayTitle", "legalPlay"],
   ["legalAccountTitle", "legalAccount"],
   ["legalPrivacyTitle", "legalPrivacy"],
+  ["legalBasisTitle", "legalBasis"],
+  ["legalRetentionTitle", "legalRetention"],
+  ["legalSharingTitle", "legalSharing"],
+  ["legalRightsTitle", "legalRights"],
+  ["legalChildrenTitle", "legalChildren"],
 ] as const;
 
 export default function LegalScreen() {
