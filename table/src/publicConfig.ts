@@ -1,19 +1,31 @@
+export type AdsMode = "off" | "test" | "live";
+
 export type PublicConfig = {
-  ads: { enabled: boolean; bannerUnitId: string };
+  /** off: no banner. test: Google's sample banner. live: this app's own ad units. */
+  ads: { mode: AdsMode; androidUnitId: string; iosUnitId: string; testDevices: string[] };
   poker: { autoDealDefault: boolean };
   update: { minVersion: string; force: boolean; iosUrl: string; androidUrl: string };
   announcement: string;
   names: { embedded: string[]; words: string[] };
 };
 
-/** What the phone gets from GET /api/config. Override any field with the PUBLIC_CONFIG env JSON. */
+/** The config for phones whose region has no entry of its own, and one entry per region code. */
+export type PublicConfigSet = {
+  default: PublicConfig;
+  regions: Record<string, PublicConfig>;
+};
+
+/** What the phone gets from GET /api/config when PUBLIC_CONFIG leaves a field out. */
 export const defaultPublicConfig: PublicConfig = {
-  ads: { enabled: true, bannerUnitId: "" },
+  ads: { mode: "test", androidUnitId: "", iosUnitId: "", testDevices: [] },
   poker: { autoDealDefault: true },
   update: { minVersion: "", force: false, iosUrl: "", androidUrl: "" },
   announcement: "",
   names: { embedded: [], words: [] },
 };
+
+const REGION = /^[A-Z]{2}$/;
+const CONFIG_KEYS = ["ads", "poker", "update", "announcement", "names"];
 
 function object(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -46,9 +58,25 @@ function version(value: unknown) {
   return /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(raw) ? raw : "";
 }
 
-function bannerId(value: unknown) {
+function unitId(value: unknown) {
   const raw = text(value, 128);
   return /^ca-app-pub-\d+\/\d+$/.test(raw) ? raw : "";
+}
+
+function adsMode(ads: Record<string, unknown> | null): AdsMode {
+  const mode = ads?.mode;
+  if (mode === "off" || mode === "test" || mode === "live") return mode;
+  // The older shape only had an on/off switch.
+  if (ads?.enabled === false) return "off";
+  return defaultPublicConfig.ads.mode;
+}
+
+function testDevices(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => text(item, 64))
+    .filter((item) => /^[A-Za-z0-9-]{8,64}$/.test(item))
+    .slice(0, 20);
 }
 
 function announcement(value: unknown) {
@@ -68,16 +96,9 @@ function terms(value: unknown) {
   return out;
 }
 
-export function readPublicConfig(raw: string | undefined): PublicConfig {
-  if (!raw?.trim()) return defaultPublicConfig;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    console.error("PUBLIC_CONFIG is not valid JSON. The app keeps the built-in config.");
-    return defaultPublicConfig;
-  }
-  const body = object(parsed);
+/** One complete config. A field it leaves out takes the built-in value, never another region's. */
+export function readOneConfig(value: unknown): PublicConfig {
+  const body = object(value);
   if (!body) return defaultPublicConfig;
   const ads = object(body.ads);
   const poker = object(body.poker);
@@ -85,8 +106,10 @@ export function readPublicConfig(raw: string | undefined): PublicConfig {
   const names = object(body.names);
   return {
     ads: {
-      enabled: bool(ads?.enabled, defaultPublicConfig.ads.enabled),
-      bannerUnitId: ads && "bannerUnitId" in ads ? bannerId(ads.bannerUnitId) : "",
+      mode: adsMode(ads),
+      androidUnitId: unitId(ads?.androidUnitId),
+      iosUnitId: unitId(ads?.iosUnitId),
+      testDevices: testDevices(ads?.testDevices),
     },
     poker: {
       autoDealDefault: bool(poker?.autoDealDefault, defaultPublicConfig.poker.autoDealDefault),
@@ -105,9 +128,65 @@ export function readPublicConfig(raw: string | undefined): PublicConfig {
   };
 }
 
-let cached: PublicConfig | undefined;
+/**
+ * PUBLIC_CONFIG is `{ "default": {...}, "FR": {...}, "IL": {...} }`, each a whole config.
+ * A body with config fields at the top is the older single-config shape and becomes the default.
+ */
+export function readPublicConfig(raw: string | undefined): PublicConfigSet {
+  const empty: PublicConfigSet = { default: defaultPublicConfig, regions: {} };
+  if (!raw?.trim()) return empty;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    console.error("PUBLIC_CONFIG is not valid JSON. The app keeps the built-in config.");
+    return empty;
+  }
+  const body = object(parsed);
+  if (!body) return empty;
+  if (!("default" in body) && CONFIG_KEYS.some((key) => key in body)) {
+    return { default: readOneConfig(body), regions: {} };
+  }
+  const regions: Record<string, PublicConfig> = {};
+  for (const [key, value] of Object.entries(body)) {
+    const region = key.toUpperCase();
+    if (!REGION.test(region)) continue;
+    regions[region] = readOneConfig(value);
+  }
+  return { default: readOneConfig(body.default), regions };
+}
 
-export function publicConfig() {
+/** A two-letter region from the phone's settings, or "" for anything else. */
+export function regionOf(value: unknown) {
+  const region = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return REGION.test(region) ? region : "";
+}
+
+let cached: PublicConfigSet | undefined;
+
+export function publicConfigSet() {
   cached ??= readPublicConfig(process.env.PUBLIC_CONFIG);
   return cached;
+}
+
+export function publicConfigFor(region: string) {
+  const set = publicConfigSet();
+  const matched = region && set.regions[region] ? region : "";
+  const config = matched ? set.regions[matched]! : set.default;
+  return {
+    ...config,
+    // Builds before the ads mode read these two fields. They keep showing Google's sample banner.
+    ads: { ...config.ads, enabled: config.ads.mode !== "off", bannerUnitId: "" },
+    region: matched || "default",
+  };
+}
+
+/** Name filtering runs on the server for every table, so it uses the terms of every region together. */
+export function allNameTerms() {
+  const set = publicConfigSet();
+  const configs = [set.default, ...Object.values(set.regions)];
+  return {
+    embedded: [...new Set(configs.flatMap((config) => config.names.embedded))],
+    words: [...new Set(configs.flatMap((config) => config.names.words))],
+  };
 }

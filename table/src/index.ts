@@ -15,11 +15,11 @@ import { startIdleWatch, stopIdleWatch } from "./idleWatch.js";
 import { attachSockets } from "./sockets.js";
 import { installAnalytics, startAnalytics, stopAnalytics } from "./events/install.js";
 import { setNameExtras } from "./name.js";
-import { publicConfig } from "./publicConfig.js";
+import { allNameTerms, publicConfigFor, regionOf } from "./publicConfig.js";
 import { connectRedis, flushTables, redis, stopStore, subscriber } from "./store.js";
 
-const config = publicConfig();
-setNameExtras(config.names.embedded, config.names.words);
+const nameTerms = allNameTerms();
+setNameExtras(nameTerms.embedded, nameTerms.words);
 
 installAnalytics();
 await connectRedis();
@@ -112,8 +112,8 @@ app.get("/join", (req, res) => {
   location.replace(/Android/i.test(navigator.userAgent) ? intent : app);
 </script>`);
 });
-app.get("/api/config", (_req, res) => {
-  res.json(publicConfig());
+app.get("/api/config", (req, res) => {
+  res.json(publicConfigFor(regionOf(req.query.region)));
 });
 app.use("/api/games", router);
 

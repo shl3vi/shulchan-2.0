@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Linking from "expo-linking";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { adPrivacyAction } from "@/ads/AdBanner";
 import { CONTACT_EMAIL } from "@/game/support";
 import { isRtl, t } from "@/i18n";
 
@@ -18,6 +20,17 @@ export default function LegalScreen() {
   const insets = useSafeAreaInsets();
   const align = isRtl() ? "right" : "left";
   const textWidth = useWindowDimensions().width - 44;
+  const [privacyChoices, setPrivacyChoices] = useState<(() => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void adPrivacyAction().then((action) => {
+      if (live) setPrivacyChoices(() => action);
+    }).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16 }]}>
@@ -53,6 +66,15 @@ export default function LegalScreen() {
           </Text>
         </Text>
         <Text style={[styles.updated, { textAlign: align }]}>{t("legalAccessUpdated")}</Text>
+        {privacyChoices ? (
+          <Text
+            style={[styles.copy, styles.link, { textAlign: align }]}
+            onPress={() => void privacyChoices().catch(() => undefined)}
+            accessibilityRole="button"
+          >
+            {t("adPrivacyChoices")}
+          </Text>
+        ) : null}
       </ScrollView>
     </View>
   );

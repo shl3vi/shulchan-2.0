@@ -1,22 +1,28 @@
 import Constants from "expo-constants";
+import { getLocales } from "expo-localization";
 import { Platform } from "react-native";
 import { API_URL } from "@/game/api";
 import { setNameExtras } from "@/game/name";
 import { compareVersions } from "@/game/version";
 
+export type AdsMode = "off" | "test" | "live";
+
 export type RemoteConfig = {
-  ads: { enabled: boolean; bannerUnitId: string };
+  /** off: no banner. test: Google's sample banner. live: this app's own ad units. */
+  ads: { mode: AdsMode; androidUnitId: string; iosUnitId: string; testDevices: string[] };
   poker: { autoDealDefault: boolean };
   update: { minVersion: string; force: boolean; iosUrl: string; androidUrl: string };
   announcement: string;
   names: { embedded: string[]; words: string[] };
 };
 
+function modeOf(value: unknown): AdsMode | null {
+  return value === "off" || value === "test" || value === "live" ? value : null;
+}
+
 const fallback: RemoteConfig = {
-  ads: {
-    enabled: process.env.EXPO_PUBLIC_ADS_ENABLED !== "false",
-    bannerUnitId: "",
-  },
+  // Nothing is shown until the server answers, so a build cannot serve ads its config did not ask for.
+  ads: { mode: modeOf(process.env.EXPO_PUBLIC_ADS_MODE) ?? "off", androidUnitId: "", iosUnitId: "", testDevices: [] },
   poker: { autoDealDefault: true },
   update: { minVersion: "", force: false, iosUrl: "", androidUrl: "" },
   announcement: "",
@@ -60,6 +66,26 @@ function httpsUrl(value: unknown) {
   }
 }
 
+function unitId(value: unknown) {
+  const raw = text(value, 128);
+  return /^ca-app-pub-\d+\/\d+$/.test(raw) ? raw : "";
+}
+
+function testDevices(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => text(item, 64)).filter((item) => /^[A-Za-z0-9-]{8,64}$/.test(item)).slice(0, 20);
+}
+
+/** The region in the phone's settings, such as FR. It is not where the phone is. */
+export function phoneRegion() {
+  try {
+    const region = getLocales()[0]?.regionCode?.toUpperCase() ?? "";
+    return /^[A-Z]{2}$/.test(region) ? region : "";
+  } catch {
+    return "";
+  }
+}
+
 function terms(value: unknown) {
   if (!Array.isArray(value)) return [];
   const out: string[] = [];
@@ -81,11 +107,12 @@ function apply(body: unknown): RemoteConfig {
   const update = object(record.update);
   const names = object(record.names);
   const minVersion = text(update?.minVersion, 20);
-  const banner = text(ads?.bannerUnitId, 128);
   return {
     ads: {
-      enabled: bool(ads?.enabled, current.ads.enabled),
-      bannerUnitId: /^ca-app-pub-\d+\/\d+$/.test(banner) ? banner : "",
+      mode: modeOf(ads?.mode) ?? (ads?.enabled === false ? "off" : current.ads.mode),
+      androidUnitId: unitId(ads?.androidUnitId),
+      iosUnitId: unitId(ads?.iosUnitId),
+      testDevices: testDevices(ads?.testDevices),
     },
     poker: { autoDealDefault: bool(poker?.autoDealDefault, current.poker.autoDealDefault) },
     update: {
@@ -101,7 +128,8 @@ function apply(body: unknown): RemoteConfig {
 
 export async function loadRemoteConfig() {
   try {
-    const response = await fetch(`${API_URL}/api/config`);
+    const region = phoneRegion();
+    const response = await fetch(`${API_URL}/api/config${region ? `?region=${region}` : ""}`);
     if (!response.ok) return;
     const next = apply(await response.json());
     current = next;

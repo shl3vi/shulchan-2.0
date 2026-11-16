@@ -3,5 +3,5 @@ import { useRemoteConfig } from "@/game/UpdateNotice";
 
 export function useTableAdAllowed(state: TableSnapshot | null) {
   const config = useRemoteConfig();
-  return config.ads.enabled && state?.round == null;
+  return config.ads.mode !== "off" && state?.round == null;
 }

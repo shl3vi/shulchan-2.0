@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { StyleSheet, View } from "react-native";
 import { DarkTheme, Stack, ThemeProvider } from "expo-router";
 import { GameSessionProvider, useGameSession } from "@/game/GameSession";
+import { warmUpAds } from "@/ads/AdBanner";
 import { loadRemoteConfig } from "@/game/remoteConfig";
 import { loadLocale, subscribeLocale, locale } from "@/i18n";
 
@@ -34,7 +35,7 @@ function Shell() {
   const currentLocale = useSyncExternalStore(subscribeLocale, locale, locale);
   useEffect(() => {
     void loadLocale().finally(() => setLangReady(true));
-    void loadRemoteConfig();
+    void loadRemoteConfig().then(() => warmUpAds()).catch(() => undefined);
   }, []);
   // Keep the native splash image visible until the seat check finishes.
   // A painted view here would cover that image with another color.

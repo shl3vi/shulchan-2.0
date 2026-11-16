@@ -61,13 +61,19 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+          "androidAppId": "ca-app-pub-1060524753529308~8002841923",
+          "iosAppId": "ca-app-pub-1060524753529308~2890291058",
+          "delayAppMeasurementInit": true,
+          "userTrackingUsageDescription": "LOOCHKA shows a banner ad at the table. Allowing tracking lets the ad network show ads closer to your interests. The game works the same either way.",
+          "skAdNetworkItems": [
+            "cstr6suwn9.skadnetwork"
+          ]
         }
       ],
       "expo-secure-store",
       "expo-audio",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -82,7 +88,9 @@
     "owner": "shl3vi"
   },
   "react-native-google-mobile-ads": {
-    "android_app_id": "ca-app-pub-3940256099942544~3347511713",
-    "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
+    "android_app_id": "ca-app-pub-1060524753529308~8002841923",
+    "ios_app_id": "ca-app-pub-1060524753529308~2890291058",
+    "delay_app_measurement_init": true,
+    "user_tracking_usage_description": "LOOCHKA shows a banner ad at the table. Allowing tracking lets the ad network show ads closer to your interests. The game works the same either way."
   }
 }
