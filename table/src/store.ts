@@ -17,6 +17,8 @@ export type SeatPlayer = {
 export type TableRecord = {
   id: string;
   adminId?: string;
+  /** Server time the admin was first seen disconnected. See admin.ts. */
+  adminAwaySince?: number;
   adminSecret?: string;
   smallBlind: number;
   buyIn: number;

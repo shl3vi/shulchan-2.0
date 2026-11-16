@@ -5,7 +5,8 @@ import { reportCaught } from "./events/report.js";
 import { needsIdleWrite, sweepIdle } from "./idle.js";
 import { stopMedia } from "./livekit.js";
 import { expireTurn, overdueTurn } from "./turnWatch.js";
-import { extendPausedTables, listOpenTables, publishTable, removeTable, TABLE_UNCHANGED, TableNotFound, withTable } from "./store.js";
+import { extendPausedTables, listOpenTables, publishTable, removeTable, TABLE_UNCHANGED, TableNotFound, withTable, type TableRecord } from "./store.js";
+import { settleAdmin } from "./admin.js";
 
 const SWEEP_MS = 10_000;
 
@@ -24,6 +25,22 @@ async function closeIdle(io: Server, tableId: string, epoch: number | undefined)
   await stopMedia(tableId, epoch, true);
 }
 
+/** Player ids with a live socket on any table process. The Redis adapter answers for the others. */
+async function connectedPlayers(io: Server, tableId: string) {
+  const sockets = await io.of("/table").in(tableId).fetchSockets();
+  return new Set(sockets.map((socket) => String(socket.handshake.auth.playerId ?? "")));
+}
+
+async function handOffAdmin(io: Server, tableId: string, record: TableRecord, now: number) {
+  if (record.players.length === 0 || record.closing) return;
+  const connected = await connectedPlayers(io, tableId);
+  // Try it on a copy first, so a table with its admin present is never locked or written.
+  const probe = { adminId: record.adminId, adminAwaySince: record.adminAwaySince, players: record.players };
+  if (!settleAdmin(probe, connected, now, (items) => items[0]!)) return;
+  const changed = await withTable(tableId, async (table) => (settleAdmin(table, connected, Date.now()) ? true : TABLE_UNCHANGED));
+  if (changed !== TABLE_UNCHANGED) await publishTable(tableId);
+}
+
 async function watch(io: Server) {
   const debugId = debugConfig()?.tableId;
   const open = await listOpenTables();
@@ -31,6 +48,8 @@ async function watch(io: Server) {
     if (row.id === debugId) continue;
     const now = Date.now();
     try {
+      // Before the pause check: a paused table whose admin left can only be resumed by a new admin.
+      await handOffAdmin(io, row.id, row.record, now);
       if (overdueTurn(row.record, now)) await expireTurn(row.id);
       if (row.record.paused) {
         await stopMedia(row.id, row.record.mediaEpoch, false);
