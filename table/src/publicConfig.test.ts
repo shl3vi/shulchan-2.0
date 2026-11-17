@@ -59,3 +59,12 @@ test("only a two-letter region is accepted", () => {
   assert.equal(regionOf(["FR"]), "");
   assert.equal(regionOf(undefined), "");
 });
+
+test("video quality is read per game and kept in range", () => {
+  const config = readOneConfig({
+    video: { poker: { width: 480, height: 360, frameRate: 99, maxKbps: "fast" }, backgammon: "nope" },
+  });
+  assert.deepEqual(config.video.poker, { width: 480, height: 360, frameRate: 30, maxKbps: 150 });
+  assert.deepEqual(config.video.backgammon, { width: 320, height: 240, frameRate: 15, maxKbps: 150 });
+  assert.deepEqual(readOneConfig({}).video.poker, { width: 320, height: 240, frameRate: 15, maxKbps: 150 });
+});

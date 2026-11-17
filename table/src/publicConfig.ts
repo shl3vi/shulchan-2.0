@@ -1,9 +1,13 @@
 export type AdsMode = "off" | "test" | "live";
 
+/** How one phone captures and sends its camera. A seat tile is small, so this stays low. */
+export type VideoQuality = { width: number; height: number; frameRate: number; maxKbps: number };
+
 export type PublicConfig = {
   /** off: no banner. test: Google's sample banner. live: this app's own ad units. */
   ads: { mode: AdsMode; androidUnitId: string; iosUnitId: string; testDevices: string[] };
   poker: { autoDealDefault: boolean };
+  video: { poker: VideoQuality; backgammon: VideoQuality };
   update: { minVersion: string; force: boolean; iosUrl: string; androidUrl: string };
   announcement: string;
   names: { embedded: string[]; words: string[] };
@@ -19,13 +23,17 @@ export type PublicConfigSet = {
 export const defaultPublicConfig: PublicConfig = {
   ads: { mode: "test", androidUnitId: "", iosUnitId: "", testDevices: [] },
   poker: { autoDealDefault: true },
+  video: {
+    poker: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
+    backgammon: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
+  },
   update: { minVersion: "", force: false, iosUrl: "", androidUrl: "" },
   announcement: "",
   names: { embedded: [], words: [] },
 };
 
 const REGION = /^[A-Z]{2}$/;
-const CONFIG_KEYS = ["ads", "poker", "update", "announcement", "names"];
+const CONFIG_KEYS = ["ads", "poker", "video", "update", "announcement", "names"];
 
 function object(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -39,6 +47,22 @@ function bool(value: unknown, fallback: boolean) {
 function text(value: unknown, max: number) {
   if (typeof value !== "string") return "";
   return value.trim().slice(0, max);
+}
+
+/** A whole number inside the range, or the fallback for anything else. */
+function int(value: unknown, min: number, max: number, fallback: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function videoQuality(value: unknown, fallback: VideoQuality): VideoQuality {
+  const body = object(value);
+  return {
+    width: int(body?.width, 160, 1280, fallback.width),
+    height: int(body?.height, 120, 720, fallback.height),
+    frameRate: int(body?.frameRate, 5, 30, fallback.frameRate),
+    maxKbps: int(body?.maxKbps, 50, 2000, fallback.maxKbps),
+  };
 }
 
 function httpsUrl(value: unknown) {
@@ -104,6 +128,7 @@ export function readOneConfig(value: unknown): PublicConfig {
   const poker = object(body.poker);
   const update = object(body.update);
   const names = object(body.names);
+  const video = object(body.video);
   return {
     ads: {
       mode: adsMode(ads),
@@ -113,6 +138,10 @@ export function readOneConfig(value: unknown): PublicConfig {
     },
     poker: {
       autoDealDefault: bool(poker?.autoDealDefault, defaultPublicConfig.poker.autoDealDefault),
+    },
+    video: {
+      poker: videoQuality(video?.poker, defaultPublicConfig.video.poker),
+      backgammon: videoQuality(video?.backgammon, defaultPublicConfig.video.backgammon),
     },
     update: {
       minVersion: version(update?.minVersion),

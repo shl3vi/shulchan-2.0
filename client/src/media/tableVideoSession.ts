@@ -1,5 +1,6 @@
 import { Room, RoomEvent, Track, type VideoTrack } from "livekit-client";
 import { liveKitToken } from "@/game/api";
+import type { VideoQuality } from "@/game/remoteConfig";
 import type { Credentials } from "@/game/types";
 import { allowCapture } from "@/media/capturePermission";
 import { registerLiveKit } from "@/media/registerLiveKit";
@@ -10,8 +11,24 @@ export function startTableVideo(
   onMic: (on: boolean) => void,
   onDown: () => void,
   desired: { camera: boolean; mic: boolean },
+  quality: VideoQuality,
 ) {
-  const room = new Room();
+  /**
+   * A seat tile is small, so each camera is sent once, at a small size and a capped
+   * bitrate (set per region and per game in the server config). Dynacast stops a camera
+   * nobody receives. adaptiveStream stays off: remote tiles draw with RTCView, which
+   * it cannot see, so it would pause cameras that are on screen.
+   */
+  const room = new Room({
+    dynacast: true,
+    videoCaptureDefaults: {
+      resolution: { width: quality.width, height: quality.height, frameRate: quality.frameRate },
+    },
+    publishDefaults: {
+      simulcast: false,
+      videoEncoding: { maxBitrate: quality.maxKbps * 1000, maxFramerate: quality.frameRate },
+    },
+  });
   let stopped = false;
   let connected = false;
   let blocked = new Set<string>();

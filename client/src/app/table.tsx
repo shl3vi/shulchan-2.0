@@ -521,7 +521,7 @@ export default function TableScreen() {
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const insets = useSafeAreaInsets();
   const { credentials, state, error, dismissError, startHand, setAutoDeal, setPaused, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
-  const video = useTableVideo(credentials, state?.paused === true);
+  const video = useTableVideo(credentials, state?.paused === true, state?.kind ?? "poker");
   const showAd = useTableAdAllowed(state);
   const mode = updateMode();
   const [sheet, setSheet] = useState<"stats" | "admin" | null>(null);

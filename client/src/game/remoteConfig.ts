@@ -7,10 +7,15 @@ import { compareVersions } from "@/game/version";
 
 export type AdsMode = "off" | "test" | "live";
 
+/** How this phone captures and sends its camera at a table. */
+export type VideoQuality = { width: number; height: number; frameRate: number; maxKbps: number };
+export type GameKind = "poker" | "backgammon";
+
 export type RemoteConfig = {
   /** off: no banner. test: Google's sample banner. live: this app's own ad units. */
   ads: { mode: AdsMode; androidUnitId: string; iosUnitId: string; testDevices: string[] };
   poker: { autoDealDefault: boolean };
+  video: Record<GameKind, VideoQuality>;
   update: { minVersion: string; force: boolean; iosUrl: string; androidUrl: string };
   announcement: string;
   names: { embedded: string[]; words: string[] };
@@ -24,6 +29,10 @@ const fallback: RemoteConfig = {
   // Nothing is shown until the server answers, so a build cannot serve ads its config did not ask for.
   ads: { mode: modeOf(process.env.EXPO_PUBLIC_ADS_MODE) ?? "off", androidUnitId: "", iosUnitId: "", testDevices: [] },
   poker: { autoDealDefault: true },
+  video: {
+    poker: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
+    backgammon: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
+  },
   update: { minVersion: "", force: false, iosUrl: "", androidUrl: "" },
   announcement: "",
   names: { embedded: [], words: [] },
@@ -53,6 +62,21 @@ function bool(value: unknown, fallbackValue: boolean) {
 function object(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function int(value: unknown, min: number, max: number, fallbackValue: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallbackValue;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function videoQuality(value: unknown, fallbackValue: VideoQuality): VideoQuality {
+  const body = object(value);
+  return {
+    width: int(body?.width, 160, 1280, fallbackValue.width),
+    height: int(body?.height, 120, 720, fallbackValue.height),
+    frameRate: int(body?.frameRate, 5, 30, fallbackValue.frameRate),
+    maxKbps: int(body?.maxKbps, 50, 2000, fallbackValue.maxKbps),
+  };
 }
 
 function httpsUrl(value: unknown) {
@@ -106,6 +130,7 @@ function apply(body: unknown): RemoteConfig {
   const poker = object(record.poker);
   const update = object(record.update);
   const names = object(record.names);
+  const video = object(record.video);
   const minVersion = text(update?.minVersion, 20);
   return {
     ads: {
@@ -115,6 +140,10 @@ function apply(body: unknown): RemoteConfig {
       testDevices: testDevices(ads?.testDevices),
     },
     poker: { autoDealDefault: bool(poker?.autoDealDefault, current.poker.autoDealDefault) },
+    video: {
+      poker: videoQuality(video?.poker, fallback.video.poker),
+      backgammon: videoQuality(video?.backgammon, fallback.video.backgammon),
+    },
     update: {
       minVersion: /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(minVersion) ? minVersion : "",
       force: bool(update?.force, false),

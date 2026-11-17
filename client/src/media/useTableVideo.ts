@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import type { VideoTrack } from "livekit-client";
+import { remoteConfig, type GameKind } from "@/game/remoteConfig";
 import type { Credentials } from "@/game/types";
 import { allowCapture } from "@/media/capturePermission";
 import { videoSupported } from "@/media/videoSupport";
@@ -14,7 +15,7 @@ type VideoHandle = {
   block: (ids: string[]) => void;
 };
 
-export function useTableVideo(credentials: Credentials | null, suspended = false) {
+export function useTableVideo(credentials: Credentials | null, suspended = false, kind: GameKind = "poker") {
   const [tracks, setTracks] = useState<Map<string, VideoTrack>>(new Map());
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
@@ -31,6 +32,8 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
   const suspendedRef = useRef(suspended);
   credentialsRef.current = credentials;
   suspendedRef.current = suspended;
+  const kindRef = useRef(kind);
+  kindRef.current = kind;
 
   const gameId = credentials?.gameId;
   const playerId = credentials?.playerId;
@@ -81,7 +84,7 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
       const session = mod.startTableVideo(current, setTracks, setMicOn, () => {
         handle.current = null;
         reset();
-      }, desired.current);
+      }, desired.current, remoteConfig().video[kindRef.current]);
       if (ticket !== generation.current || suspendedRef.current) {
         session.disconnect();
         return;
