@@ -10,7 +10,9 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://loochka.com"
+        "EXPO_PUBLIC_API_URL": "https://loochka.com",
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_sR36NbR7H6tcJCmfjmzF2rBaeFRt9mpnAKJRBKSJz8zA",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
       }
     },
     "production": {
@@ -18,7 +20,9 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://loochka.com"
+        "EXPO_PUBLIC_API_URL": "https://loochka.com",
+        "EXPO_PUBLIC_POSTHOG_KEY": "phc_sR36NbR7H6tcJCmfjmzF2rBaeFRt9mpnAKJRBKSJz8zA",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
       },
       "autoIncrement": true
     }

@@ -6,6 +6,7 @@ import { warmUpAds } from "@/ads/AdBanner";
 import { loadRemoteConfig } from "@/game/remoteConfig";
 import { acceptTerms, hasAcceptedTerms } from "@/game/terms";
 import { loadLocale, subscribeLocale, locale } from "@/i18n";
+import { CrashScreen } from "@/ui/CrashScreen";
 import { TermsGate } from "@/ui/TermsGate";
 
 const navigationTheme = {
@@ -24,9 +25,11 @@ const navigationTheme = {
 export default function RootLayout() {
   return (
     <ThemeProvider value={navigationTheme}>
-      <GameSessionProvider>
-        <Shell />
-      </GameSessionProvider>
+      <CrashScreen>
+        <GameSessionProvider>
+          <Shell />
+        </GameSessionProvider>
+      </CrashScreen>
     </ThemeProvider>
   );
 }
