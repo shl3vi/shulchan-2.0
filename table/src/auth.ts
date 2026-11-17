@@ -80,11 +80,51 @@ function redirectUri() {
   return process.env.GOOGLE_OAUTH_REDIRECT_URI ?? "";
 }
 
-/** AUTH_UPSTREAM turns any token the upstream accepts into a signed-in host, so it must never reach production. */
-export function assertSafeAuthConfig(env: NodeJS.ProcessEnv = process.env) {
-  if (env.NODE_ENV === "production" && env.AUTH_UPSTREAM) {
-    throw new Error("AUTH_UPSTREAM must not be set when NODE_ENV=production");
+/** Reads the Sign in with Apple key (.p8). Railway keeps it on one line, with \n for each line break. */
+function readAppleKey(env: NodeJS.ProcessEnv = process.env) {
+  const teamId = env.APPLE_TEAM_ID?.trim();
+  const keyId = env.APPLE_KEY_ID?.trim();
+  const pem = env.APPLE_PRIVATE_KEY?.replace(/\\n/g, "\n").trim();
+  if (!teamId || !keyId || !pem) return null;
+  return { teamId, keyId, key: createPrivateKey(pem) };
+}
+
+const APPLE_KEY_NAMES = ["APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY"];
+
+/**
+ * Without the Apple key, sign-in saves no refresh token and account deletion revokes nothing at Apple. The one-time
+ * code Apple sends at sign-in can't be redeemed later, so production keeps Apple sign-in off until the key is set.
+ * Local dev keeps it on, so it can be tried without the key.
+ */
+export function appleSignInOff(env: NodeJS.ProcessEnv = process.env) {
+  return env.NODE_ENV === "production" && !APPLE_KEY_NAMES.every((name) => env[name]?.trim());
+}
+
+/** No key at all turns Apple sign-in off. A key that is only partly set, or can't be read, is a mistake and stops the start. */
+function assertAppleKey(env: NodeJS.ProcessEnv) {
+  const missing = APPLE_KEY_NAMES.filter((name) => !env[name]?.trim());
+  if (missing.length === APPLE_KEY_NAMES.length) {
+    console.warn("Apple sign-in is off: set APPLE_TEAM_ID, APPLE_KEY_ID and APPLE_PRIVATE_KEY to turn it on");
+    return;
   }
+  if (missing.length) throw new Error(`${missing.join(", ")} must be set too, or Apple sign-in can't work (Sign in with Apple key)`);
+  let key: ReturnType<typeof createPrivateKey>;
+  try {
+    key = readAppleKey(env)!.key;
+  } catch {
+    throw new Error("APPLE_PRIVATE_KEY is not a readable private key. Paste the whole .p8 file, with \\n for each line break");
+  }
+  if (key.asymmetricKeyType !== "ec" || key.asymmetricKeyDetails?.namedCurve !== "prime256v1") {
+    throw new Error("APPLE_PRIVATE_KEY is not a Sign in with Apple key (expected an ES256 .p8 key)");
+  }
+}
+
+/** Checked at startup, so a bad production config stops the deploy instead of failing quietly. */
+export function assertSafeAuthConfig(env: NodeJS.ProcessEnv = process.env) {
+  if (env.NODE_ENV !== "production") return;
+  // AUTH_UPSTREAM turns any token the upstream accepts into a signed-in host.
+  if (env.AUTH_UPSTREAM) throw new Error("AUTH_UPSTREAM must not be set when NODE_ENV=production");
+  assertAppleKey(env);
 }
 
 export const authRouter = Router();
@@ -201,15 +241,14 @@ async function appleProfile(sub: string, email: string | undefined, name: string
 
 /** The client secret Apple asks for is a short ES256 JWT signed with the Sign in with Apple key (.p8). */
 function appleClientSecret() {
-  const teamId = process.env.APPLE_TEAM_ID;
-  const keyId = process.env.APPLE_KEY_ID;
-  const pem = process.env.APPLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!teamId || !keyId || !pem) return null;
+  const apple = readAppleKey();
+  if (!apple) return null;
+  const { teamId, keyId, key } = apple;
   const clientId = appleAudiences()[0];
   const now = Math.floor(Date.now() / 1000);
   const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
   const input = `${encode({ alg: "ES256", kid: keyId })}.${encode({ iss: teamId, iat: now, exp: now + 300, aud: "https://appleid.apple.com", sub: clientId })}`;
-  const signature = sign("sha256", Buffer.from(input), { key: createPrivateKey(pem), dsaEncoding: "ieee-p1363" });
+  const signature = sign("sha256", Buffer.from(input), { key, dsaEncoding: "ieee-p1363" });
   return { clientId, secret: `${input}.${signature.toString("base64url")}` };
 }
 
@@ -224,14 +263,26 @@ async function appleForm(path: string, fields: Record<string, string>) {
   return response;
 }
 
-/** Trades the one-time authorization code for a refresh token, so the sign-in can be revoked later. */
+/**
+ * Trades the one-time authorization code for a refresh token, so the sign-in can be revoked later. The code can't be
+ * redeemed again, so a failure here means this user can never be revoked: it is logged, but sign-in still goes ahead.
+ */
 async function appleRefreshToken(code: string) {
   try {
     const response = await appleForm("token", { code, grant_type: "authorization_code" });
-    if (!response?.ok) return undefined;
+    if (!response) {
+      console.error("apple token skipped: the Sign in with Apple key is not set");
+      return undefined;
+    }
+    if (!response.ok) {
+      console.error("apple token failed", response.status, await response.text().catch(() => ""));
+      return undefined;
+    }
     const body = (await response.json()) as { refresh_token?: string };
+    if (!body.refresh_token) console.error("apple token failed: no refresh token in the answer");
     return body.refresh_token;
-  } catch {
+  } catch (error) {
+    console.error("apple token failed", error);
     return undefined;
   }
 }
@@ -245,7 +296,8 @@ export async function deleteAppleAccount(sub: string | undefined) {
   if (record.refreshToken) {
     try {
       const response = await appleForm("revoke", { token: record.refreshToken, token_type_hint: "refresh_token" });
-      if (response && !response.ok) console.error("apple revoke failed", response.status);
+      if (!response) console.error("apple revoke skipped: the Sign in with Apple key is not set");
+      else if (!response.ok) console.error("apple revoke failed", response.status);
     } catch (error) {
       console.error("apple revoke failed", error);
     }
@@ -254,6 +306,10 @@ export async function deleteAppleAccount(sub: string | undefined) {
 }
 
 authRouter.post("/auth/apple", async (req, res) => {
+  if (appleSignInOff()) {
+    res.status(503).json({ error: "Apple sign-in is not available yet. Sign in with Google." });
+    return;
+  }
   const body = readSchema(appleBody, req.body);
   if (!body) {
     res.status(400).json({ error: "Sign-in expired. Try again." });
