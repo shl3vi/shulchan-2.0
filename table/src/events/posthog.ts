@@ -12,7 +12,8 @@ function distinctId(event: AppEvent) {
 }
 
 export function capture(event: AppEvent) {
-  if (!client) return;
+  // Errors are counted and sent with the heartbeat instead, so a burst of errors can't run up the PostHog bill.
+  if (!client || event.name === "error") return;
   client.capture({
     distinctId: distinctId(event),
     event: event.name,
@@ -28,6 +29,12 @@ export function capture(event: AppEvent) {
 
 export function listenPosthog() {
   subscribe("posthog", capture);
+}
+
+/** For a crash: sends one event now, since the process is about to exit. */
+export async function captureCrash(source: string) {
+  if (!client) return;
+  await client.captureImmediate({ distinctId: "server", event: "server.crash", properties: { source } });
 }
 
 export async function shutdownPosthog() {

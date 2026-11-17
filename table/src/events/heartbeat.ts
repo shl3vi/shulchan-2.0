@@ -1,6 +1,7 @@
 import { pool } from "../db.js";
 import { redis } from "../store.js";
 import { publish } from "./bus.js";
+import { takeErrorCounts } from "./errorCount.js";
 
 const EVERY_MS = 5 * 60 * 1000;
 let timer: NodeJS.Timeout | undefined;
@@ -20,7 +21,7 @@ async function beat() {
   } catch {
     postgresOk = false;
   }
-  publish({ name: "server.heartbeat", data: { redisOk, postgresOk } });
+  publish({ name: "server.heartbeat", data: { redisOk, postgresOk, ...takeErrorCounts() } });
 }
 
 export function startHeartbeat() {

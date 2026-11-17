@@ -13,6 +13,7 @@ import { router } from "./routes.js";
 import { attachCluster } from "./cluster.js";
 import { startIdleWatch, stopIdleWatch } from "./idleWatch.js";
 import { attachSockets } from "./sockets.js";
+import { installCrashHandlers } from "./events/crash.js";
 import { installAnalytics, startAnalytics, stopAnalytics } from "./events/install.js";
 import { setNameExtras } from "./name.js";
 import { allNameTerms, publicConfigFor, regionOf } from "./publicConfig.js";
@@ -29,6 +30,7 @@ const nameTerms = allNameTerms();
 setNameExtras(nameTerms.embedded, nameTerms.words);
 
 installAnalytics();
+installCrashHandlers();
 await connectRedis();
 
 const app = express();

@@ -19,6 +19,12 @@ export function reportError(input: {
   if (input.tableId) void noteError(input.tableId);
 }
 
+/** The PostHog event only says which kind of error it was; the Railway log keeps the message and stack. */
+function logError(tableId: string | undefined, route: string, error: unknown) {
+  const where = `${route}${tableId ? ` table=${tableId}` : ""}`;
+  console.error(`error at ${where}:`, error instanceof Error ? (error.stack ?? error.message) : error);
+}
+
 export function reportCaught(tableId: string | undefined, error: unknown, route: string, kind?: "poker" | "backgammon") {
   if (error instanceof TableNotFound) return;
   const message = error instanceof Error ? error.message : "";
@@ -31,12 +37,15 @@ export function reportCaught(tableId: string | undefined, error: unknown, route:
     return;
   }
   if (message === "Table is busy") {
+    logError(tableId, route, error);
     reportError({ area: "store", tableId, op: "lock", kind });
     return;
   }
   if (error instanceof EngineTimeout || message === "Poker engine failed" || /fetch failed|ECONNREFUSED|EAI_AGAIN/i.test(message)) {
+    logError(tableId, route, error);
     reportError({ area: "store", tableId, op: "engine", kind });
     return;
   }
+  logError(tableId, route, error);
   reportError({ area: "action", tableId, route, kind });
 }

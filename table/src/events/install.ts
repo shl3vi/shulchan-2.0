@@ -1,9 +1,11 @@
 import { whenTablesExpire } from "../store.js";
 import { startHeartbeat, stopHeartbeat } from "./heartbeat.js";
 import { summarizeExpired } from "./ledger.js";
+import { listenErrorCount } from "./errorCount.js";
 import { listenPosthog, shutdownPosthog } from "./posthog.js";
 
 export function installAnalytics() {
+  listenErrorCount();
   listenPosthog();
   whenTablesExpire(summarizeExpired);
 }
