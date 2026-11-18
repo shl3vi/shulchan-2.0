@@ -5,5 +5,5 @@ License: Creative Commons Zero (CC0). Trimmed and converted to WAV.
 chips-push.wav, card-deal.wav and card-flip.wav: "Casino Audio" 1.1 by Kenney (www.kenney.nl),
 chips-handle-5, card-slide-1 and card-place-2. License: Creative Commons Zero (CC0). Converted from OGG to WAV.
 
-applause.m4a: "Small group cheer and applause" from Mixkit (https://mixkit.co/free-sound-effects/applause/),
+applause.wav: "Small group cheer and applause" from Mixkit (https://mixkit.co/free-sound-effects/applause/),
 Mixkit Sound Effects Free License. Cut to 4.3 seconds with a fade out.

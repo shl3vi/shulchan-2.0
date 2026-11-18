@@ -18,7 +18,7 @@ import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
 import { move as playMove, newGame, opponent, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
-import { playSfx, preloadSfx } from "@/game/sfx";
+import { playSfx, preloadSfx, sleepSfx } from "@/game/sfx";
 import { t } from "@/i18n";
 import { SeatSafety } from "@/game/SeatSafety";
 import { TableHold } from "@/game/TableHold";
@@ -553,6 +553,7 @@ export default function TableScreen() {
 
   useEffect(() => {
     preloadSfx();
+    return () => sleepSfx();
   }, []);
 
   // Applause for everyone at the table when a poker hand ends, as the winner's seat grows.

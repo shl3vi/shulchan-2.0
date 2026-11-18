@@ -72,7 +72,16 @@
       "expo-secure-store",
       "expo-audio",
       "expo-apple-authentication",
-      "expo-localization"
+      "expo-localization",
+      [
+        "react-native-audio-api",
+        {
+          "iosBackgroundMode": false,
+          "androidForegroundService": false,
+          "androidPermissions": []
+        }
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
