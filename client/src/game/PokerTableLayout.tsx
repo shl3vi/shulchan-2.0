@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,6 +17,8 @@ export type SeatSlot = {
   /** Server time of that snapshot, so the clock restarts on each one. */
   turnStamp?: number;
   isYou: boolean;
+  /** Still has cards in the current hand. */
+  inHand?: boolean;
   winner?: boolean;
   video?: ReactNode;
   cameraOn?: boolean;
@@ -111,6 +113,70 @@ function PlayingCard({
   );
 }
 
+const FLIP_MS = 260;
+const FLIP_GAP_MS = 220;
+
+/**
+ * A card that turns over when it gets a new face: it shows its back, waits `delay`,
+ * then flips. With flipOnMount it also flips the first time it is drawn.
+ */
+function FlipCard({
+  card,
+  size,
+  scale,
+  delay = 0,
+  flipOnMount = false,
+}: {
+  card?: Card;
+  size: "board" | "hole";
+  scale: number;
+  delay?: number;
+  flipOnMount?: boolean;
+}) {
+  const face = card ? `${card.rank}${card.suit}` : "";
+  const [shown, setShown] = useState(flipOnMount ? "" : face);
+  const [flips, setFlips] = useState(0);
+  const [turn] = useState(() => new Animated.Value(flipOnMount && face ? 0 : 1));
+  if (face !== shown) {
+    setShown(face);
+    if (face) setFlips((count) => count + 1);
+  }
+  // Before paint, so the new face never shows for a frame before the flip.
+  useLayoutEffect(() => {
+    if (flips === 0) return;
+    turn.setValue(0);
+    const run = Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(turn, { toValue: 1, duration: FLIP_MS, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]);
+    run.start();
+    return () => run.stop();
+    // Only a new face starts a flip; a changed delay does not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flips, turn]);
+  if (!card) return <PlayingCard size={size} scale={scale} />;
+  const squash = turn.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.02, 1] });
+  const lift = turn.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.12, 1] });
+  return (
+    <Animated.View style={{ transform: [{ scaleX: squash }, { scaleY: lift }] }}>
+      <Animated.View style={{ opacity: turn.interpolate({ inputRange: [0, 0.499, 0.5, 1], outputRange: [0, 0, 1, 1] }) }}>
+        <PlayingCard card={card} size={size} scale={scale} />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          opacity: turn.interpolate({ inputRange: [0, 0.499, 0.5, 1], outputRange: [1, 1, 0, 0] }),
+        }}
+      >
+        <PlayingCard back size={size} scale={scale} />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 function BetChip({ amount, scale }: { amount: number; scale: number }) {
   const u = (n: number) => n * scale;
   return (
@@ -156,7 +222,7 @@ function ShownCards({ cards, scale }: { cards: Card[]; scale: number }) {
   return (
     <View style={{ flexDirection: "row", gap: u(2) }}>
       {cards.slice(0, 2).map((card, index) => (
-        <PlayingCard key={index} card={card} size="hole" scale={scale} />
+        <FlipCard key={index} card={card} size="hole" scale={scale} flipOnMount delay={index * 140} />
       ))}
     </View>
   );
@@ -475,6 +541,13 @@ function TableFelt({
   onDeal?: () => void;
 }) {
   const u = (n: number) => n * scale;
+  // Cards that arrive together (an all-in runs out the board) flip one after another.
+  const [seen, setSeen] = useState(community.length);
+  const [revealFrom, setRevealFrom] = useState(community.length);
+  if (community.length !== seen) {
+    setRevealFrom(Math.min(seen, community.length));
+    setSeen(community.length);
+  }
   const railW = FELT.w + RAIL * 2;
   const railH = FELT.h + RAIL * 2;
   const radius = u(railW / 2);
@@ -603,7 +676,13 @@ function TableFelt({
           </Text>
           <View style={{ flexDirection: "row", gap: u(4), zIndex: 1 }}>
             {Array.from({ length: 5 }, (_, index) => (
-              <PlayingCard key={index} card={community[index]} size="board" scale={scale} />
+              <FlipCard
+                key={index}
+                card={community[index]}
+                size="board"
+                scale={scale}
+                delay={Math.max(0, index - revealFrom) * FLIP_GAP_MS}
+              />
             ))}
           </View>
           <View style={{ height: u(20), marginTop: u(6), flexDirection: "row", alignItems: "center", gap: u(6) }}>
@@ -639,6 +718,117 @@ function TableFelt({
           ) : null}
       </View>
     </View>
+  );
+}
+
+const DEAL_STAGGER_MS = 70;
+const DEAL_FLIGHT_MS = 260;
+const DEAL_FROM = { x: FELT.x + FELT.w / 2, y: FELT.y + FELT.h / 2 };
+/** Hole cards at the seats are drawn a little smaller than in your hand. */
+const TUCK_SCALE = 0.9;
+
+/** Seats in deal order: clockwise from the seat left of you, you last, two times around. */
+function dealOrder(targets: number[]) {
+  const round = [...targets].sort((a, b) => (a === 0 ? 99 : a) - (b === 0 ? 99 : b));
+  return [...round.map((visual) => ({ visual, card: 0 as const })), ...round.map((visual) => ({ visual, card: 1 as const }))];
+}
+
+/** When your two cards land, in ms after the deal starts, for a hand with `players` dealt in. */
+export function heroDealDelays(players: number) {
+  const n = Math.max(1, players);
+  return [(n - 1) * DEAL_STAGGER_MS + DEAL_FLIGHT_MS, (2 * n - 1) * DEAL_STAGGER_MS + DEAL_FLIGHT_MS];
+}
+
+/** Where a seat's face-down cards sit, in stage pixels. Yours go to your seat and fade. */
+function tuckSpot(visual: number, card: 0 | 1) {
+  const seat = SEAT_CENTERS[visual] ?? SEAT_CENTERS[0];
+  if (visual === 0) return { x: seat.x + (card ? 7 : -7), y: seat.y, rot: card ? 6 : -6 };
+  const side = DEAL_FROM.x >= seat.x ? 1 : -1;
+  return { x: seat.x + side * 30 + (card ? 5 : -5), y: seat.y + 34, rot: card ? 9 : -7 };
+}
+
+const TUCK_W = 20;
+const TUCK_H = 28;
+
+function TuckedCards({ visual, scale }: { visual: number; scale: number }) {
+  const s = scale * TUCK_SCALE;
+  return (
+    <>
+      {([0, 1] as const).map((card) => {
+        const spot = tuckSpot(visual, card);
+        return (
+          <View
+            key={card}
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: spot.x * scale - (TUCK_W * s) / 2,
+              top: spot.y * scale - (TUCK_H * s) / 2,
+              zIndex: 4,
+              transform: [{ rotate: `${spot.rot}deg` }],
+            }}
+          >
+            <PlayingCard back size="hole" scale={s} />
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
+/** Card backs flying from the middle of the felt to each seat in the hand, one at a time. */
+function DealLayer({ targets, scale, onDone }: { targets: number[]; scale: number; onDone: () => void }) {
+  const [cards] = useState(() => dealOrder(targets));
+  const [flights] = useState(() => cards.map(() => new Animated.Value(0)));
+  const done = useRef(onDone);
+  useEffect(() => {
+    done.current = onDone;
+  });
+  useEffect(() => {
+    const run = Animated.stagger(
+      DEAL_STAGGER_MS,
+      flights.map((flight) =>
+        Animated.timing(flight, { toValue: 1, duration: DEAL_FLIGHT_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ),
+    );
+    run.start(({ finished }) => {
+      if (finished) done.current();
+    });
+    return () => run.stop();
+  }, [flights]);
+  const s = scale * TUCK_SCALE;
+  return (
+    <>
+      {cards.map((entry, index) => {
+        const flight = flights[index]!;
+        const spot = tuckSpot(entry.visual, entry.card);
+        const hero = entry.visual === 0;
+        return (
+          <Animated.View
+            key={`${entry.visual}-${entry.card}`}
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: DEAL_FROM.x * scale - (TUCK_W * s) / 2,
+              top: DEAL_FROM.y * scale - (TUCK_H * s) / 2,
+              zIndex: 6,
+              opacity: flight.interpolate({
+                inputRange: [0, 0.02, 0.85, 1],
+                outputRange: [0, 1, 1, hero ? 0 : 1],
+              }),
+              transform: [
+                { translateX: flight.interpolate({ inputRange: [0, 1], outputRange: [0, (spot.x - DEAL_FROM.x) * scale] }) },
+                { translateY: flight.interpolate({ inputRange: [0, 1], outputRange: [0, (spot.y - DEAL_FROM.y) * scale] }) },
+                { rotate: flight.interpolate({ inputRange: [0, 1], outputRange: [`${spot.rot - 160}deg`, `${spot.rot}deg`] }) },
+                { scale: flight.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
+              ],
+            }}
+          >
+            <PlayingCard back size="hole" scale={s} />
+          </Animated.View>
+        );
+      })}
+    </>
   );
 }
 
@@ -756,6 +946,16 @@ export function PokerTableLayout({
   const heroSeat = seats.findIndex((seat) => seat?.isYou);
   const hero = heroSeat >= 0 ? heroSeat : 0;
   const u = (n: number) => n * scale;
+  const visualOf = (seatIndex: number) => (seatIndex - hero + SEAT_CENTERS.length) % SEAT_CENTERS.length;
+  const dealtIn = seats.flatMap((seat, seatIndex) => (seat?.inHand ? [visualOf(seatIndex)] : []));
+  // A new hand starts the deal. Joining in the middle of a hand does not.
+  const [deal, setDeal] = useState<{ id: number; targets: number[] } | null>(null);
+  const [lastRound, setLastRound] = useState(round);
+  if (lastRound !== round) {
+    setLastRound(round);
+    if (lastRound == null && round != null && dealtIn.length > 0) setDeal({ id: (deal?.id ?? 0) + 1, targets: dealtIn });
+    else if (round == null && deal) setDeal(null);
+  }
 
   return (
     <View
@@ -807,6 +1007,14 @@ export function PokerTableLayout({
               </View>
             );
           })}
+          {round != null && !deal
+            ? SEAT_CENTERS.map((_, visual) => {
+                const player = seats[(hero + visual) % SEAT_CENTERS.length];
+                if (visual === 0 || !player?.inHand || (shown[(hero + visual) % SEAT_CENTERS.length]?.length ?? 0) > 0) return null;
+                return <TuckedCards key={`tuck-${visual}`} visual={visual} scale={scale} />;
+              })
+            : null}
+          {deal ? <DealLayer key={deal.id} targets={deal.targets} scale={scale} onDone={() => setDeal(null)} /> : null}
           {SEAT_CENTERS.map((center, visual) => {
             const seatIndex = (hero + visual) % SEAT_CENTERS.length;
             const player = seats[seatIndex];
@@ -893,6 +1101,7 @@ export function ActionDock({
   cards,
   onAction,
   idleText,
+  dealDelays,
 }: {
   actions: PokerAction[];
   yourTurn: boolean;
@@ -902,6 +1111,8 @@ export function ActionDock({
   onAction: (action: PokerAction, amount?: number) => void;
   /** Shown when it is not your turn. Omitted between hands, when Deal is the next step. */
   idleText?: string | null;
+  /** When the deal reaches you, so your cards turn over as they land. */
+  dealDelays?: number[];
 }) {
   const [sizing, setSizing] = useState<PokerAction | null>(null);
   const [chips, setChips] = useState(0);
@@ -937,7 +1148,7 @@ export function ActionDock({
       <View style={dock.bar}>
         <View style={dock.hole}>
           {cards.slice(0, 2).map((card, index) => (
-            <PlayingCard key={index} card={card} size="board" scale={1} />
+            <FlipCard key={index} card={card} size="board" scale={1} flipOnMount delay={dealDelays?.[index] ?? index * 140} />
           ))}
         </View>
         <View style={dock.actions}>

@@ -12,7 +12,7 @@ import { updateMode } from "@/game/remoteConfig";
 import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
-import { ActionDock, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
+import { ActionDock, heroDealDelays, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
 import type { Card, Credentials, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
@@ -686,6 +686,7 @@ export default function TableScreen() {
       toAct: state?.playerToActId === player.id,
       ...(state?.playerToActId === player.id && turnLeftMs != null ? { turnLeftMs, turnStamp: state.serverNow } : {}),
       isYou,
+      inHand: player.inHand,
       winner: winnerSeats.has(player.seat),
       video: track ? <SeatVideo track={track} /> : undefined,
       cameraOn: isYou ? video.cameraOn : track != null,
@@ -922,6 +923,7 @@ export default function TableScreen() {
         chipRange={you?.chipRange ?? null}
         step={state?.bigBlind ?? 1}
         cards={you?.holeCards ?? []}
+        dealDelays={heroDealDelays((state?.players ?? []).filter((player) => player.inHand).length)}
         idleText={state?.paused || state?.round == null ? null : t("waitingTurn")}
         onAction={(action, chips) => act(action, chips)}
       />
