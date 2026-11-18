@@ -18,6 +18,7 @@ import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
 import { move as playMove, newGame, opponent, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
+import { playSfx } from "@/game/sfx";
 import { t } from "@/i18n";
 import { SeatSafety } from "@/game/SeatSafety";
 import { TableHold } from "@/game/TableHold";
@@ -231,6 +232,9 @@ function BackgammonTable({
     seenGame.current = key;
     setSelected(null);
     setGame(next);
+    if (!first && next.phase === "over" && prev.phase !== "over" && next.winner != null && myColor != null) {
+      playSfx(next.winner === myColor ? "win" : "lose");
+    }
     if (!remote || first) return;
     const rolled = (next.rolls ?? 0) !== (prev.rolls ?? 0) && (next.lastRoll?.length ?? 0) > 0;
     const moved =
@@ -548,6 +552,18 @@ export default function TableScreen() {
   useEffect(() => {
     holdOff.current(blockedKey ? blockedKey.split(" ") : []);
   }, [blockedKey]);
+
+  // Win or lose sound when a poker hand you were still in ends. Not on the first snapshot.
+  const lastHand = useRef<{ round: string | null; inHand: boolean } | null>(null);
+  useEffect(() => {
+    if (!state || state.kind === "backgammon") return;
+    const mine = state.players.find((player) => player.id === state.you?.id);
+    const before = lastHand.current;
+    lastHand.current = { round: state.round, inHand: mine?.inHand === true };
+    if (!before || before.round == null || state.round != null || !before.inHand || !mine) return;
+    if (state.lastWinners.length === 0) return;
+    playSfx(state.lastWinners.some((winner) => winner.seat === mine.seat) ? "win" : "lose");
+  }, [state]);
 
   useEffect(() => {
     const backgammon = kind === "backgammon" || state?.kind === "backgammon";
