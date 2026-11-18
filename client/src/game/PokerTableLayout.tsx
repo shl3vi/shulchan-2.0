@@ -4,7 +4,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { betAnchor, FELT, RAIL, SEAT_CENTERS, SEAT_H, SEAT_TOP, SEAT_W, STAGE_H, STAGE_W } from "@/game/tableStage";
 import type { Card } from "@/game/types";
-import { playSfx, type Sfx } from "@/game/sfx";
+import { ownChipJustPlayed, playOwnChip, playSfx, type Sfx } from "@/game/sfx";
 import { t } from "@/i18n";
 
 export type SeatSlot = {
@@ -238,7 +238,7 @@ export const SPOTLIGHT_DELAY_MS = POT_PUSH_DELAY_MS + CHIP_FLIGHT_MS + 80;
  * A seat's bet in front of it. A new or bigger bet slides out from the seat.
  * Drawn while the bet is zero too, so it can tell when a bet appears.
  */
-function SlidingBet({ amount, dx, dy, scale }: { amount: number; dx: number; dy: number; scale: number }) {
+function SlidingBet({ amount, dx, dy, scale, mine = false }: { amount: number; dx: number; dy: number; scale: number; mine?: boolean }) {
   const [last, setLast] = useState(amount);
   const [pushes, setPushes] = useState(0);
   const [slide] = useState(() => new Animated.Value(1));
@@ -248,12 +248,13 @@ function SlidingBet({ amount, dx, dy, scale }: { amount: number; dx: number; dy:
   }
   useLayoutEffect(() => {
     if (pushes === 0) return;
-    playSfx("chip");
+    // Your own bet already made its sound when you tapped.
+    if (!(mine && ownChipJustPlayed())) playSfx("chip");
     slide.setValue(0);
     const run = Animated.timing(slide, { toValue: 1, duration: CHIP_SLIDE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true });
     run.start();
     return () => run.stop();
-  }, [pushes, slide]);
+  }, [pushes, slide, mine]);
   if (amount <= 0) return null;
   return (
     <Animated.View
@@ -1154,7 +1155,7 @@ export function PokerTableLayout({
                   zIndex: 2,
                 }}
               >
-                <SlidingBet amount={player.bet} dx={u(center.x - anchor.x)} dy={u(center.y - anchor.y)} scale={scale} />
+                <SlidingBet amount={player.bet} dx={u(center.x - anchor.x)} dy={u(center.y - anchor.y)} scale={scale} mine={player.isYou} />
               </View>
             );
           })}
@@ -1310,14 +1311,25 @@ export function ActionDock({
           {yourTurn ? (
             <View style={dock.row}>
               {quiet.map((action) => (
-                <Pressable key={action} style={({ pressed }) => [dock.button, actionStyle(action), pressed && dock.pressed]} onPress={() => onAction(action)}>
+                <Pressable
+                  key={action}
+                  style={({ pressed }) => [dock.button, actionStyle(action), pressed && dock.pressed]}
+                  onPress={() => {
+                    if (action === "call") playOwnChip();
+                    onAction(action);
+                  }}
+                >
                   <Text style={dock.buttonText}>{t(action)}</Text>
                 </Pressable>
               ))}
               {chipRange ? (
                 <Pressable
                   style={({ pressed }) => [dock.button, dock.allIn, pressed && dock.pressed]}
-                  onPress={() => sized[0] && onAction(sized[0], chipRange.max)}
+                  onPress={() => {
+                    if (!sized[0]) return;
+                    playOwnChip();
+                    onAction(sized[0], chipRange.max);
+                  }}
                 >
                   <Text style={dock.buttonText}>{t("allIn")}</Text>
                 </Pressable>
@@ -1371,6 +1383,7 @@ export function ActionDock({
               style={({ pressed }) => [dock.confirm, pressed && dock.pressed]}
               onPress={() => {
                 if (!sizing) return;
+                playOwnChip();
                 onAction(sizing, chips);
                 setSizing(null);
               }}

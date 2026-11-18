@@ -45,6 +45,7 @@ type Status = { didJustFinish?: boolean };
 type Player = {
   volume: number;
   play: () => void;
+  pause: () => void;
   seekTo: (seconds: number) => Promise<void>;
   addListener: (event: "playbackStatusUpdate", listener: (status: Status) => void) => unknown;
 };
@@ -90,8 +91,11 @@ function voicesFor(name: Sfx): Voice[] {
       player.volume = VOLUME[name];
       const voice: Voice = { player, ready: true };
       player.addListener("playbackStatusUpdate", (status) => {
-        if (!status.didJustFinish) return;
-        // Rewind as soon as it ends, so the next play does not wait for a seek.
+        if (!status.didJustFinish || voice.ready) return;
+        // Rewind as soon as it ends, so the next play does not wait for a seek. Pause first:
+        // on Android the player is still set to play after it ends, so a seek alone starts it
+        // again, and it would loop forever.
+        player.pause();
         void player.seekTo(0).then(
           () => {
             voice.ready = true;
@@ -119,6 +123,19 @@ export function preloadSfx() {
   }
 }
 
+let ownChipAt = 0;
+
+/** Your own call, bet or raise: the chip sound plays on the tap, not when the server answers. */
+export function playOwnChip() {
+  ownChipAt = Date.now();
+  playSfx("chip");
+}
+
+/** True right after playOwnChip, so the bet showing up on your seat does not play it twice. */
+export function ownChipJustPlayed() {
+  return Date.now() - ownChipAt < 2500;
+}
+
 /** Plays a short sound from the start. */
 export function playSfx(name: Sfx) {
   try {
@@ -138,6 +155,7 @@ export function playSfx(name: Sfx) {
     const voice = list[start % list.length]!;
     turn.set(name, start + 1);
     voice.ready = false;
+    voice.player.pause();
     void voice.player.seekTo(0).then(() => voice.player.play(), () => voice.player.play());
   } catch {
     // Sound is a nice-to-have; never let it break the table.
