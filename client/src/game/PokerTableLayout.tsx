@@ -231,7 +231,8 @@ const CHIP_FLIGHT_MS = 420;
 const POT_SPOT = { x: FELT.x + FELT.w / 2, y: FELT.y + FELT.h / 2 + 31 };
 /** The pot reaches the winners this long after a hand ends; the spotlight waits for it. */
 const POT_PUSH_DELAY_MS = CHIP_SLIDE_MS + 60;
-const SPOTLIGHT_DELAY_MS = POT_PUSH_DELAY_MS + CHIP_FLIGHT_MS + 80;
+/** When the winner's seat starts to grow, after a hand ends. The applause starts with it. */
+export const SPOTLIGHT_DELAY_MS = POT_PUSH_DELAY_MS + CHIP_FLIGHT_MS + 80;
 
 /**
  * A seat's bet in front of it. A new or bigger bet slides out from the seat.

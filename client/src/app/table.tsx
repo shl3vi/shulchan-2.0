@@ -12,13 +12,13 @@ import { updateMode } from "@/game/remoteConfig";
 import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
-import { ActionDock, heroDealDelays, PokerTableLayout, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
+import { ActionDock, heroDealDelays, PokerTableLayout, SPOTLIGHT_DELAY_MS, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
 import type { Card, Credentials, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
 import { move as playMove, newGame, opponent, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
-import { playSfx } from "@/game/sfx";
+import { playSfx, preloadSfx } from "@/game/sfx";
 import { t } from "@/i18n";
 import { SeatSafety } from "@/game/SeatSafety";
 import { TableHold } from "@/game/TableHold";
@@ -232,9 +232,7 @@ function BackgammonTable({
     seenGame.current = key;
     setSelected(null);
     setGame(next);
-    if (!first && next.phase === "over" && prev.phase !== "over" && next.winner != null && next.winner === myColor) {
-      playSfx("win");
-    }
+    if (!first && next.phase === "over" && prev.phase !== "over" && next.winner != null) playSfx("applause");
     if (!remote || first) return;
     const rolled = (next.rolls ?? 0) !== (prev.rolls ?? 0) && (next.lastRoll?.length ?? 0) > 0;
     const moved =
@@ -553,16 +551,25 @@ export default function TableScreen() {
     holdOff.current(blockedKey ? blockedKey.split(" ") : []);
   }, [blockedKey]);
 
-  // Win sound when a poker hand ends and you won some of it. Not on the first snapshot.
+  useEffect(() => {
+    preloadSfx();
+  }, []);
+
+  // Applause for everyone at the table when a poker hand ends, as the winner's seat grows.
+  // Not on the first snapshot.
   const lastRound = useRef<string | null | undefined>(undefined);
+  const applause = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!state || state.kind === "backgammon") return;
     const before = lastRound.current;
     lastRound.current = state.round;
-    if (before == null || state.round != null) return;
-    const mine = state.players.find((player) => player.id === state.you?.id);
-    if (mine && state.lastWinners.some((winner) => winner.seat === mine.seat)) playSfx("win");
+    if (before == null || state.round != null || state.lastWinners.length === 0) return;
+    if (applause.current) clearTimeout(applause.current);
+    applause.current = setTimeout(() => playSfx("applause"), SPOTLIGHT_DELAY_MS);
   }, [state]);
+  useEffect(() => () => {
+    if (applause.current) clearTimeout(applause.current);
+  }, []);
 
   useEffect(() => {
     const backgammon = kind === "backgammon" || state?.kind === "backgammon";
