@@ -10,6 +10,15 @@ export function openingBackgammon() {
   return enginePost<unknown>(backgammonUrl, "/games");
 }
 
+export async function backgammonMoves(game: unknown) {
+  const payload = await enginePost<{ moves?: { from: number | "bar"; to: number | "off"; die: number }[] }>(
+    backgammonUrl,
+    "/moves",
+    { game },
+  );
+  return payload.moves ?? [];
+}
+
 /** White is the lower seat of the first two seated players, black the other. Everyone else watches. */
 function colorOf(table: TableRecord, playerId: string): Color | null {
   const seated = table.players.filter((player) => !player.pendingRemoval).sort((a, b) => a.seat - b.seat);

@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
 import { APP_SCHEME, assertSafeAuthConfig, authRouter } from "./auth.js";
-import { debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
+import { backgammonDebugConfig, debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
 import { pool } from "./db.js";
 import { enginesReady } from "./engine.js";
 import { allowedOrigins, cors, rateLimit } from "./http.js";
@@ -167,6 +167,11 @@ const debug = debugConfig();
 if (debug) {
   app.use("/dev/dashboard", debugRouter(debug));
   await ensureDebugTable(debug);
+}
+const backgammonDebug = backgammonDebugConfig();
+if (backgammonDebug) {
+  app.use("/dev/backgammon", debugRouter(backgammonDebug));
+  await ensureDebugTable(backgammonDebug);
 }
 
 const httpServer = createServer(app);

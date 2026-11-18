@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import express from "express";
-import { apply, IllegalAction, newGame, type Action, type Color, type Game } from "./rules.js";
+import { apply, IllegalAction, legalMoves, newGame, type Action, type Color, type Game } from "./rules.js";
 
 const engineToken = process.env.ENGINE_TOKEN;
 if (!engineToken) throw new Error("ENGINE_TOKEN is required");
@@ -24,6 +24,15 @@ app.use((req, res, next) => {
 
 app.post("/games", (_req, res) => {
   res.status(201).json(newGame());
+});
+
+app.post("/moves", (req, res) => {
+  const game = req.body?.game as Game | undefined;
+  if (!game || !Array.isArray(game.points)) {
+    res.status(400).json({ error: "Invalid request" });
+    return;
+  }
+  res.json({ moves: legalMoves(game) });
 });
 
 app.post("/apply", (req, res) => {

@@ -203,7 +203,7 @@ function sequences(game: Game): Move[][] {
   return found;
 }
 
-function legalMoves(game: Game): Move[] {
+export function legalMoves(game: Game): Move[] {
   if (game.phase !== "move") return [];
   const paths = sequences(game);
   if (paths.length === 0) return [];

@@ -1,10 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 import { z } from "zod";
+import { backgammonMoves, noteBackgammonWin, openingBackgammon, playBackgammon } from "./backgammon.js";
 import { actPoker, addChips, createPokerTable, readPoker, seatPoker, startPoker, type ActionName } from "./engine.js";
 import { playerName } from "./name.js";
 import { assignAdmin, dropRemovedPlayers, releaseSeat, tablePassword } from "./players.js";
-import { chipAmount, MAX_CHIPS, readSchema } from "./schema.js";
+import { backgammonBody, chipAmount, MAX_CHIPS, readSchema, type BackgammonAction } from "./schema.js";
 import { snapshot } from "./snapshot.js";
 import { openTable } from "./events/ledger.js";
 import { insertTable, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
@@ -25,13 +26,24 @@ export type DebugConfig = {
   smallBlind: number;
   buyIn: number;
   password: string | null;
+  kind: "poker" | "backgammon";
 };
 
 let cached: DebugConfig | null | undefined;
+let cachedBackgammon: DebugConfig | null | undefined;
 
 export function debugConfig(): DebugConfig | null {
   if (cached === undefined) cached = loadDebugConfig();
   return cached;
+}
+
+export function backgammonDebugConfig(): DebugConfig | null {
+  if (cachedBackgammon === undefined) cachedBackgammon = loadBackgammonDebugConfig();
+  return cachedBackgammon;
+}
+
+export function isDebugTable(tableId: string) {
+  return debugConfig()?.tableId === tableId || backgammonDebugConfig()?.tableId === tableId;
 }
 
 function loadDebugConfig(): DebugConfig | null {
@@ -53,7 +65,33 @@ function loadDebugConfig(): DebugConfig | null {
     console.error("Debug table is off. DEBUG_TABLE_PASSWORD must be six digits.");
     return null;
   }
-  return { tableId, dashboardId, smallBlind, buyIn, password };
+  return { tableId, dashboardId, smallBlind, buyIn, password, kind: "poker" };
+}
+
+function loadBackgammonDebugConfig(): DebugConfig | null {
+  const tableId = process.env.DEBUG_BG_TABLE_ID?.trim() ?? "";
+  const dashboardId = process.env.DEBUG_BG_DASHBOARD_ID?.trim() ?? "";
+  if (!tableId && !dashboardId) return null;
+  if (!tableId || !dashboardId || dashboardId.length < 16 || tableId.length > 64 || tableId.includes("/") || dashboardId.includes("/")) {
+    console.error("Backgammon debug table is off. Set DEBUG_BG_TABLE_ID and a DEBUG_BG_DASHBOARD_ID of at least 16 characters.");
+    return null;
+  }
+  if (debugConfig()?.tableId === tableId) {
+    console.error("Backgammon debug table is off. DEBUG_BG_TABLE_ID must differ from DEBUG_TABLE_ID.");
+    return null;
+  }
+  const smallBlind = Number(process.env.DEBUG_BG_TABLE_SMALL_BLIND ?? process.env.DEBUG_TABLE_SMALL_BLIND ?? 1);
+  const buyIn = Number(process.env.DEBUG_BG_TABLE_BUY_IN ?? process.env.DEBUG_TABLE_BUY_IN ?? 100);
+  if (!Number.isInteger(smallBlind) || smallBlind < 1 || !Number.isInteger(buyIn) || buyIn < smallBlind * 2) {
+    console.error("Backgammon debug table is off. Check DEBUG_BG_TABLE_SMALL_BLIND and DEBUG_BG_TABLE_BUY_IN.");
+    return null;
+  }
+  const password = process.env.DEBUG_BG_TABLE_PASSWORD?.trim() || null;
+  if (password !== null && !/^\d{6}$/.test(password)) {
+    console.error("Backgammon debug table is off. DEBUG_BG_TABLE_PASSWORD must be six digits.");
+    return null;
+  }
+  return { tableId, dashboardId, smallBlind, buyIn, password, kind: "backgammon" };
 }
 
 export async function openDebugTable(config: DebugConfig) {
@@ -67,15 +105,23 @@ export async function openDebugTable(config: DebugConfig) {
           buyIn: config.buyIn,
           password: config.password ?? tablePassword(),
           players: [],
+          ...(config.kind === "backgammon" ? { kind: "backgammon" as const } : {}),
         };
         await createPokerTable(table, config.smallBlind);
-        if (await insertTable(table)) await openTable(table.id, "poker");
+        if (config.kind === "backgammon") table.backgammon = await openingBackgammon();
+        if (await insertTable(table)) await openTable(table.id, config.kind);
       }
       const table = await readTable(config.tableId);
       if (!table) throw new Error("Debug table missing");
       if (config.password && table.password !== config.password) {
         await withTable(config.tableId, async (current) => {
           current.password = config.password!;
+        });
+      }
+      if (config.kind === "backgammon" && (table.kind !== "backgammon" || !table.backgammon)) {
+        await withTable(config.tableId, async (current) => {
+          current.kind = "backgammon";
+          if (!current.backgammon) current.backgammon = await openingBackgammon();
         });
       }
       try {
@@ -85,7 +131,7 @@ export async function openDebugTable(config: DebugConfig) {
           await createPokerTable(current, current.smallBlind);
         });
       }
-      console.log(`Debug table ${config.tableId} is ready`);
+      console.log(`${config.kind === "backgammon" ? "Backgammon debug" : "Debug"} table ${config.tableId} is ready`);
       return;
     } catch (error) {
       last = error;
@@ -109,8 +155,9 @@ function sameToken(given: string, expected: string) {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-async function debugState(tableId: string) {
-  const table = await readTable(tableId);
+async function debugState(config: DebugConfig) {
+  if (config.kind === "backgammon") return backgammonState(config.tableId);
+  const table = await readTable(config.tableId);
   if (!table) throw new TableNotFound();
   const view = await readPoker(table);
   const snap = snapshot(table, view);
@@ -137,6 +184,37 @@ async function debugState(tableId: string) {
   };
 }
 
+async function backgammonState(tableId: string) {
+  const table = await readTable(tableId);
+  if (!table) throw new TableNotFound();
+  const game = table.backgammon;
+  let moves: Awaited<ReturnType<typeof backgammonMoves>> = [];
+  if (game) {
+    try {
+      moves = await backgammonMoves(game);
+    } catch {
+      moves = [];
+    }
+  }
+  const seated = table.players.filter((player) => !player.pendingRemoval).sort((a, b) => a.seat - b.seat);
+  return {
+    id: table.id,
+    password: table.password,
+    kind: "backgammon" as const,
+    buyIn: table.buyIn,
+    players: table.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      seat: player.seat,
+      isAdmin: player.id === table.adminId,
+      color: seated[0]?.id === player.id ? "white" as const : seated[1]?.id === player.id ? "black" as const : null,
+    })),
+    game: game ?? null,
+    moves,
+    log: table.backgammonLog ?? [],
+  };
+}
+
 async function resetTable(config: DebugConfig) {
   const current = await readTable(config.tableId);
   if (!current) throw new TableNotFound();
@@ -150,6 +228,30 @@ async function resetTable(config: DebugConfig) {
     delete table.idleCloseAt;
     delete table.closing;
     table.lastActivityAt = Date.now();
+    if (config.kind === "backgammon") {
+      table.kind = "backgammon";
+      table.backgammon = await openingBackgammon();
+      delete table.backgammonLog;
+    }
+  });
+  await publishTable(config.tableId);
+}
+
+function backgammonActor(table: TableRecord, action: BackgammonAction) {
+  const seated = table.players.filter((player) => !player.pendingRemoval).sort((a, b) => a.seat - b.seat);
+  const game = table.backgammon as { phase?: string; turn?: "white" | "black" } | undefined;
+  if (action.type === "restart" || !game || game.phase === "over") return table.adminId ?? seated[0]?.id ?? null;
+  const color = game.phase === "offer" ? (game.turn === "white" ? "black" : "white") : game.turn;
+  return (color === "black" ? seated[1] : seated[0])?.id ?? null;
+}
+
+async function playDebug(config: DebugConfig, action: BackgammonAction) {
+  await withTable(config.tableId, async (table) => {
+    const actor = backgammonActor(table, action);
+    if (!actor) throw new Error("Seat the players first");
+    const next = await playBackgammon(table, actor, action);
+    noteBackgammonWin(table, next as { phase?: unknown; winner?: unknown; score?: unknown });
+    table.backgammon = next;
   });
   await publishTable(config.tableId);
 }
@@ -236,12 +338,12 @@ export function debugRouter(config: DebugConfig) {
 
   router.get("/:token", (_req, res) => {
     res.setHeader("cache-control", "no-store");
-    res.type("html").send(debugPage());
+    res.type("html").send(debugPage(config.kind));
   });
 
   router.get("/:token/state", async (_req, res) => {
     try {
-      res.json(await debugState(config.tableId));
+      res.json(await debugState(config));
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
     }
@@ -292,6 +394,18 @@ export function debugRouter(config: DebugConfig) {
     await respond(res, config, () => rebuy(config, body.playerId, body.amount));
   });
 
+  if (config.kind === "backgammon") {
+    router.post("/:token/play", async (req, res) => {
+      const body = readSchema(backgammonBody, req.body);
+      if (!body) {
+        res.status(400).json({ error: "Unknown action" });
+        return;
+      }
+      await respond(res, config, () => playDebug(config, body));
+    });
+    return router;
+  }
+
   router.post("/:token/act", async (req, res) => {
     const body = readSchema(actBody, req.body);
     if (!body) {
@@ -311,13 +425,208 @@ export function debugRouter(config: DebugConfig) {
 async function respond(res: import("express").Response, config: DebugConfig, run: () => Promise<void>) {
   try {
     await run();
-    res.json(await debugState(config.tableId));
+    res.json(await debugState(config));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed" });
   }
 }
 
-function debugPage() {
+function backgammonPage() {
+  return `<!doctype html>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backgammon</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #1a120c; color: #fafaf9; font: 14px/1.3 sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px 16px 140px; }
+  .top, .ops, .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .top { justify-content: space-between; }
+  .meta, .empty { color: #a8a29e; }
+  .error { color: #fca5a5; min-height: 1.2em; }
+  code { color: #f6d36b; }
+  button, input { font: inherit; }
+  button { background: #f6d36b; color: #1c1917; border: 0; border-radius: 999px; padding: 8px 14px; font-weight: 700; cursor: pointer; }
+  button.ghost { background: #1c1917cc; color: #fafaf9; border: 1px solid #44403c; }
+  input { background: #0c0a09; color: #fafaf9; border: 1px solid #44403c; border-radius: 8px; padding: 6px 8px; }
+  .board { display: grid; grid-template-columns: repeat(6, 1fr) 72px repeat(6, 1fr); gap: 6px; margin-top: 12px; background: #5c3a1e; padding: 10px; border-radius: 16px; }
+  .point, .bar { min-height: 92px; border-radius: 8px; background: #f5e6c8; color: #1c1917; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 6px; }
+  .point.dark { background: #8a5a32; color: #fff; }
+  .point b, .bar b { font-size: 11px; opacity: 0.7; }
+  .checkers { font-weight: 800; font-size: 18px; }
+  .white { color: #fafaf9; text-shadow: 0 1px 0 #1c1917; }
+  .black { color: #1c1917; }
+  .point.dark .black { color: #111; }
+  .bar { background: #3f2a1d; color: #fafaf9; justify-content: center; gap: 8px; }
+  .player { background: #111827ee; border: 1px solid #292524; border-radius: 12px; padding: 8px 10px; }
+  .player.turn { border-color: #f6d36b; }
+  .dock { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 12px 16px; background: #0c0a09f2; border-top: 1px solid #292524; }
+</style>
+<main>
+  <div class="top">
+    <div id="info"></div>
+    <form id="add" class="ops">
+      <input name="name" placeholder="Name" maxlength="24" required style="width:120px">
+      <button type="submit">Add player</button>
+    </form>
+  </div>
+  <p class="error" id="error"></p>
+  <div id="players" class="ops"></div>
+  <p id="status"></p>
+  <div id="board" class="board"></div>
+  <p id="log" class="meta"></p>
+</main>
+<div class="dock">
+  <span id="actions" class="ops"></span>
+  <button id="open" type="button">Open table</button>
+  <button id="reset" class="ghost" type="button">Reset</button>
+</div>
+<script>
+  const base = location.pathname.replace(/\\/$/, "");
+  const error = document.getElementById("error");
+  let state = null;
+
+  function send(path, body) {
+    error.textContent = "";
+    return fetch(base + path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body || {}),
+    }).then(async (response) => {
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        error.textContent = payload.error || "Failed";
+        return;
+      }
+      state = payload;
+      draw();
+    }).catch(() => { error.textContent = "Failed"; });
+  }
+
+  function point(number) {
+    const count = state.game && state.game.points ? state.game.points[number - 1] || 0 : 0;
+    const node = document.createElement("div");
+    node.className = "point" + (number % 2 === 0 ? " dark" : "");
+    const label = document.createElement("b");
+    label.textContent = String(number);
+    const checkers = document.createElement("span");
+    checkers.className = "checkers " + (count > 0 ? "white" : "black");
+    checkers.textContent = count === 0 ? "" : (count > 0 ? "W " : "B ") + Math.abs(count);
+    node.append(label, checkers);
+    return node;
+  }
+
+  function draw() {
+    if (!state) return;
+    const game = state.game || {};
+    const info = document.getElementById("info");
+    info.textContent = "";
+    info.append("Table ", Object.assign(document.createElement("code"), { textContent: state.id }));
+    info.append("  password ", Object.assign(document.createElement("code"), { textContent: state.password || "" }));
+    const players = document.getElementById("players");
+    players.textContent = "";
+    const turn = game.phase === "offer" ? (game.turn === "white" ? "black" : "white") : game.turn;
+    for (const player of state.players) {
+      const card = document.createElement("div");
+      card.className = "player" + (player.color && player.color === turn ? " turn" : "");
+      const title = document.createElement("div");
+      title.textContent = player.name + (player.color ? " · " + player.color : "") + (player.isAdmin ? " · admin" : "");
+      const ops = document.createElement("div");
+      ops.className = "ops";
+      const remove = document.createElement("button");
+      remove.className = "ghost";
+      remove.type = "button";
+      remove.textContent = "Remove";
+      remove.onclick = () => send("/remove", { playerId: player.id });
+      const admin = document.createElement("button");
+      admin.className = "ghost";
+      admin.type = "button";
+      admin.textContent = "Admin";
+      admin.onclick = () => send("/admin", { playerId: player.id });
+      ops.append(remove, admin);
+      card.append(title, ops);
+      players.append(card);
+    }
+    const dice = (game.dice || []).join(" ");
+    const cube = game.cube ? "cube " + game.cube + (game.cubeOwner ? " (" + game.cubeOwner + ")" : "") : "cube 1";
+    document.getElementById("status").textContent = [
+      game.phase || "no game",
+      game.turn ? game.turn + " to play" : "",
+      dice ? "dice " + dice : "",
+      cube,
+      game.message || "",
+      game.winner ? "winner " + game.winner + " +" + (game.score || 0) : "",
+      "bar W" + ((game.bar && game.bar.white) || 0) + " B" + ((game.bar && game.bar.black) || 0),
+      "off W" + ((game.off && game.off.white) || 0) + " B" + ((game.off && game.off.black) || 0),
+    ].filter(Boolean).join(" · ");
+    const board = document.getElementById("board");
+    board.textContent = "";
+    const top = [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
+    const bottom = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+    function half(numbers, barText) {
+      numbers.slice(0, 6).forEach((number) => board.append(point(number)));
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      bar.textContent = barText;
+      board.append(bar);
+      numbers.slice(6).forEach((number) => board.append(point(number)));
+    }
+    half(top, "bar B " + ((game.bar && game.bar.black) || 0));
+    half(bottom, "bar W " + ((game.bar && game.bar.white) || 0));
+    const actions = document.getElementById("actions");
+    actions.textContent = "";
+    function action(label, body) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.onclick = () => send("/play", body);
+      actions.append(button);
+    }
+    if (game.phase === "opening" || game.phase === "roll") action("Roll", { type: "roll" });
+    if (game.phase === "roll") action("Double", { type: "double" });
+    if (game.phase === "offer") {
+      action("Accept", { type: "answer", accept: true });
+      action("Pass", { type: "answer", accept: false });
+    }
+    for (const move of state.moves || []) {
+      const from = move.from === "bar" ? "bar" : String(move.from);
+      const to = move.to === "off" ? "off" : String(move.to);
+      action(from + " → " + to + " (" + move.die + ")", { type: "move", from: move.from, to: move.to, die: move.die });
+    }
+    action("Restart", { type: "restart" });
+    const log = state.log || [];
+    document.getElementById("log").textContent = log.length
+      ? log.slice(-6).map((entry) => entry.winner + " +" + entry.points).join(" · ")
+      : "";
+  }
+
+  async function refresh() {
+    const response = await fetch(base + "/state");
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      error.textContent = payload.error || "Table is closed";
+      return;
+    }
+    error.textContent = "";
+    state = payload;
+    draw();
+  }
+
+  document.getElementById("add").onsubmit = (event) => {
+    event.preventDefault();
+    const name = new FormData(event.target).get("name");
+    send("/players", { name }).then(() => { event.target.reset(); });
+  };
+  document.getElementById("open").onclick = () => send("/open");
+  document.getElementById("reset").onclick = () => {
+    if (confirm("Clear every player and start a new game?")) send("/reset");
+  };
+  refresh();
+  setInterval(refresh, 2000);
+</script>`;
+}
+
+function debugPage(kind: DebugConfig["kind"] = "poker") {
+  if (kind === "backgammon") return backgammonPage();
   return `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Table</title>

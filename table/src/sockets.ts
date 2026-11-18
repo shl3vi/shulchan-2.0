@@ -6,7 +6,7 @@ import { noteBackgammon, notePlayers, notePoker } from "./events/ledger.js";
 import { reportCaught, reportError } from "./events/report.js";
 import { assignAdmin, dropRemovedPlayers, foldDeparted, releaseSeat, sameSecret, seatedCount, tablePassword } from "./players.js";
 import { noteBackgammonWin, playBackgammon } from "./backgammon.js";
-import { debugConfig } from "./debug.js";
+import { isDebugTable } from "./debug.js";
 import { allowSocketEvent } from "./http.js";
 import { endRoom, mediaRoom, mediaRooms, removeFromRoom } from "./livekit.js";
 import { assertPlaying, noteActivity, setPaused } from "./idle.js";
@@ -261,7 +261,7 @@ export function attachSockets(io: Server) {
         requireAdmin(current);
         await releaseSeat(current, parsed.playerId);
         // The removed player still knows the old password, so it must not let them back in.
-        if (debugConfig()?.tableId !== tableId) current.password = tablePassword();
+        if (!isDebugTable(tableId)) current.password = tablePassword();
         return { seated: seatedCount(current), epoch: current.mediaEpoch };
       }).then(async (result) => {
         if (result === undefined) return;

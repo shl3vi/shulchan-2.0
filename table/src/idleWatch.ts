@@ -1,5 +1,5 @@
 import type { Server } from "socket.io";
-import { debugConfig } from "./debug.js";
+import { isDebugTable } from "./debug.js";
 import { summarizeIdle } from "./events/ledger.js";
 import { reportCaught } from "./events/report.js";
 import { needsIdleWrite, sweepIdle } from "./idle.js";
@@ -42,12 +42,11 @@ async function handOffAdmin(io: Server, tableId: string, record: TableRecord, no
 }
 
 async function watch(io: Server) {
-  const debugId = debugConfig()?.tableId;
   const open = await listOpenTables();
   for (const row of open) {
     const now = Date.now();
-    if (row.id === debugId) {
-      // The debug table never closes or changes admin, but its turn clock still runs.
+    if (isDebugTable(row.id)) {
+      // A debug table never closes or changes admin, but its turn clock still runs.
       if (overdueTurn(row.record, now)) await expireTurn(row.id);
       continue;
     }
