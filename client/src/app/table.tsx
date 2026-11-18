@@ -518,11 +518,18 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** The turn lengths the admin steps through, one tap at a time. */
+const TURN_SECONDS_CHOICES = [15, 20, 30, 45, 60, 90, 120];
+
+function nextTurnSeconds(current: number) {
+  return TURN_SECONDS_CHOICES.find((seconds) => seconds > current) ?? TURN_SECONDS_CHOICES[0]!;
+}
+
 export default function TableScreen() {
   const router = useRouter();
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const insets = useSafeAreaInsets();
-  const { credentials, state, error, dismissError, startHand, setAutoDeal, setPaused, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
+  const { credentials, state, error, dismissError, startHand, setAutoDeal, setTurnSeconds, setPaused, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
   const video = useTableVideo(credentials, state?.paused === true, state?.kind ?? "poker");
   const showAd = useTableAdAllowed(state);
   const mode = updateMode();
@@ -691,7 +698,9 @@ export default function TableScreen() {
       stack: player.stack,
       bet: player.betSize,
       toAct: state?.playerToActId === player.id,
-      ...(state?.playerToActId === player.id && turnLeftMs != null ? { turnLeftMs, turnStamp: state.serverNow } : {}),
+      ...(state?.playerToActId === player.id && turnLeftMs != null
+        ? { turnLeftMs, turnTotalMs: (state.turnSeconds ?? 30) * 1000, turnStamp: state.serverNow }
+        : {}),
       isYou,
       inHand: player.inHand,
       winner: winnerSeats.has(player.seat),
@@ -763,6 +772,17 @@ export default function TableScreen() {
                     <Pressable style={styles.statsRow} onPress={() => setAutoDeal(state?.autoDeal !== true)}>
                       <Text style={styles.statsLine}>{t("autoDeal")}</Text>
                       <Text style={styles.makeAdmin}>{state?.autoDeal ? t("autoDealOn") : t("autoDealOff")}</Text>
+                    </Pressable>
+                  ) : null}
+                  {state?.kind !== "backgammon" ? (
+                    <Pressable
+                      style={styles.statsRow}
+                      onPress={() => setTurnSeconds(nextTurnSeconds(state?.turnSeconds ?? 30))}
+                      accessibilityRole="button"
+                      accessibilityHint={t("turnTimeHint")}
+                    >
+                      <Text style={styles.statsLine}>{t("turnTime")}</Text>
+                      <Text style={styles.makeAdmin}>{t("turnTimeValue", { seconds: state?.turnSeconds ?? 30 })}</Text>
                     </Pressable>
                   ) : null}
                   {(state?.players ?? []).length === 0 ? <Text style={styles.statsLine}>{t("noPlayers")}</Text> : null}

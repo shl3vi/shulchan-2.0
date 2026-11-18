@@ -1,5 +1,6 @@
 import type { EngineView } from "./engine.js";
 import type { TableRecord } from "./store.js";
+import { turnMs } from "./turn.js";
 
 export type TableSnapshot = {
   id: string;
@@ -39,6 +40,8 @@ export type TableSnapshot = {
   idleCloseAt?: number;
   /** Server epoch ms when the player to act runs out of time. Absent while paused or between hands. */
   turnDeadline?: number;
+  /** Poker only. Seconds each player has to act. */
+  turnSeconds?: number;
   /** Server epoch ms when this snapshot was built. */
   serverNow: number;
   lastWinners: { seat: number; name: string; amount: number }[];
@@ -91,7 +94,7 @@ export function snapshot(
     kind: table.kind ?? "poker",
     ...(table.kind === "backgammon"
       ? { backgammon: table.backgammon, backgammonLog: table.backgammonLog ?? [] }
-      : { autoDeal: table.autoDeal === true }),
+      : { autoDeal: table.autoDeal === true, turnSeconds: turnMs(table) / 1000 }),
     ...(viewer && viewer.id === table.adminId ? { password: table.password } : {}),
     paused: table.paused === true,
     serverNow: Date.now(),

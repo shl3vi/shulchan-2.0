@@ -1,3 +1,5 @@
+import { DEFAULT_TURN_SECONDS, MAX_TURN_SECONDS, MIN_TURN_SECONDS } from "./turn.js";
+
 export type AdsMode = "off" | "test" | "live";
 
 /** How one phone captures and sends its camera. A seat tile is small, so this stays low. */
@@ -6,7 +8,8 @@ export type VideoQuality = { width: number; height: number; frameRate: number; m
 export type PublicConfig = {
   /** off: no banner. test: Google's sample banner. live: this app's own ad units. */
   ads: { mode: AdsMode; androidUnitId: string; iosUnitId: string; testDevices: string[] };
-  poker: { autoDealDefault: boolean };
+  /** turnSecondsDefault: how long each player has to act at a new poker table. */
+  poker: { autoDealDefault: boolean; turnSecondsDefault: number };
   video: { poker: VideoQuality; backgammon: VideoQuality };
   update: { minVersion: string; force: boolean; iosUrl: string; androidUrl: string };
   announcement: string;
@@ -22,7 +25,7 @@ export type PublicConfigSet = {
 /** What the phone gets from GET /api/config when PUBLIC_CONFIG leaves a field out. */
 export const defaultPublicConfig: PublicConfig = {
   ads: { mode: "test", androidUnitId: "", iosUnitId: "", testDevices: [] },
-  poker: { autoDealDefault: true },
+  poker: { autoDealDefault: true, turnSecondsDefault: DEFAULT_TURN_SECONDS },
   video: {
     poker: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
     backgammon: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
@@ -138,6 +141,7 @@ export function readOneConfig(value: unknown): PublicConfig {
     },
     poker: {
       autoDealDefault: bool(poker?.autoDealDefault, defaultPublicConfig.poker.autoDealDefault),
+      turnSecondsDefault: int(poker?.turnSecondsDefault, MIN_TURN_SECONDS, MAX_TURN_SECONDS, defaultPublicConfig.poker.turnSecondsDefault),
     },
     video: {
       poker: videoQuality(video?.poker, defaultPublicConfig.video.poker),

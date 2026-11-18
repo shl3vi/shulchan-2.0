@@ -1,7 +1,11 @@
 import type { ActionName, EngineView } from "./engine.js";
 
-/** How long a poker player has to act before the server acts for them. */
-export const TURN_MS = 30 * 1000;
+/** How long a poker player has to act when the table sets nothing else. */
+export const DEFAULT_TURN_SECONDS = 30;
+export const TURN_MS = DEFAULT_TURN_SECONDS * 1000;
+/** The admin can set any whole number of seconds in this range. */
+export const MIN_TURN_SECONDS = 10;
+export const MAX_TURN_SECONDS = 300;
 
 export type TurnClock = {
   seat: number;
@@ -10,7 +14,12 @@ export type TurnClock = {
   deadline: number;
 };
 
-type TurnTable = { turn?: TurnClock };
+type TurnTable = { turn?: TurnClock; turnSeconds?: number };
+
+/** The table's turn length. Tables opened before it could be set get the old 30 seconds. */
+export function turnMs(table: TurnTable) {
+  return (table.turnSeconds ?? DEFAULT_TURN_SECONDS) * 1000;
+}
 
 /**
  * Starts a full clock whenever a new seat is to act. `fresh` is set after a real
@@ -25,12 +34,12 @@ export function stampTurn(table: TurnTable, view: EngineView, now: number, fresh
   }
   const current = table.turn;
   if (!fresh && current && current.seat === seat && current.round === view.round) return;
-  table.turn = { seat, round: view.round, deadline: now + TURN_MS };
+  table.turn = { seat, round: view.round, deadline: now + turnMs(table) };
 }
 
-/** After a pause the player to act gets a full clock again. */
+/** After a pause, or a new turn length, the player to act gets a full clock again. */
 export function restartTurn(table: TurnTable, now: number) {
-  if (table.turn) table.turn.deadline = now + TURN_MS;
+  if (table.turn) table.turn.deadline = now + turnMs(table);
 }
 
 /** A player who ran out of time checks when that costs nothing, otherwise folds. */

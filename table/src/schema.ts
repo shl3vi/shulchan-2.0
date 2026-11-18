@@ -1,10 +1,14 @@
 import { z } from "zod";
+import { MAX_TURN_SECONDS, MIN_TURN_SECONDS } from "./turn.js";
+
+const turnSeconds = z.number().int().min(MIN_TURN_SECONDS).max(MAX_TURN_SECONDS);
 
 export const createBody = z.object({
   smallBlind: z.number().int().positive(),
   buyIn: z.number().int().positive(),
   kind: z.enum(["poker", "backgammon"]).optional(),
   autoDeal: z.boolean().optional(),
+  turnSeconds: turnSeconds.optional(),
 }).strict();
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -81,6 +85,10 @@ export const rebuyBody = z.object({
 
 export const autoDealBody = z.object({
   enabled: z.boolean(),
+}).strict();
+
+export const turnTimeBody = z.object({
+  seconds: turnSeconds,
 }).strict();
 
 export const pauseBody = z.object({

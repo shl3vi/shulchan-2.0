@@ -17,6 +17,7 @@ type GameSessionValue = {
     hostToken: string,
     kind?: "poker" | "backgammon",
     autoDeal?: boolean,
+    turnSeconds?: number,
   ) => Promise<void>;
   join: (name: string, gameId: string, password: string) => Promise<void>;
   ready: boolean;
@@ -25,6 +26,7 @@ type GameSessionValue = {
   transferAdmin: (playerId: string) => void;
   startHand: () => void;
   setAutoDeal: (enabled: boolean) => void;
+  setTurnSeconds: (seconds: number) => void;
   setPaused: (paused: boolean) => void;
   act: (action: string, amount?: number) => void;
   rebuy: (amount: number) => void;
@@ -118,9 +120,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       ready,
-      async createAndSit(name, smallBlind, buyIn, hostToken, kind = "poker", autoDeal = false) {
+      async createAndSit(name, smallBlind, buyIn, hostToken, kind = "poker", autoDeal = false, turnSeconds) {
         if (credentials) throw new Error(t("alreadyAtTable"));
-        const table = await createTable(smallBlind, buyIn, hostToken, kind, autoDeal);
+        const table = await createTable(smallBlind, buyIn, hostToken, kind, autoDeal, turnSeconds);
         const player = await joinTable(table.gameId, name, table.password, table.adminSecret);
         remember({
           gameId: table.gameId,
@@ -158,6 +160,10 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       setAutoDeal(enabled) {
         if (!state?.you?.isAdmin) return;
         socket?.emit("auto-deal", { enabled });
+      },
+      setTurnSeconds(seconds) {
+        if (!state?.you?.isAdmin) return;
+        socket?.emit("turn-time", { seconds });
       },
       setPaused(paused) {
         if (!state?.you?.isAdmin) return;

@@ -1,5 +1,4 @@
 import { considerAutoDeal } from "./autodeal.js";
-import { debugConfig } from "./debug.js";
 import { actPoker, readPoker } from "./engine.js";
 import { notePlayers, notePoker } from "./events/ledger.js";
 import { reportCaught } from "./events/report.js";
@@ -12,8 +11,9 @@ const GRACE_MS = 500;
 
 const pending = new Map<string, NodeJS.Timeout>();
 
+// The debug table is not held: it shows the clock like any other table, so the clock must act there too.
 function holds(table: TableRecord) {
-  return table.kind === "backgammon" || table.paused === true || table.closing === true || table.id === debugConfig()?.tableId;
+  return table.kind === "backgammon" || table.paused === true || table.closing === true;
 }
 
 /**

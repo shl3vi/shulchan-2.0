@@ -270,7 +270,7 @@ export default function HomeScreen() {
     setBusy(true);
     try {
       if (!host) return;
-      await session.createAndSit(seatedName, smallBlind, buyIn, host.token, nextKind, nextKind === "poker" && autoDeal);
+      await session.createAndSit(seatedName, smallBlind, buyIn, host.token, nextKind, nextKind === "poker" && autoDeal, config.poker.turnSecondsDefault);
       router.push(nextKind === "backgammon" ? { pathname: "/table", params: { kind: "backgammon" } } : "/table");
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : t("serverUnreachable");

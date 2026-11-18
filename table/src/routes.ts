@@ -2,6 +2,7 @@ import { Router } from "express";
 import { considerAutoDeal } from "./autodeal.js";
 import { createPokerTable, readPoker, seatPoker } from "./engine.js";
 import { liveKitToken, mediaRoom, VideoUnavailable } from "./livekit.js";
+import { publicConfigSet } from "./publicConfig.js";
 import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
 import { nameProblem, playerName } from "./name.js";
@@ -62,6 +63,10 @@ router.post("/", async (req, res) => {
     kind: body.kind === "backgammon" ? "backgammon" : "poker",
     lastActivityAt: Date.now(),
     ...(body.kind !== "backgammon" && body.autoDeal ? { autoDeal: true } : {}),
+    // The app sends its region's default. An older app sends none and gets the default region's.
+    ...(body.kind !== "backgammon"
+      ? { turnSeconds: body.turnSeconds ?? publicConfigSet().default.poker.turnSecondsDefault }
+      : {}),
     players: [],
   };
   const view = await createPokerTable(table, smallBlind);

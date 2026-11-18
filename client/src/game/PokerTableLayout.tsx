@@ -15,6 +15,8 @@ export type SeatSlot = {
   toAct: boolean;
   /** Time left to act when the snapshot was built. Only on the seat to act. */
   turnLeftMs?: number;
+  /** The table's whole turn length, so the ring starts full. */
+  turnTotalMs?: number;
   /** Server time of that snapshot, so the clock restarts on each one. */
   turnStamp?: number;
   isYou: boolean;
@@ -439,27 +441,27 @@ function SeatCurtain({ open }: { open: boolean }) {
 }
 
 /** Seconds left for the seat to act. The server acts when it reaches zero. Remount per snapshot. */
-/** Matches TURN_MS on the table service. */
-const TURN_MS = 30_000;
+/** Used when the server does not send the table's turn length. */
+const DEFAULT_TURN_MS = 30_000;
 
 /**
  * A line around the video frame that drains clockwise from the top middle as the
  * turn runs out, gold until the last 10 seconds, then red.
  */
-function TurnRing({ leftMs, scale }: { leftMs: number; scale: number }) {
+function TurnRing({ leftMs, totalMs, scale }: { leftMs: number; totalMs: number; scale: number }) {
   const u = (n: number) => n * scale;
   const [box, setBox] = useState({ w: u(60), h: u(92) });
   const { w, h } = box;
   const t = u(3);
   const perimeter = 2 * (w + h);
   // Share of the full turn still left, 1 to 0, so a new layout size does not restart it.
-  const [left] = useState(() => new Animated.Value(Math.min(1, leftMs / TURN_MS)));
+  const [left] = useState(() => new Animated.Value(Math.min(1, leftMs / totalMs)));
   useEffect(() => {
     const run = Animated.timing(left, { toValue: 0, duration: leftMs, easing: Easing.linear, useNativeDriver: false });
     run.start();
     return () => run.stop();
   }, [leftMs, left]);
-  const urgentAt = 10_000 / TURN_MS;
+  const urgentAt = 10_000 / totalMs;
   const color = left.interpolate({
     inputRange: [urgentAt - 0.001, urgentAt],
     outputRange: ["#ef4444", "#f6d36b"],
@@ -567,7 +569,7 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
       {occupied ? <SeatCurtain open={cameraOn} /> : null}
       {player?.toAct && player.turnLeftMs != null ? (
         <>
-          <TurnRing key={`ring-${player.turnStamp}`} leftMs={player.turnLeftMs} scale={scale} />
+          <TurnRing key={`ring-${player.turnStamp}`} leftMs={player.turnLeftMs} totalMs={player.turnTotalMs ?? DEFAULT_TURN_MS} scale={scale} />
           <TurnClock key={player.turnStamp} leftMs={player.turnLeftMs} scale={scale} />
         </>
       ) : null}

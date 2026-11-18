@@ -10,7 +10,7 @@ import { debugConfig } from "./debug.js";
 import { allowSocketEvent } from "./http.js";
 import { endRoom, mediaRoom, mediaRooms, removeFromRoom } from "./livekit.js";
 import { assertPlaying, noteActivity, setPaused } from "./idle.js";
-import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, pauseBody, playerBody, readSchema, rebuyBody } from "./schema.js";
+import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, pauseBody, playerBody, readSchema, rebuyBody, turnTimeBody } from "./schema.js";
 import { blockedSeatIds } from "./safety.js";
 import { restartTurn } from "./turn.js";
 import { armTurn } from "./turnWatch.js";
@@ -140,6 +140,23 @@ export function attachSockets(io: Server) {
         requireAdmin(current);
         if ((current.kind ?? "poker") === "backgammon") throw new Error("This table is not poker");
         current.autoDeal = parsed.enabled;
+      });
+    });
+
+    onEvent("turn-time", (body: unknown) => {
+      const parsed = readSchema(turnTimeBody, body);
+      if (!parsed) {
+        reportError({ area: "validation", route: "turn-time", tableId, kind });
+        socket.emit("error", { message: "Invalid request" });
+        return;
+      }
+      return change("Cannot change the turn time", async (current) => {
+        requireAdmin(current);
+        if ((current.kind ?? "poker") === "backgammon") throw new Error("This table is not poker");
+        if (current.turnSeconds === parsed.seconds) return TABLE_UNCHANGED;
+        current.turnSeconds = parsed.seconds;
+        // The player acting now gets the new length in full, so the change shows at once.
+        if (current.paused !== true) restartTurn(current, Date.now());
       });
     });
 

@@ -20,6 +20,8 @@ export type TableSnapshot = {
   buyIn: number;
   kind?: "poker" | "backgammon";
   autoDeal?: boolean;
+  /** Poker only. Seconds each player has to act. */
+  turnSeconds?: number;
   backgammon?: unknown;
   backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
   communityCards: Card[];

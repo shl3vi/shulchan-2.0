@@ -45,8 +45,12 @@ async function watch(io: Server) {
   const debugId = debugConfig()?.tableId;
   const open = await listOpenTables();
   for (const row of open) {
-    if (row.id === debugId) continue;
     const now = Date.now();
+    if (row.id === debugId) {
+      // The debug table never closes or changes admin, but its turn clock still runs.
+      if (overdueTurn(row.record, now)) await expireTurn(row.id);
+      continue;
+    }
     try {
       // Before the pause check: a paused table whose admin left can only be resumed by a new admin.
       await handOffAdmin(io, row.id, row.record, now);

@@ -14,7 +14,8 @@ export type GameKind = "poker" | "backgammon";
 export type RemoteConfig = {
   /** off: no banner. test: Google's sample banner. live: this app's own ad units. */
   ads: { mode: AdsMode; androidUnitId: string; iosUnitId: string; testDevices: string[] };
-  poker: { autoDealDefault: boolean };
+  /** turnSecondsDefault: how long each player has to act at a table this phone opens. */
+  poker: { autoDealDefault: boolean; turnSecondsDefault: number };
   video: Record<GameKind, VideoQuality>;
   update: { minVersion: string; force: boolean; iosUrl: string; androidUrl: string };
   announcement: string;
@@ -28,7 +29,7 @@ function modeOf(value: unknown): AdsMode | null {
 const fallback: RemoteConfig = {
   // Nothing is shown until the server answers, so a build cannot serve ads its config did not ask for.
   ads: { mode: modeOf(process.env.EXPO_PUBLIC_ADS_MODE) ?? "off", androidUnitId: "", iosUnitId: "", testDevices: [] },
-  poker: { autoDealDefault: true },
+  poker: { autoDealDefault: true, turnSecondsDefault: 30 },
   video: {
     poker: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
     backgammon: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
@@ -139,7 +140,10 @@ function apply(body: unknown): RemoteConfig {
       iosUnitId: unitId(ads?.iosUnitId),
       testDevices: testDevices(ads?.testDevices),
     },
-    poker: { autoDealDefault: bool(poker?.autoDealDefault, current.poker.autoDealDefault) },
+    poker: {
+      autoDealDefault: bool(poker?.autoDealDefault, current.poker.autoDealDefault),
+      turnSecondsDefault: int(poker?.turnSecondsDefault, 10, 300, current.poker.turnSecondsDefault),
+    },
     video: {
       poker: videoQuality(video?.poker, fallback.video.poker),
       backgammon: videoQuality(video?.backgammon, fallback.video.backgammon),

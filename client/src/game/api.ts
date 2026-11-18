@@ -96,12 +96,13 @@ export function createTable(
   hostToken: string,
   kind: "poker" | "backgammon" = "poker",
   autoDeal = false,
+  turnSeconds?: number,
 ) {
   return post<{ gameId: string; adminSecret: string; password: string }>("/api/games", {
     smallBlind,
     buyIn,
     kind,
-    ...(kind === "poker" ? { autoDeal } : {}),
+    ...(kind === "poker" ? { autoDeal, ...(turnSeconds != null ? { turnSeconds } : {}) } : {}),
   }, {
     authorization: `Bearer ${hostToken}`,
   });
