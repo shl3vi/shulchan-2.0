@@ -578,6 +578,96 @@ function TableFelt({
   );
 }
 
+const SPOTLIGHT_ZOOM = 2.1;
+const SPOTLIGHT_HOLD_MS = 3000;
+
+/** Moves the winner's seat to the middle of the table, enlarged, then back to its place. */
+function Spotlight({
+  active,
+  scale,
+  dx,
+  dy,
+  left,
+  top,
+  children,
+}: {
+  active: boolean;
+  scale: number;
+  dx: number;
+  dy: number;
+  left: number;
+  top: number;
+  children: ReactNode;
+}) {
+  const [progress] = useState(() => new Animated.Value(0));
+  const [finished, setFinished] = useState(false);
+  const [wasActive, setWasActive] = useState(active);
+  if (wasActive !== active) {
+    setWasActive(active);
+    setFinished(false);
+  }
+  const lifted = active && !finished;
+  useEffect(() => {
+    if (!active) {
+      progress.stopAnimation();
+      progress.setValue(0);
+      return;
+    }
+    const run = Animated.sequence([
+      Animated.spring(progress, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
+      Animated.delay(SPOTLIGHT_HOLD_MS),
+      Animated.timing(progress, { toValue: 0, duration: 550, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    ]);
+    run.start(({ finished: done }) => {
+      if (done) setFinished(true);
+    });
+    return () => run.stop();
+  }, [active, progress]);
+  // The video frame's center, measured from the seat widget's top left corner.
+  const fx = (SEAT_W / 2) * scale;
+  const fy = SEAT_TOP * scale;
+  const zoom = progress.interpolate({ inputRange: [0, 1], outputRange: [1, SPOTLIGHT_ZOOM] });
+  return (
+    <>
+      {lifted ? (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            opacity: progress,
+            zIndex: 9,
+          }}
+        />
+      ) : null}
+      <Animated.View
+        style={{
+          position: "absolute",
+          left,
+          top,
+          zIndex: lifted ? 10 : 3,
+          transform: [
+            { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, dx] }) },
+            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, dy] }) },
+            // Scale around the video frame instead of the widget's middle.
+            { translateX: fx - (SEAT_W * scale) / 2 },
+            { translateY: fy - (SEAT_H * scale) / 2 },
+            { scale: zoom },
+            { translateX: -(fx - (SEAT_W * scale) / 2) },
+            { translateY: -(fy - (SEAT_H * scale) / 2) },
+          ],
+        }}
+      >
+        {children}
+      </Animated.View>
+    </>
+  );
+}
+
 export function PokerTableLayout({
   seats,
   shown,
@@ -657,19 +747,19 @@ export function PokerTableLayout({
             const seatIndex = (hero + visual) % SEAT_CENTERS.length;
             const player = seats[seatIndex];
             return (
-              <View
+              <Spotlight
                 key={`seat-${visual}`}
-                style={{
-                  position: "absolute",
-                  left: u(center.x - SEAT_W / 2),
-                  top: u(center.y - SEAT_TOP),
-                  zIndex: 3,
-                }}
+                active={player?.winner === true}
+                scale={scale}
+                dx={u(STAGE_W / 2 - center.x)}
+                dy={u(STAGE_H / 2 - center.y)}
+                left={u(center.x - SEAT_W / 2)}
+                top={u(center.y - SEAT_TOP)}
               >
                 <Pressable disabled={!player || !onSeat} onPress={() => onSeat?.(seatIndex)}>
                   <SeatView player={player} scale={scale} />
                 </Pressable>
-              </View>
+              </Spotlight>
             );
           })}
         </View>
