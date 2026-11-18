@@ -21,6 +21,12 @@ const SOURCES = {
   turnChime: [require("../../assets/sounds/turn-chime.wav")],
   turnTick: [require("../../assets/sounds/turn-tick.wav")],
   checkerHit: [require("../../assets/sounds/checker-hit.wav")],
+  checkerPlace: [require("../../assets/sounds/checker-place.wav")],
+  diceClack: [
+    require("../../assets/sounds/dice-clack-1.wav"),
+    require("../../assets/sounds/dice-clack-2.wav"),
+    require("../../assets/sounds/dice-clack-3.wav"),
+  ],
 } as const;
 
 export type Sfx = keyof typeof SOURCES;
@@ -38,6 +44,8 @@ const VOLUME: Record<Sfx, number> = {
   // Soft on purpose: it repeats every second near the end of your turn.
   turnTick: 0.4,
   checkerHit: 0.9,
+  checkerPlace: 0.55,
+  diceClack: 0.65,
 };
 
 /**
@@ -48,7 +56,8 @@ const VOLUME: Record<Sfx, number> = {
  */
 type Engine = {
   preload: () => void;
-  play: (name: Sfx) => void;
+  /** `level` scales the sound's own volume, from 0 to 1. */
+  play: (name: Sfx, level: number) => void;
   /** Stops the output while no table is open, so it does not use the battery. */
   sleep: () => void;
 };
@@ -92,7 +101,8 @@ function fastEngine(): Engine | null {
     return null;
   }
   let context: FastContext | null = null;
-  const gains = new Map<Sfx, FastGain>();
+  /** One gain per sound and volume step (tenths), made once and reused. */
+  const gains = new Map<string, FastGain>();
   const buffers = new Map<Sfx, FastBuffer[]>();
   const loading = new Map<Sfx, Promise<void>>();
 
@@ -119,16 +129,19 @@ function fastEngine(): Engine | null {
     return promise;
   }
 
-  function start(name: Sfx) {
+  function start(name: Sfx, level: number) {
     const ctx = ready();
     const list = buffers.get(name);
     if (!list || list.length === 0) return false;
-    let gain = gains.get(name);
+    // Each volume step has its own gain, so a quiet play does not change one already playing.
+    const step = Math.round(level * 10);
+    const key = `${name}:${step}`;
+    let gain = gains.get(key);
     if (!gain) {
       gain = ctx.createGain();
-      gain.gain.value = VOLUME[name];
+      gain.gain.value = VOLUME[name] * (step / 10);
       gain.connect(ctx.destination);
-      gains.set(name, gain);
+      gains.set(key, gain);
     }
     const source = ctx.createBufferSource();
     source.buffer = pick(list);
@@ -142,10 +155,10 @@ function fastEngine(): Engine | null {
       ready();
       for (const name of NAMES) void load(name);
     },
-    play(name) {
-      if (start(name)) return;
+    play(name, level) {
+      if (start(name, level)) return;
       // Not decoded yet (the first sound right after opening the table): play it when it is.
-      void load(name).then(() => start(name));
+      void load(name).then(() => start(name, level));
     },
     sleep() {
       if (context?.state === "running") void context.suspend();
@@ -166,6 +179,9 @@ const VOICES: Record<Sfx, number> = {
   turnChime: 1,
   turnTick: 2,
   checkerHit: 1,
+  checkerPlace: 2,
+  // A roll knocks many times in a second, and the two dice can knock at once.
+  diceClack: 2,
 };
 
 type Status = { didJustFinish?: boolean };
@@ -236,7 +252,7 @@ function playerEngine(): Engine | null {
     preload() {
       for (const name of NAMES) voicesFor(name);
     },
-    play(name) {
+    play(name, level) {
       const list = voicesFor(name);
       if (list.length === 0) return;
       const first = turn.get(name) ?? 0;
@@ -246,6 +262,7 @@ function playerEngine(): Engine | null {
         if (!voice.ready) continue;
         turn.set(name, index + 1);
         voice.ready = false;
+        voice.player.volume = VOLUME[name] * level;
         voice.player.play();
         return;
       }
@@ -253,6 +270,7 @@ function playerEngine(): Engine | null {
       const voice = list[first % list.length]!;
       turn.set(name, first + 1);
       voice.ready = false;
+      voice.player.volume = VOLUME[name] * level;
       voice.player.pause();
       void voice.player.seekTo(0).then(() => voice.player.play(), () => voice.player.play());
     },
@@ -302,10 +320,10 @@ export function ownChipJustPlayed() {
   return Date.now() - ownChipAt < 2500;
 }
 
-/** Plays a short sound from the start. */
-export function playSfx(name: Sfx) {
+/** Plays a short sound from the start. `level` (0 to 1) makes this one play quieter. */
+export function playSfx(name: Sfx, level = 1) {
   try {
-    current()?.play(name);
+    current()?.play(name, Math.max(0, Math.min(1, level)));
   } catch {
     // Sound is a nice-to-have; never let it break the table.
   }

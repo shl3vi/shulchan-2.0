@@ -4,6 +4,9 @@ They are made here, so they have no outside source or license.
 - turn-tick: a soft wooden tick, about 60 ms, for each of the last 5 seconds of your turn.
 - turn-chime: two bell notes rising a fifth, about 0.9 s, when your turn starts.
 - checker-hit: a heavy knock, about 0.3 s, when a backgammon checker is hit and sent to the bar.
+- checker-place: a soft wooden thud, about 0.13 s, when a backgammon checker lands.
+- dice-clack-1 to 3: a dice knock, about 70 ms, each a little higher, for each bounce in the cup.
+The place and clack sounds are the tones the app used to synthesize live, now rendered to files.
 """
 
 import math
@@ -90,7 +93,71 @@ def hit() -> list[float]:
     return out
 
 
+def bandpass(samples: list[float], center: float, q: float) -> list[float]:
+    """A plain biquad band-pass filter (constant peak gain)."""
+    omega = 2 * math.pi * center / RATE
+    alpha = math.sin(omega) / (2 * q)
+    b0, b1, b2 = alpha, 0.0, -alpha
+    a0, a1, a2 = 1 + alpha, -2 * math.cos(omega), 1 - alpha
+    out = []
+    x1 = x2 = y1 = y2 = 0.0
+    for x in samples:
+        y = (b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0
+        out.append(y)
+        x2, x1, y2, y1 = x1, x, y1, y
+    return out
+
+
+def sweep_phase(start: float, end: float, glide: float, time: float) -> float:
+    """Phase of a tone gliding exponentially from start to end Hz over `glide` seconds."""
+    if time <= glide:
+        ratio = end / start
+        return 2 * math.pi * start * glide * (ratio ** (time / glide) - 1) / math.log(ratio)
+    return sweep_phase(start, end, glide, glide) + 2 * math.pi * end * (time - glide)
+
+
+def envelope(time: float, peak_at: float, end_at: float) -> float:
+    """Exponential rise to 1 and fall to silence, like Web Audio's exponential ramps."""
+    floor = 0.0001
+    if time < peak_at:
+        return floor * (1 / floor) ** (time / peak_at)
+    if time < end_at:
+        return (floor) ** ((time - peak_at) / (end_at - peak_at))
+    return 0.0
+
+
+def place() -> list[float]:
+    length = int(RATE * 0.13)
+    return [
+        math.sin(sweep_phase(200, 70, 0.09, index / RATE)) * envelope(index / RATE, 0.008, 0.12)
+        for index in range(length)
+    ]
+
+
+def triangle(phase: float) -> float:
+    return 2 / math.pi * math.asin(math.sin(phase))
+
+
+def clack(start: float, seed: int) -> list[float]:
+    random.seed(seed)
+    length = int(RATE * 0.08)
+    tone = [triangle(sweep_phase(start, 70, 0.06, index / RATE)) for index in range(length)]
+    tone = bandpass(tone, 900, 1.0)
+    out = []
+    for index, value in enumerate(tone):
+        time = index / RATE
+        body = value * envelope(time, 0.004, 0.07) * 0.32
+        noise = 0.0
+        if time < 0.04:
+            noise = random.uniform(-1, 1) * (1 - time / 0.04) * 0.18 * envelope(time, 0.0001, 0.04)
+        out.append(body + noise)
+    return out
+
+
 write("turn-tick.wav", tick())
 write("turn-chime.wav", chime())
 write("checker-hit.wav", hit())
-print("Wrote turn-tick.wav, turn-chime.wav and checker-hit.wav to", OUT)
+write("checker-place.wav", place())
+for number, (start, seed) in enumerate(((280, 21), (420, 22), (560, 23)), start=1):
+    write(f"dice-clack-{number}.wav", clack(start, seed))
+print("Wrote the turn, checker and dice sounds to", OUT)

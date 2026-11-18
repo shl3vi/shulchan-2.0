@@ -8,4 +8,4 @@ chips-handle-5, card-slide-1 and card-place-2. License: Creative Commons Zero (C
 applause.wav: "Small group cheer and applause" from Mixkit (https://mixkit.co/free-sound-effects/applause/),
 Mixkit Sound Effects Free License. Cut to 4.3 seconds with a fade out.
 
-turn-tick.wav, turn-chime.wav and checker-hit.wav: made for this app by scripts/make-sounds.py (synthesized, no outside source).
+turn-tick.wav, turn-chime.wav, checker-hit.wav, checker-place.wav and dice-clack-1.wav to dice-clack-3.wav: made for this app by scripts/make-sounds.py (synthesized, no outside source).
