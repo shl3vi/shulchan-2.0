@@ -1,0 +1,6 @@
+chip-*.wav, chips-collect.wav, chips-push.wav, card-deal.wav and card-flip.wav
+come from "Casino Audio" 1.1 by Kenney (www.kenney.nl), converted from OGG to WAV:
+chip-lay-1/2/3, chips-stack-2, chips-handle-5, card-slide-1 and card-place-2.
+License: Creative Commons Zero (CC0), http://creativecommons.org/publicdomain/zero/1.0/
+
+win.wav is made by client/scripts/make-sounds.mjs.

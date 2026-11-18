@@ -232,8 +232,8 @@ function BackgammonTable({
     seenGame.current = key;
     setSelected(null);
     setGame(next);
-    if (!first && next.phase === "over" && prev.phase !== "over" && next.winner != null && myColor != null) {
-      playSfx(next.winner === myColor ? "win" : "lose");
+    if (!first && next.phase === "over" && prev.phase !== "over" && next.winner != null && next.winner === myColor) {
+      playSfx("win");
     }
     if (!remote || first) return;
     const rolled = (next.rolls ?? 0) !== (prev.rolls ?? 0) && (next.lastRoll?.length ?? 0) > 0;
@@ -553,16 +553,15 @@ export default function TableScreen() {
     holdOff.current(blockedKey ? blockedKey.split(" ") : []);
   }, [blockedKey]);
 
-  // Win or lose sound when a poker hand you were still in ends. Not on the first snapshot.
-  const lastHand = useRef<{ round: string | null; inHand: boolean } | null>(null);
+  // Win sound when a poker hand ends and you won some of it. Not on the first snapshot.
+  const lastRound = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     if (!state || state.kind === "backgammon") return;
+    const before = lastRound.current;
+    lastRound.current = state.round;
+    if (before == null || state.round != null) return;
     const mine = state.players.find((player) => player.id === state.you?.id);
-    const before = lastHand.current;
-    lastHand.current = { round: state.round, inHand: mine?.inHand === true };
-    if (!before || before.round == null || state.round != null || !before.inHand || !mine) return;
-    if (state.lastWinners.length === 0) return;
-    playSfx(state.lastWinners.some((winner) => winner.seat === mine.seat) ? "win" : "lose");
+    if (mine && state.lastWinners.some((winner) => winner.seat === mine.seat)) playSfx("win");
   }, [state]);
 
   useEffect(() => {
