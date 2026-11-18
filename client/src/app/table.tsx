@@ -13,7 +13,7 @@ import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
 import { ActionDock, heroDealDelays, PokerTableLayout, SPOTLIGHT_DELAY_MS, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
-import type { Card, Credentials, TableSnapshot } from "@/game/types";
+import type { Card, Credentials, RebuyRule, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
 import { move as playMove, newGame, opponent, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
@@ -518,6 +518,9 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Your phone ticks for this many seconds before your turn runs out. */
+const TICK_SECONDS = 5;
+
 /** The turn lengths the admin steps through, one tap at a time. */
 const TURN_SECONDS_CHOICES = [15, 20, 30, 45, 60, 90, 120];
 
@@ -525,11 +528,51 @@ function nextTurnSeconds(current: number) {
   return TURN_SECONDS_CHOICES.find((seconds) => seconds > current) ?? TURN_SECONDS_CHOICES[0]!;
 }
 
+/** Small blinds the admin steps through with − and +. */
+const SMALL_BLIND_STEPS = [1, 2, 3, 5, 10, 15, 20, 25, 50, 75, 100, 150, 200, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 10000];
+
+function stepBlind(current: number, direction: -1 | 1) {
+  if (direction > 0) return SMALL_BLIND_STEPS.find((value) => value > current) ?? current;
+  return [...SMALL_BLIND_STEPS].reverse().find((value) => value < current) ?? current;
+}
+
+const REBUY_RULES: RebuyRule[] = ["any", "busted", "off"];
+const REBUY_LABEL = { any: "rebuyAny", busted: "rebuyBusted", off: "rebuyOff" } as const;
+
+/** Whether this player may buy more chips now under the table's rule. */
+function mayRebuy(state: TableSnapshot | null) {
+  const rule = state?.rebuy ?? "any";
+  if (rule === "any") return true;
+  if (rule === "off") return false;
+  const me = state?.players.find((player) => player.id === state.you?.id);
+  return me != null && me.stack === 0 && !me.inHand;
+}
+
+function Stepper({ value, onMinus, onPlus, minusOff, plusOff }: {
+  value: string;
+  onMinus: () => void;
+  onPlus: () => void;
+  minusOff?: boolean;
+  plusOff?: boolean;
+}) {
+  return (
+    <View style={styles.stepper}>
+      <Pressable style={[styles.stepperButton, minusOff && styles.stepperOff]} onPress={onMinus} disabled={minusOff} hitSlop={6}>
+        <Text style={styles.stepperText}>−</Text>
+      </Pressable>
+      <Text style={styles.stepperValue}>{value}</Text>
+      <Pressable style={[styles.stepperButton, plusOff && styles.stepperOff]} onPress={onPlus} disabled={plusOff} hitSlop={6}>
+        <Text style={styles.stepperText}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function TableScreen() {
   const router = useRouter();
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const insets = useSafeAreaInsets();
-  const { credentials, state, error, dismissError, startHand, setAutoDeal, setTurnSeconds, setPaused, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
+  const { credentials, state, error, dismissError, startHand, setAutoDeal, setTurnSeconds, setTableSettings, setPaused, act, leave, removePlayer, transferAdmin, rebuy, emit } = useGameSession();
   const video = useTableVideo(credentials, state?.paused === true, state?.kind ?? "poker");
   const showAd = useTableAdAllowed(state);
   const mode = updateMode();
@@ -562,6 +605,27 @@ export default function TableScreen() {
     preloadSfx();
     return () => sleepSfx();
   }, []);
+
+  // Your turn, on this phone only: a chime when the action reaches you, and a soft tick for each
+  // of the last 5 seconds. A new betting round counts as a new turn, even for the same player.
+  const yourTurn = state?.kind !== "backgammon" && you != null && state?.playerToActId === you.id && turnLeftMs != null;
+  const yourTurnKey = yourTurn ? `${state?.round}` : null;
+  const lastTurnKey = useRef<string | null>(null);
+  useEffect(() => {
+    const before = lastTurnKey.current;
+    lastTurnKey.current = yourTurnKey;
+    if (yourTurnKey != null && yourTurnKey !== before) playSfx("turnChime");
+  }, [yourTurnKey]);
+  useEffect(() => {
+    if (!yourTurn || turnLeftMs == null) return;
+    const endsAt = Date.now() + turnLeftMs;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let second = TICK_SECONDS; second >= 1; second -= 1) {
+      const wait = endsAt - second * 1000 - Date.now();
+      if (wait >= 0) timers.push(setTimeout(() => playSfx("turnTick"), wait));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [yourTurn, turnLeftMs, state?.serverNow]);
 
   // Applause for everyone at the table when a poker hand ends, as the winner's seat grows.
   // Not on the first snapshot.
@@ -785,6 +849,50 @@ export default function TableScreen() {
                       <Text style={styles.makeAdmin}>{t("turnTimeValue", { seconds: state?.turnSeconds ?? 30 })}</Text>
                     </Pressable>
                   ) : null}
+                  {state && state.kind !== "backgammon" ? (() => {
+                    // The blinds the next hand uses: a pending change, or the current blinds.
+                    const plannedSmall = state.nextSmallBlind ?? state.smallBlind;
+                    const buyInStep = plannedSmall * 2 * 10;
+                    return (
+                      <>
+                        <View style={styles.statsRow}>
+                          <View style={styles.settingCopy}>
+                            <Text style={styles.statsLine}>{t("blinds")}</Text>
+                            {state.nextSmallBlind != null ? (
+                              <Text style={styles.settingHint}>{t("blindsNextHand")}</Text>
+                            ) : null}
+                          </View>
+                          <Stepper
+                            value={`${plannedSmall}/${plannedSmall * 2}`}
+                            onMinus={() => setTableSettings({ smallBlind: stepBlind(plannedSmall, -1) })}
+                            onPlus={() => setTableSettings({ smallBlind: stepBlind(plannedSmall, 1) })}
+                            minusOff={stepBlind(plannedSmall, -1) === plannedSmall}
+                            plusOff={stepBlind(plannedSmall, 1) === plannedSmall || stepBlind(plannedSmall, 1) * 2 > state.buyIn}
+                          />
+                        </View>
+                        <View style={styles.statsRow}>
+                          <Text style={styles.statsLine}>{t("buyIn")}</Text>
+                          <Stepper
+                            value={String(state.buyIn)}
+                            onMinus={() => setTableSettings({ buyIn: Math.max(plannedSmall * 2, state.buyIn - buyInStep) })}
+                            onPlus={() => setTableSettings({ buyIn: state.buyIn + buyInStep })}
+                            minusOff={state.buyIn <= plannedSmall * 2}
+                          />
+                        </View>
+                        <Pressable
+                          style={styles.statsRow}
+                          onPress={() => {
+                            const rule = state.rebuy ?? "any";
+                            setTableSettings({ rebuy: REBUY_RULES[(REBUY_RULES.indexOf(rule) + 1) % REBUY_RULES.length] });
+                          }}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.statsLine}>{t("rebuys")}</Text>
+                          <Text style={styles.makeAdmin}>{t(REBUY_LABEL[state.rebuy ?? "any"])}</Text>
+                        </Pressable>
+                      </>
+                    );
+                  })() : null}
                   {(state?.players ?? []).length === 0 ? <Text style={styles.statsLine}>{t("noPlayers")}</Text> : null}
                   {(state?.players ?? []).map((player) => (
                     <View key={player.id} style={styles.statsRow}>
@@ -877,14 +985,16 @@ export default function TableScreen() {
               { label: t("shareTable"), icon: "share" as const, onPress: shareTable },
               { label: t("tableInfo"), icon: "info", onPress: () => setInfo(true) },
               { label: t("statistics"), icon: "stats", onPress: () => setSheet("stats") },
-              {
-                label: t("buyMore"),
-                icon: "buy" as const,
-                onPress: () => {
-                  setBuyChips(state?.buyIn ?? state?.bigBlind ?? 1);
-                  setBuying(true);
-                },
-              },
+              ...(state?.kind === "backgammon" || mayRebuy(state)
+                ? [{
+                    label: t("buyMore"),
+                    icon: "buy" as const,
+                    onPress: () => {
+                      setBuyChips(state?.buyIn ?? state?.bigBlind ?? 1);
+                      setBuying(true);
+                    },
+                  }]
+                : []),
               ...(state?.you?.isAdmin
                 ? [{ label: t("adminOptions"), icon: "admin" as const, onPress: () => setSheet("admin") }]
                 : []),
@@ -1056,6 +1166,13 @@ const styles = StyleSheet.create({
   statsActions: { flexDirection: "row", alignItems: "center", gap: 14 },
   statsLine: { color: "#f7f7fc", fontSize: 16, flexShrink: 1 },
   makeAdmin: { color: "#a8b2ff", fontWeight: "800" },
+  settingCopy: { flexShrink: 1, gap: 2 },
+  settingHint: { color: "#a8a29e", fontSize: 13 },
+  stepper: { flexDirection: "row", alignItems: "center", gap: 10 },
+  stepperButton: { width: 34, height: 34, borderRadius: 10, backgroundColor: "rgba(168, 178, 255, 0.12)", alignItems: "center", justifyContent: "center" },
+  stepperOff: { opacity: 0.35 },
+  stepperText: { color: "#c8ceff", fontSize: 22, lineHeight: 26 },
+  stepperValue: { color: "#f7f7fc", fontSize: 16, fontWeight: "800", minWidth: 56, textAlign: "center", fontVariant: ["tabular-nums"] },
   infoLabel: { color: "#a6a8b8", fontSize: 13, fontWeight: "700", letterSpacing: 0.6 },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   infoValue: { color: "#f7f7fc", fontSize: 22, fontWeight: "900", letterSpacing: 2, flex: 1 },

@@ -14,6 +14,8 @@ export type SeatPlayer = {
   pendingRemoval?: boolean;
 };
 
+export type RebuyRule = "any" | "busted" | "off";
+
 export type TableRecord = {
   id: string;
   adminId?: string;
@@ -46,6 +48,8 @@ export type TableRecord = {
   mediaEpoch?: number;
   /** Poker only. The seat to act and when the server acts for them. */
   turn?: TurnClock;
+  /** Poker only. Who may buy more chips: anyone at any time (the default), only a player with none left, or nobody. */
+  rebuy?: RebuyRule;
   /** Poker only. Seconds each player has to act. Set from the region's config, changed by the admin. */
   turnSeconds?: number;
   players: SeatPlayer[];

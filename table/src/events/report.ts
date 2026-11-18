@@ -32,7 +32,13 @@ export function reportCaught(tableId: string | undefined, error: unknown, route:
     reportError({ area: "forbidden", tableId, route, kind });
     return;
   }
-  if (message === "Table is paused" || message === "Table is closing" || message.startsWith("Buy-in")) {
+  if (
+    message === "Table is paused" ||
+    message === "Table is closing" ||
+    message.startsWith("Buy-in") ||
+    message === "Rebuys are off at this table" ||
+    message === "You can buy more chips once you have none left"
+  ) {
     reportError({ area: "validation", tableId, route, kind });
     return;
   }

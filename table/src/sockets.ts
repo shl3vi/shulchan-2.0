@@ -1,6 +1,6 @@
 import type { Server, Socket } from "socket.io";
 import { considerAutoDeal } from "./autodeal.js";
-import { actPoker, addChips, readPoker, startPoker } from "./engine.js";
+import { actPoker, addChips, readPoker, setPokerBlinds, startPoker } from "./engine.js";
 import { snapshot } from "./snapshot.js";
 import { noteBackgammon, notePlayers, notePoker } from "./events/ledger.js";
 import { reportCaught, reportError } from "./events/report.js";
@@ -10,7 +10,7 @@ import { debugConfig } from "./debug.js";
 import { allowSocketEvent } from "./http.js";
 import { endRoom, mediaRoom, mediaRooms, removeFromRoom } from "./livekit.js";
 import { assertPlaying, noteActivity, setPaused } from "./idle.js";
-import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, pauseBody, playerBody, readSchema, rebuyBody, turnTimeBody } from "./schema.js";
+import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, pauseBody, playerBody, readSchema, rebuyBody, tableSettingsBody, turnTimeBody } from "./schema.js";
 import { blockedSeatIds } from "./safety.js";
 import { restartTurn } from "./turn.js";
 import { armTurn } from "./turnWatch.js";
@@ -160,6 +160,29 @@ export function attachSockets(io: Server) {
       });
     });
 
+    onEvent("table-settings", (body: unknown) => {
+      const parsed = readSchema(tableSettingsBody, body);
+      if (!parsed) {
+        reportError({ area: "validation", route: "table-settings", tableId, kind });
+        socket.emit("error", { message: "Invalid request" });
+        return;
+      }
+      return change("Cannot change the table settings", async (current) => {
+        requireAdmin(current);
+        if ((current.kind ?? "poker") === "backgammon") throw new Error("This table is not poker");
+        const view = await readPoker(current);
+        const blinds = parsed.smallBlind ?? view.nextSmallBlind ?? current.smallBlind;
+        const buyIn = parsed.buyIn ?? current.buyIn;
+        // Same rule as opening a table, checked against the blinds the next hand will use.
+        if (buyIn < blinds * 2) throw new Error("Buy-in must be at least one big blind");
+        if (parsed.smallBlind != null && parsed.smallBlind !== (view.nextSmallBlind ?? current.smallBlind)) {
+          await setPokerBlinds(current, parsed.smallBlind);
+        }
+        if (parsed.buyIn != null) current.buyIn = parsed.buyIn;
+        if (parsed.rebuy != null) current.rebuy = parsed.rebuy;
+      });
+    });
+
     onEvent("pause", (body: unknown) => {
       const parsed = readSchema(pauseBody, body);
       if (!parsed) {
@@ -264,6 +287,12 @@ export function attachSockets(io: Server) {
       return change("Buy-in failed", async (current, seat) => {
         if (!Number.isInteger(amount) || amount < 1 || amount > current.buyIn) {
           throw new Error("Buy-in must be a whole number up to the table buy-in");
+        }
+        const rule = current.rebuy ?? "any";
+        if (rule === "off") throw new Error("Rebuys are off at this table");
+        if (rule === "busted") {
+          const entry = (await readPoker(current)).seats.find((item) => item.seat === seat.seat);
+          if ((entry?.stack ?? 0) > 0 || entry?.inHand) throw new Error("You can buy more chips once you have none left");
         }
         await addChips(current, seat.seat, amount);
         seat.bought = (seat.bought ?? current.buyIn) + amount;

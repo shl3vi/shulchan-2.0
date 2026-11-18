@@ -18,6 +18,8 @@ type PlayedAction = { action: ActionName; amount?: number };
 
 export type EngineDoc = {
   smallBlind: number;
+  /** Set by a blinds change during a hand. It becomes smallBlind when that hand ends. */
+  nextSmallBlind?: number;
   firstHand: boolean;
   button: number;
   seats: Array<number | null>;
@@ -52,6 +54,9 @@ type PokerTable = {
 };
 
 export type EngineView = {
+  smallBlind: number;
+  /** A blinds change waiting for the hand to end, or null. */
+  nextSmallBlind: number | null;
   communityCards: Card[];
   pots: { size: number; eligiblePlayers: number[] }[];
   round: "preflop" | "flop" | "turn" | "river" | null;
@@ -157,6 +162,8 @@ export function viewOf(doc: EngineDoc, table: PokerTable): EngineView {
   const actor = betting ? table.playerToAct() : null;
   const legal = actor != null ? table.legalActions() : null;
   return {
+    smallBlind: doc.smallBlind,
+    nextSmallBlind: doc.nextSmallBlind ?? null,
     communityCards: inHand ? table.communityCards() : (doc.lastBoard ?? []),
     pots: inHand ? table.pots() : [],
     round: inHand ? table.roundOfBetting() : null,
@@ -189,8 +196,10 @@ function finish(doc: EngineDoc, table: PokerTable): EngineDoc {
     if (leaving.has(waiting.seat)) continue;
     if (seats[waiting.seat] == null) seats[waiting.seat] = waiting.stack;
   }
+  const { nextSmallBlind, ...rest } = doc;
   return {
-    ...doc,
+    ...rest,
+    smallBlind: nextSmallBlind ?? doc.smallBlind,
     firstHand: false,
     button: (table as unknown as { settledButton?: number }).settledButton ?? doc.button,
     seats,
@@ -259,6 +268,14 @@ export function unseat(doc: EngineDoc, seat: number): EngineDoc {
   };
 }
 
+/** New blinds. Between hands they apply at once; during a hand, from the next one. */
+export function setBlinds(doc: EngineDoc, smallBlind: number): EngineDoc {
+  if (!Number.isInteger(smallBlind) || smallBlind < 1) throw new Error("smallBlind must be a positive integer");
+  const { nextSmallBlind: _pending, ...rest } = doc;
+  if (doc.hand) return smallBlind === doc.smallBlind ? rest : { ...rest, nextSmallBlind: smallBlind };
+  return { ...rest, smallBlind };
+}
+
 export function startHand(doc: EngineDoc): EngineDoc {
   if (doc.hand) throw new Error("Hand already in progress");
   const seated = doc.seats.filter((stack) => stack != null).length + doc.waiting.length;
@@ -301,6 +318,7 @@ export type PokerAction =
   | { type: "add"; seat: number; amount: number }
   | { type: "unseat"; seat: number }
   | { type: "start" }
+  | { type: "blinds"; smallBlind: number }
   | { type: "act"; seat: number; action: ActionName; amount?: number };
 
 /** Returns the next hand. The caller keeps it; this process stores nothing. */
@@ -316,6 +334,8 @@ export function applyAction(doc: EngineDoc, action: PokerAction): EngineDoc {
       return unseat(doc, action.seat);
     case "start":
       return startHand(doc);
+    case "blinds":
+      return setBlinds(doc, action.smallBlind);
     case "act":
       return act(doc, action.seat, action.action, action.amount);
   }

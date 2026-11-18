@@ -45,6 +45,8 @@ function readAction(value: unknown): PokerAction | null {
     return { type: "add", seat: action.seat, amount: action.amount };
   }
   if (action.type === "unseat" && whole(action.seat)) return { type: "unseat", seat: action.seat };
+  const blinds = value as { smallBlind?: unknown };
+  if (action.type === "blinds" && whole(blinds.smallBlind)) return { type: "blinds", smallBlind: blinds.smallBlind };
   if (action.type === "act" && whole(action.seat) && actionNames.has(action.action as ActionName)) {
     const amount = action.amount == null ? undefined : Number(action.amount);
     return { type: "act", seat: action.seat, action: action.action as ActionName, amount };

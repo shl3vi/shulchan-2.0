@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { io, type Socket } from "socket.io-client";
 import { API_URL, createTable, joinTable, tableExists } from "@/game/api";
 import { loadSeat, saveSeat } from "@/game/sessionStore";
-import type { Credentials, TableSnapshot } from "@/game/types";
+import type { Credentials, RebuyRule, TableSnapshot } from "@/game/types";
 import { t } from "@/i18n";
 
 type GameSessionValue = {
@@ -27,6 +27,7 @@ type GameSessionValue = {
   startHand: () => void;
   setAutoDeal: (enabled: boolean) => void;
   setTurnSeconds: (seconds: number) => void;
+  setTableSettings: (settings: { smallBlind?: number; buyIn?: number; rebuy?: RebuyRule }) => void;
   setPaused: (paused: boolean) => void;
   act: (action: string, amount?: number) => void;
   rebuy: (amount: number) => void;
@@ -164,6 +165,10 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       setTurnSeconds(seconds) {
         if (!state?.you?.isAdmin) return;
         socket?.emit("turn-time", { seconds });
+      },
+      setTableSettings(settings) {
+        if (!state?.you?.isAdmin) return;
+        socket?.emit("table-settings", settings);
       },
       setPaused(paused) {
         if (!state?.you?.isAdmin) return;

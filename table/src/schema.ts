@@ -91,6 +91,13 @@ export const turnTimeBody = z.object({
   seconds: turnSeconds,
 }).strict();
 
+/** Admin table settings. Each field is optional; only the ones sent change. */
+export const tableSettingsBody = z.object({
+  smallBlind: z.number().int().positive().max(MAX_CHIPS / 2).optional(),
+  buyIn: chipAmount.optional(),
+  rebuy: z.enum(["any", "busted", "off"]).optional(),
+}).strict().refine((body) => body.smallBlind != null || body.buyIn != null || body.rebuy != null);
+
 export const pauseBody = z.object({
   paused: z.boolean(),
 }).strict();

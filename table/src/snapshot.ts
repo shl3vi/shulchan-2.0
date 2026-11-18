@@ -42,6 +42,10 @@ export type TableSnapshot = {
   turnDeadline?: number;
   /** Poker only. Seconds each player has to act. */
   turnSeconds?: number;
+  /** Poker only. New small blind that starts with the next hand. */
+  nextSmallBlind?: number;
+  /** Poker only. Who may buy more chips. */
+  rebuy?: "any" | "busted" | "off";
   /** Server epoch ms when this snapshot was built. */
   serverNow: number;
   lastWinners: { seat: number; name: string; amount: number }[];
@@ -94,7 +98,12 @@ export function snapshot(
     kind: table.kind ?? "poker",
     ...(table.kind === "backgammon"
       ? { backgammon: table.backgammon, backgammonLog: table.backgammonLog ?? [] }
-      : { autoDeal: table.autoDeal === true, turnSeconds: turnMs(table) / 1000 }),
+      : {
+          autoDeal: table.autoDeal === true,
+          turnSeconds: turnMs(table) / 1000,
+          rebuy: table.rebuy ?? "any",
+          ...(view.nextSmallBlind != null ? { nextSmallBlind: view.nextSmallBlind } : {}),
+        }),
     ...(viewer && viewer.id === table.adminId ? { password: table.password } : {}),
     paused: table.paused === true,
     serverNow: Date.now(),

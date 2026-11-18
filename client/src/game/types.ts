@@ -12,6 +12,8 @@ export type PublicPlayer = {
   blocked?: boolean;
 };
 
+export type RebuyRule = "any" | "busted" | "off";
+
 export type TableSnapshot = {
   id: string;
   status: "waiting" | "playing";
@@ -22,6 +24,10 @@ export type TableSnapshot = {
   autoDeal?: boolean;
   /** Poker only. Seconds each player has to act. */
   turnSeconds?: number;
+  /** Poker only. New small blind that starts with the next hand. */
+  nextSmallBlind?: number;
+  /** Poker only. Who may buy more chips: anyone, only a player with no chips left, or nobody. */
+  rebuy?: RebuyRule;
   backgammon?: unknown;
   backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
   communityCards: Card[];
