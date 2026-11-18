@@ -448,15 +448,28 @@ function backgammonPage() {
   button { background: #f6d36b; color: #1c1917; border: 0; border-radius: 999px; padding: 8px 14px; font-weight: 700; cursor: pointer; }
   button.ghost { background: #1c1917cc; color: #fafaf9; border: 1px solid #44403c; }
   input { background: #0c0a09; color: #fafaf9; border: 1px solid #44403c; border-radius: 8px; padding: 6px 8px; }
-  .board { display: grid; grid-template-columns: repeat(6, 1fr) 72px repeat(6, 1fr); gap: 6px; margin-top: 12px; background: #5c3a1e; padding: 10px; border-radius: 16px; }
-  .point, .bar { min-height: 92px; border-radius: 8px; background: #f5e6c8; color: #1c1917; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 6px; }
-  .point.dark { background: #8a5a32; color: #fff; }
-  .point b, .bar b { font-size: 11px; opacity: 0.7; }
-  .checkers { font-weight: 800; font-size: 18px; }
-  .white { color: #fafaf9; text-shadow: 0 1px 0 #1c1917; }
-  .black { color: #1c1917; }
-  .point.dark .black { color: #111; }
-  .bar { background: #3f2a1d; color: #fafaf9; justify-content: center; gap: 8px; }
+  .board { display: flex; flex-direction: column; gap: 28px; margin-top: 12px; background: #5c3317; border: 3px solid #f6d36b; border-radius: 16px; padding: 12px; }
+  .half { display: grid; grid-template-columns: repeat(6, 1fr) 64px repeat(6, 1fr) 28px; min-height: 176px; }
+  .point { position: relative; display: flex; flex-direction: column; align-items: center; min-height: 176px; }
+  .point.down { justify-content: flex-start; }
+  .point.up { justify-content: flex-end; }
+  .point::before { content: ""; position: absolute; left: 12%; right: 12%; height: 74%; }
+  .point.down::before { top: 0; clip-path: polygon(50% 100%, 0 0, 100% 0); }
+  .point.up::before { bottom: 0; clip-path: polygon(50% 0, 0 100%, 100% 100%); }
+  .point.odd::before { background: #7f1d1d; }
+  .point.even::before { background: #1a6b78; }
+  .bar { margin: 0 18px; border-radius: 4px; background: #3f2412; display: flex; flex-direction: column; align-items: center; }
+  .bar.far { justify-content: flex-start; padding-top: 6px; }
+  .bar.near { justify-content: flex-end; padding-bottom: 6px; }
+  .off { display: flex; flex-direction: column; align-items: center; }
+  .off.far { justify-content: flex-start; padding-top: 4px; }
+  .off.near { justify-content: flex-end; padding-bottom: 4px; }
+  .stack { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+  .point.down .stack, .off.far .stack, .bar.far .stack { padding-top: 4px; }
+  .point.up .stack, .off.near .stack, .bar.near .stack { padding-bottom: 4px; }
+  .checker { width: 22px; height: 22px; border-radius: 50%; display: block; flex: none; box-sizing: border-box; }
+  .checker.white { background: radial-gradient(circle at 35% 32%, #fff, #f5f0e6 42%, #cfc6b8); border: 1px solid #d6d3d1; box-shadow: inset 0 0 0 3px #efe4d2; }
+  .checker.black { background: radial-gradient(circle at 35% 32%, #57534e, #1c1917 46%, #0c0a09); border: 1px solid #f6d36b; box-shadow: inset 0 0 0 3px #292524; }
   .player { background: #111827ee; border: 1px solid #292524; border-radius: 12px; padding: 8px 10px; }
   .player.turn { border-color: #f6d36b; }
   .dock { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 12px 16px; background: #0c0a09f2; border-top: 1px solid #292524; }
@@ -502,16 +515,24 @@ function backgammonPage() {
     }).catch(() => { error.textContent = "Failed"; });
   }
 
-  function point(number) {
+  function stack(count, color) {
+    const node = document.createElement("div");
+    node.className = "stack";
+    const gap = count <= 1 ? 0 : Math.min(3, (148 - 22) / (count - 1) - 22);
+    for (let index = 0; index < count; index += 1) {
+      const checker = document.createElement("i");
+      checker.className = "checker " + color;
+      if (index > 0) checker.style.marginTop = gap + "px";
+      node.append(checker);
+    }
+    return node;
+  }
+
+  function point(number, up) {
     const count = state.game && state.game.points ? state.game.points[number - 1] || 0 : 0;
     const node = document.createElement("div");
-    node.className = "point" + (number % 2 === 0 ? " dark" : "");
-    const label = document.createElement("b");
-    label.textContent = String(number);
-    const checkers = document.createElement("span");
-    checkers.className = "checkers " + (count > 0 ? "white" : "black");
-    checkers.textContent = count === 0 ? "" : (count > 0 ? "W " : "B ") + Math.abs(count);
-    node.append(label, checkers);
+    node.className = "point " + (up ? "up" : "down") + (number % 2 === 0 ? " even" : " odd");
+    if (count !== 0) node.append(stack(Math.abs(count), count > 0 ? "white" : "black"));
     return node;
   }
 
@@ -555,23 +576,28 @@ function backgammonPage() {
       cube,
       game.message || "",
       game.winner ? "winner " + game.winner + " +" + (game.score || 0) : "",
-      "bar W" + ((game.bar && game.bar.white) || 0) + " B" + ((game.bar && game.bar.black) || 0),
-      "off W" + ((game.off && game.off.white) || 0) + " B" + ((game.off && game.off.black) || 0),
     ].filter(Boolean).join(" · ");
     const board = document.getElementById("board");
     board.textContent = "";
     const top = [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
     const bottom = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-    function half(numbers, barText) {
-      numbers.slice(0, 6).forEach((number) => board.append(point(number)));
+    function half(numbers, up, barColor, barCount, offCount) {
+      const row = document.createElement("div");
+      row.className = "half";
+      numbers.slice(0, 6).forEach((number) => row.append(point(number, up)));
       const bar = document.createElement("div");
-      bar.className = "bar";
-      bar.textContent = barText;
-      board.append(bar);
-      numbers.slice(6).forEach((number) => board.append(point(number)));
+      bar.className = "bar " + (up ? "near" : "far");
+      if (barCount > 0) bar.append(stack(barCount, barColor));
+      row.append(bar);
+      numbers.slice(6).forEach((number) => row.append(point(number, up)));
+      const off = document.createElement("div");
+      off.className = "off " + (up ? "near" : "far");
+      if (offCount > 0) off.append(stack(offCount, up ? "white" : "black"));
+      row.append(off);
+      board.append(row);
     }
-    half(top, "bar B " + ((game.bar && game.bar.black) || 0));
-    half(bottom, "bar W " + ((game.bar && game.bar.white) || 0));
+    half(top, false, "black", (game.bar && game.bar.black) || 0, (game.off && game.off.black) || 0);
+    half(bottom, true, "white", (game.bar && game.bar.white) || 0, (game.off && game.off.white) || 0);
     const actions = document.getElementById("actions");
     actions.textContent = "";
     function action(label, body) {
