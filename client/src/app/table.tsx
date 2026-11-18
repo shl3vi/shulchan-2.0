@@ -335,6 +335,7 @@ function BackgammonTable({
         <View style={[styles.menu, { top: insets.top + 8 }]}>
           <TableMenu
             items={[
+              { label: t("shareTable"), icon: "share", onPress: shareTable },
               { label: t("tableInfo"), icon: "info", onPress: () => setInfo(true) },
               { label: t("rules"), icon: "stats", onPress: () => setRules(true) },
               { label: t("winLog"), icon: "stats", onPress: () => setLogOpen(true) },
@@ -344,7 +345,6 @@ function BackgammonTable({
                     { label: t("restartGame"), icon: "restart" as const, onPress: restartGame },
                   ]
                 : []),
-              { label: t("shareTable"), icon: "share", onPress: shareTable },
               {
                 label: t("leaveGame"),
                 icon: "leave",
@@ -846,6 +846,7 @@ export default function TableScreen() {
         <View style={[styles.menu, { top: insets.top + 8 }]}>
           <TableMenu
             items={[
+              { label: t("shareTable"), icon: "share" as const, onPress: shareTable },
               { label: t("tableInfo"), icon: "info", onPress: () => setInfo(true) },
               { label: t("statistics"), icon: "stats", onPress: () => setSheet("stats") },
               {
@@ -859,7 +860,6 @@ export default function TableScreen() {
               ...(state?.you?.isAdmin
                 ? [{ label: t("adminOptions"), icon: "admin" as const, onPress: () => setSheet("admin") }]
                 : []),
-              { label: t("shareTable"), icon: "share" as const, onPress: shareTable },
               {
                 label: t("leaveGame"),
                 icon: "leave",
