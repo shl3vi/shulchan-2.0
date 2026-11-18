@@ -268,6 +268,67 @@ function SeatCurtain({ open }: { open: boolean }) {
 }
 
 /** Seconds left for the seat to act. The server acts when it reaches zero. Remount per snapshot. */
+/** Matches TURN_MS on the table service. */
+const TURN_MS = 30_000;
+
+/**
+ * A line around the video frame that drains clockwise from the top middle as the
+ * turn runs out, gold until the last 10 seconds, then red.
+ */
+function TurnRing({ leftMs, scale }: { leftMs: number; scale: number }) {
+  const u = (n: number) => n * scale;
+  const [box, setBox] = useState({ w: u(60), h: u(92) });
+  const { w, h } = box;
+  const t = u(3);
+  const perimeter = 2 * (w + h);
+  // Share of the full turn still left, 1 to 0, so a new layout size does not restart it.
+  const [left] = useState(() => new Animated.Value(Math.min(1, leftMs / TURN_MS)));
+  useEffect(() => {
+    const run = Animated.timing(left, { toValue: 0, duration: leftMs, easing: Easing.linear, useNativeDriver: false });
+    run.start();
+    return () => run.stop();
+  }, [leftMs, left]);
+  const urgentAt = 10_000 / TURN_MS;
+  const color = left.interpolate({
+    inputRange: [urgentAt - 0.001, urgentAt],
+    outputRange: ["#ef4444", "#f6d36b"],
+    extrapolate: "clamp",
+  });
+  // Segments in clockwise order from the top middle: [start, size].
+  const segments: [number, number][] = [
+    [0, w / 2],
+    [w / 2, h],
+    [w / 2 + h, w],
+    [w * 1.5 + h, h],
+    [w * 1.5 + 2 * h, w / 2],
+  ];
+  const part = (index: number) => {
+    const [start, size] = segments[index];
+    return left.interpolate({
+      inputRange: [start / perimeter, (start + size) / perimeter],
+      outputRange: [0, size],
+      extrapolate: "clamp",
+    });
+  };
+  const bar = { position: "absolute" as const, backgroundColor: color };
+  return (
+    <View
+      pointerEvents="none"
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        if (width !== w || height !== h) setBox({ w: width, h: height });
+      }}
+      style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, zIndex: 4 }}
+    >
+      <Animated.View style={[bar, { top: 0, left: w / 2, height: t, width: part(0) }]} />
+      <Animated.View style={[bar, { top: 0, right: 0, width: t, height: part(1) }]} />
+      <Animated.View style={[bar, { bottom: 0, right: 0, height: t, width: part(2) }]} />
+      <Animated.View style={[bar, { bottom: 0, left: 0, width: t, height: part(3) }]} />
+      <Animated.View style={[bar, { top: 0, left: 0, height: t, width: part(4) }]} />
+    </View>
+  );
+}
+
 function TurnClock({ leftMs, scale }: { leftMs: number; scale: number }) {
   const u = (n: number) => n * scale;
   const [start] = useState(() => Date.now());
@@ -334,7 +395,10 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
       )}
       {occupied ? <SeatCurtain open={cameraOn} /> : null}
       {player?.toAct && player.turnLeftMs != null ? (
-        <TurnClock key={player.turnStamp} leftMs={player.turnLeftMs} scale={scale} />
+        <>
+          <TurnRing key={`ring-${player.turnStamp}`} leftMs={player.turnLeftMs} scale={scale} />
+          <TurnClock key={player.turnStamp} leftMs={player.turnLeftMs} scale={scale} />
+        </>
       ) : null}
     </>
   );
