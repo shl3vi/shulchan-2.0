@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { isRtl, t } from "@/i18n";
 
@@ -19,22 +19,20 @@ function formatClock(ms: number) {
 }
 
 function useRemaining(closeAt: number | undefined, serverNow: number | undefined) {
-  const skew = useRef(0);
-  const seen = useRef<number | undefined>(undefined);
-  const [tick, setTick] = useState(0);
-  if (serverNow != null && serverNow !== seen.current) {
-    seen.current = serverNow;
-    skew.current = serverNow - Date.now();
-  }
+  const [remaining, setRemaining] = useState<number | null>(null);
   useEffect(() => {
     if (closeAt == null) return;
-    const id = setInterval(() => setTick((value) => value + 1), 250);
-    return () => clearInterval(id);
-  }, [closeAt]);
-  return useMemo(() => {
-    if (closeAt == null) return null;
-    return Math.max(0, closeAt - (Date.now() + skew.current));
-  }, [closeAt, serverNow, tick]);
+    // How far this phone's clock is from the server's, measured when the snapshot arrived.
+    const skew = serverNow != null ? serverNow - Date.now() : 0;
+    const update = () => setRemaining(Math.max(0, closeAt - (Date.now() + skew)));
+    const first = setTimeout(update, 0);
+    const id = setInterval(update, 250);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, [closeAt, serverNow]);
+  return closeAt == null ? null : remaining;
 }
 
 /** Idle warning and admin pause. The deadline comes from the server; this only draws it. */

@@ -105,6 +105,8 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       }
       setError(payload.message ?? "Table error");
     });
+    // The socket is an outside connection made here, and the session hands it out once it exists.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSocket(next);
     return () => {
       next.close();

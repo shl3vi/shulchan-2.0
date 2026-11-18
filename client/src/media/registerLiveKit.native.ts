@@ -5,10 +5,11 @@ let consolePatched = false;
 
 export async function registerLiveKit() {
   if (!videoSupported) return;
-  const { AudioSession, registerGlobals } = await import("@livekit/react-native");
+  const { AndroidAudioTypePresets, AudioSession, registerGlobals } = await import("@livekit/react-native");
   registerGlobals();
   void AudioSession.configureAudio({
-    android: { preferredOutputList: ["speaker"] },
+    // The voice-call preset is what Android used when this was left out, so nothing changes on the phone.
+    android: { preferredOutputList: ["speaker"], audioTypeOptions: AndroidAudioTypePresets.communication },
   }).then(() => AudioSession.startAudioSession());
   if (consolePatched) return;
   consolePatched = true;

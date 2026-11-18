@@ -20,6 +20,7 @@ const SOURCES = {
   cardFlip: [require("../../assets/sounds/card-flip.wav")],
   turnChime: [require("../../assets/sounds/turn-chime.wav")],
   turnTick: [require("../../assets/sounds/turn-tick.wav")],
+  checkerHit: [require("../../assets/sounds/checker-hit.wav")],
 } as const;
 
 export type Sfx = keyof typeof SOURCES;
@@ -36,6 +37,7 @@ const VOLUME: Record<Sfx, number> = {
   turnChime: 0.55,
   // Soft on purpose: it repeats every second near the end of your turn.
   turnTick: 0.4,
+  checkerHit: 0.9,
 };
 
 /**
@@ -163,6 +165,7 @@ const VOICES: Record<Sfx, number> = {
   cardFlip: 2,
   turnChime: 1,
   turnTick: 2,
+  checkerHit: 1,
 };
 
 type Status = { didJustFinish?: boolean };

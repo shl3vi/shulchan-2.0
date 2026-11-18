@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import { Animated, Easing, Pressable, StyleSheet, Text, View, type LayoutRectangle } from "react-native";
 import { stepDice } from "@/game/diceSound";
 import {
   checkers,
   legalMoves,
+  seenMove,
   type Color,
   type Game,
   type Move,
@@ -30,6 +31,23 @@ const TOP = [13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24];
 const BOTTOM = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 
 const OPTION_COLORS = ["#22d3ee", "#fb923c"];
+
+/** How long a checker takes to slide to its new point. */
+const SLIDE_MS = 320;
+/** The board's border width; laid-out positions include it, absolute positions do not. */
+const BOARD_BORDER = 3;
+
+type Where = number | "bar" | "off";
+/** One checker sliding across the board. It is hidden from the stack it lands on until it arrives. */
+type Flight = {
+  id: number;
+  color: Color;
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  land: Where;
+  fade: boolean;
+  progress: Animated.Value;
+};
 
 function pointColor(point: number) {
   return point % 2 === 1 ? "#7f1d1d" : "#1a6b78";
@@ -66,7 +84,7 @@ function Triangle({ point, up, side, length, tint }: { point: number; up: boolea
   );
 }
 
-const PIPS: Record<number, Array<[number, number]>> = {
+const PIPS: Record<number, [number, number][]> = {
   1: [[1, 1]],
   2: [[0, 0], [2, 2]],
   3: [[0, 0], [1, 1], [2, 2]],
@@ -152,9 +170,8 @@ export function DiceCup({
   onRoll?: () => void;
   onDone: () => void;
 }) {
-  const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
-  const glow = useRef(new Animated.Value(0.35)).current;
+  const done = useEffectEvent(() => onDone());
+  const [glow] = useState(() => new Animated.Value(0.35));
 
   useEffect(() => {
     if (!prompt) {
@@ -182,10 +199,13 @@ export function DiceCup({
       { x: -4, y: -30, vx: 40, vy: 150, rot: 20, vrot: 900 },
       { x: 6, y: -38, vx: -30, vy: 170, rot: -30, vrot: -1100 },
     ];
-    setTumbling(true);
     let last = Date.now();
     const started = last;
+    let first = true;
     const timer = setInterval(() => {
+      // Set from the first frame, not the effect body: the cup keeps tumbling even if `rolling` ends early.
+      if (first) setTumbling(true);
+      first = false;
       const now = Date.now();
       const dt = Math.min(0.032, (now - last) / 1000);
       last = now;
@@ -213,7 +233,7 @@ export function DiceCup({
           { x: -9, y: -2, rot: 0, face: faces[0] ?? 1 },
           { x: 9, y: 6, rot: 0, face: faces[1] ?? 1 },
         ]);
-        onDoneRef.current();
+        done();
       }
     }, 16);
     return () => clearInterval(timer);
@@ -269,6 +289,7 @@ export function BackgammonBoard({
   onAgain,
   bare,
   onShare,
+  onLand,
 }: {
   game: Game;
   perspective?: Color | null;
@@ -279,6 +300,8 @@ export function BackgammonBoard({
   onAgain?: () => void;
   bare?: boolean;
   onShare?: () => void;
+  /** Called when a checker lands: "hit" when it sent the other player's checker to the bar. */
+  onLand?: (kind: "place" | "hit") => void;
 }) {
   const [boardW, setBoardW] = useState(360);
   const pointW = Math.max(16, (boardW - 40) / 12);
@@ -288,6 +311,93 @@ export function BackgammonBoard({
   const moves = enabled ? legalMoves(game) : [];
   const targets = selected == null ? [] : moves.filter((move) => move.from === selected);
   const optionDice = [...new Set(targets.map((move) => move.die))];
+
+  // Where each point and the bar are, so a moving checker knows where to start and stop.
+  const halves = useRef({ top: 0, bottom: 0 });
+  const spots = useRef(new Map<number | "bar", LayoutRectangle & { up: boolean }>());
+  const shownGame = useRef(game);
+  const flightId = useRef(0);
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const landed = useEffectEvent((kind: "place" | "hit") => onLand?.(kind));
+
+  function slot(where: number | "bar", index: number, color: Color) {
+    const spot = spots.current.get(where);
+    if (!spot) return null;
+    const half = spot.up ? halves.current.bottom : halves.current.top;
+    const x = spot.x + spot.width / 2 - checker / 2 - BOARD_BORDER;
+    if (where === "bar") {
+      // The far color's bar stack sits in the upper part of the bar, the near color's below it.
+      const far = (perspective === "black" ? "white" : "black") === color;
+      return { x, y: half + spot.y + spot.height / 2 + (far ? -checker * 1.1 : checker * 0.1) - BOARD_BORDER };
+    }
+    const step = Math.min(index, 4) * checker * 0.66;
+    const y = spot.up ? spot.y + spot.height - checker - step : spot.y + 2 + step;
+    return { x, y: half + y - BOARD_BORDER };
+  }
+
+  // Before the new board is painted, start a slide for the one checker that moved.
+  useLayoutEffect(() => {
+    const prev = shownGame.current;
+    shownGame.current = game;
+    if (prev === game) return;
+    // Anything but a single move (a new game, several moves at once) just shows the new board.
+    const moved = seenMove(prev, game);
+    if (!moved) {
+      setFlights([]);
+      return;
+    }
+    const fromIndex = moved.from === "bar" ? 0 : checkers(prev, moved.from, moved.color) - 1;
+    const start = slot(moved.from, fromIndex, moved.color);
+    let end: { x: number; y: number } | null;
+    if (moved.to === "off") {
+      // Bearing off: slide past the last home point, off the edge of the board, and fade out.
+      // That point is on the right of its row, or on the left when the board is turned for black.
+      const home = moved.color === "white" ? 1 : 24;
+      const last = slot(home, 0, moved.color);
+      const spot = spots.current.get(home);
+      const outward = perspective === "black" ? -1 : 1;
+      end = last && spot ? { x: last.x + outward * spot.width * 1.2, y: last.y } : null;
+    } else {
+      end = slot(moved.to, checkers(game, moved.to, moved.color) - 1, moved.color);
+    }
+    if (bare || !start || !end) {
+      setFlights([]);
+      landed(moved.hit ? "hit" : "place");
+      return;
+    }
+    const next: Flight[] = [{
+      id: (flightId.current += 1),
+      color: moved.color,
+      from: start,
+      to: end,
+      land: moved.to,
+      fade: moved.to === "off",
+      progress: new Animated.Value(0),
+    }];
+    if (moved.hit && moved.to !== "off") {
+      const other = moved.color === "white" ? "black" : "white";
+      const hitEnd = slot("bar", 0, other);
+      if (hitEnd) {
+        next.push({ id: (flightId.current += 1), color: other, from: end, to: hitEnd, land: "bar", fade: false, progress: new Animated.Value(0) });
+      }
+    }
+    setFlights(next);
+    const ids = new Set(next.map((flight) => flight.id));
+    Animated.parallel(
+      next.map((flight) =>
+        Animated.timing(flight.progress, { toValue: 1, duration: SLIDE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true })),
+    ).start(() => {
+      setFlights((current) => current.filter((flight) => !ids.has(flight.id)));
+      landed(moved.hit ? "hit" : "place");
+    });
+    // Positions are read from refs at the moment of the move, so only a new board starts a slide.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game]);
+
+  /** Checkers still in flight to this spot, so its stack shows them only once they land. */
+  function arriving(where: Where, color: Color) {
+    return flights.filter((flight) => flight.land === where && flight.color === color).length;
+  }
 
   function optionColor(die: number) {
     return OPTION_COLORS[Math.max(0, optionDice.indexOf(die))] ?? OPTION_COLORS[0];
@@ -309,7 +419,8 @@ export function BackgammonBoard({
     if (checkers(game, point, game.turn) > 0 && moves.some((move) => move.from === point)) onSelect(point);
   }
 
-  function barStack(color: Color, count: number) {
+  function barStack(color: Color, total: number) {
+    const count = total - arriving("bar", color);
     if (count <= 0) return null;
     const size = Math.min(checker, 14);
     const shown = Math.min(count, 4);
@@ -326,13 +437,18 @@ export function BackgammonBoard({
     const white = checkers(game, point, "white");
     const black = checkers(game, point, "black");
     const color: Color | null = white > 0 ? "white" : black > 0 ? "black" : null;
-    const count = white + black;
+    const count = white + black - (color ? arriving(point, color) : 0);
     const shown = Math.min(count, 5);
     const chosen = selected === point;
     const landing = targets.find((move) => move.to === point);
     const tint = chosen ? "#f6d36b" : landing ? optionColor(landing.die) : undefined;
     return (
-      <Pressable key={point} style={[styles.point, chosen && styles.chosen]} onPress={() => pressPoint(point)}>
+      <Pressable
+        key={point}
+        style={[styles.point, chosen && styles.chosen]}
+        onPress={() => pressPoint(point)}
+        onLayout={(event) => spots.current.set(point, { ...event.nativeEvent.layout, up })}
+      >
         <View style={up ? styles.triUp : styles.triDown} pointerEvents="none">
           <Triangle point={point} up={up} side={side} length={length} tint={tint} />
         </View>
@@ -360,10 +476,11 @@ export function BackgammonBoard({
   return (
     <View style={styles.frame}>
     <View style={styles.board} onLayout={(event) => setBoardW(event.nativeEvent.layout.width)}>
-      <View style={[styles.half, { minHeight: length + 8 }]}>
+      <View style={[styles.half, { minHeight: length + 8 }]} onLayout={(event) => { halves.current.top = event.nativeEvent.layout.y; }}>
         {topPoints.slice(0, 6).map((point) => stack(point, false))}
         <Pressable
           style={[styles.bar, styles.barCenter, barHot && selected === "bar" && styles.chosen]}
+          onLayout={(event) => spots.current.set("bar", { ...event.nativeEvent.layout, up: false })}
           onPress={() => {
             if (selected === "bar") {
               onSelect(null);
@@ -385,11 +502,31 @@ export function BackgammonBoard({
           <Text style={styles.caption}>{t("bgWaiting")}</Text>
         </View>
       ) : null}
-      <View style={[styles.half, { minHeight: length + 8 }]}>
+      <View style={[styles.half, { minHeight: length + 8 }]} onLayout={(event) => { halves.current.bottom = event.nativeEvent.layout.y; }}>
         {bottomPoints.slice(0, 6).map((point) => stack(point, true))}
         <View style={styles.bar} />
         {bottomPoints.slice(6).map((point) => stack(point, true))}
       </View>
+      {flights.map((flight) => (
+        <Animated.View
+          key={flight.id}
+          pointerEvents="none"
+          style={[
+            styles.flight,
+            {
+              opacity: flight.fade ? flight.progress.interpolate({ inputRange: [0, 0.6, 1], outputRange: [1, 1, 0] }) : 1,
+              transform: [
+                { translateX: flight.progress.interpolate({ inputRange: [0, 1], outputRange: [flight.from.x, flight.to.x] }) },
+                { translateY: flight.progress.interpolate({ inputRange: [0, 1], outputRange: [flight.from.y, flight.to.y] }) },
+                // A slight lift in the middle of the slide, so it reads as picked up and put down.
+                { scale: flight.progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.12, 1] }) },
+              ],
+            },
+          ]}
+        >
+          <Checker color={flight.color} size={checker} overlap={false} up />
+        </Animated.View>
+      ))}
       {onAgain ? (
         <Pressable style={styles.again} onPress={onAgain}>
           <Text style={styles.againText}>{t("bgAgain")}</Text>
@@ -528,4 +665,5 @@ const styles = StyleSheet.create({
   },
   againText: { color: "#1c1917", fontWeight: "900" },
   hidden: { height: 0, opacity: 0 },
+  flight: { position: "absolute", left: 0, top: 0, zIndex: 10, elevation: 10 },
 });

@@ -1,8 +1,9 @@
-"""Writes assets/sounds/turn-tick.wav and turn-chime.wav. Run: python3 scripts/make-turn-sounds.py
+"""Writes the app's synthesized sounds into assets/sounds. Run: python3 scripts/make-sounds.py
 
-Both are synthesized here, so they have no outside source or license.
+They are made here, so they have no outside source or license.
 - turn-tick: a soft wooden tick, about 60 ms, for each of the last 5 seconds of your turn.
 - turn-chime: two bell notes rising a fifth, about 0.9 s, when your turn starts.
+- checker-hit: a heavy knock, about 0.3 s, when a backgammon checker is hit and sent to the bar.
 """
 
 import math
@@ -66,6 +67,30 @@ def chime() -> list[float]:
     return out
 
 
+def hit() -> list[float]:
+    """Heavier than the checker place sound: a low thump, a wooden knock and a short rattle."""
+    random.seed(11)
+    length = int(RATE * 0.3)
+    out = []
+    low = 0.0
+    for index in range(length):
+        time = index / RATE
+        # The thump drops in pitch as it dies away, like a checker slammed onto wood.
+        thump_freq = 70 + 90 * math.exp(-time / 0.03)
+        thump = math.sin(2 * math.pi * thump_freq * time) * math.exp(-time / 0.08)
+        knock = math.sin(2 * math.pi * 410 * time) * math.exp(-time / 0.025) * 0.7
+        knock += math.sin(2 * math.pi * 860 * time) * math.exp(-time / 0.012) * 0.35
+        low += (random.uniform(-1, 1) - low) * 0.25
+        rattle = low * math.exp(-time / 0.006) * 0.9
+        # A second, softer knock as the checker settles.
+        later = time - 0.055
+        settle = math.sin(2 * math.pi * 520 * later) * math.exp(-later / 0.018) * 0.3 if later > 0 else 0.0
+        attack = min(1.0, index / (RATE * 0.0015))
+        out.append((thump + knock + rattle + settle) * attack)
+    return out
+
+
 write("turn-tick.wav", tick())
 write("turn-chime.wav", chime())
-print("Wrote turn-tick.wav and turn-chime.wav to", OUT)
+write("checker-hit.wav", hit())
+print("Wrote turn-tick.wav, turn-chime.wav and checker-hit.wav to", OUT)

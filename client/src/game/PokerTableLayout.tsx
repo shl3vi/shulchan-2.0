@@ -337,7 +337,7 @@ function ShownCards({ cards, scale }: { cards: Card[]; scale: number }) {
 
 function WinnerFrame({ scale, children }: { scale: number; children: ReactNode }) {
   const u = (n: number) => n * scale;
-  const spin = useRef(new Animated.Value(0)).current;
+  const [spin] = useState(() => new Animated.Value(0));
   useEffect(() => {
     const loop = Animated.loop(
       Animated.timing(spin, {
@@ -392,7 +392,7 @@ function WinnerFrame({ scale, children }: { scale: number; children: ReactNode }
 const CURTAIN_FOLDS = ["#800000", "#b30000", "#660000", "#cc0000", "#4d0000"];
 
 function SeatCurtain({ open }: { open: boolean }) {
-  const progress = useRef(new Animated.Value(0)).current;
+  const [progress] = useState(() => new Animated.Value(0));
   const [width, setWidth] = useState(0);
   const laidOut = useRef(false);
 
@@ -543,24 +543,24 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
   const u = (n: number) => n * scale;
   const occupied = player != null;
   const cameraOn = player?.cameraOn === true;
-  const videoRef = useRef(player?.video);
-  if (player?.video) videoRef.current = player.video;
+  // The last video stays on the tile while the curtain closes after the camera goes off.
+  const [lastVideo, setLastVideo] = useState(player?.video);
+  if (player?.video && player.video !== lastVideo) setLastVideo(player.video);
+  const video = player?.video ?? lastVideo;
   const [showVideo, setShowVideo] = useState(cameraOn);
+  if (cameraOn && !showVideo) setShowVideo(true);
   const ring = player?.toAct ? "#f6d36b" : occupied ? "#44403c" : "#57534e";
 
   useEffect(() => {
-    if (cameraOn) {
-      setShowVideo(true);
-      return;
-    }
+    if (cameraOn) return;
     const timer = setTimeout(() => setShowVideo(false), 1200);
     return () => clearTimeout(timer);
   }, [cameraOn]);
 
   const face = (
     <>
-      {occupied && showVideo && videoRef.current ? (
-        videoRef.current
+      {occupied && showVideo && video ? (
+        video
       ) : (
         <Text style={{ color: occupied ? "#fafaf9" : "#78716c", fontSize: u(16), fontWeight: "700" }}>
           {player ? player.name.trim().slice(0, 1).toUpperCase() : "+"}
@@ -1051,7 +1051,7 @@ export function PokerTableLayout({
   onDeal,
   onSeat,
 }: {
-  seats: Array<SeatSlot | undefined>;
+  seats: (SeatSlot | undefined)[];
   shown: Card[][];
   community: Card[];
   pot: number;

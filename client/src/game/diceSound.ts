@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- the audio modules are optional and loaded only when the build has them. */
 type DieState = { x: number; y: number; vx: number; vy: number; rot: number; vrot: number };
 
 let audioCtx: AudioContext | null = null;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -16,7 +16,7 @@ import { ActionDock, heroDealDelays, PokerTableLayout, SPOTLIGHT_DELAY_MS, Table
 import type { Card, Credentials, RebuyRule, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
-import { move as playMove, newGame, opponent, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
+import { move as playMove, newGame, opponent, seenMove, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
 import { playSfx, preloadSfx, sleepSfx } from "@/game/sfx";
 import { t } from "@/i18n";
@@ -25,7 +25,7 @@ import { TableHold } from "@/game/TableHold";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 function WinnerSparkles() {
-  const spin = useRef(new Animated.Value(0)).current;
+  const [spin] = useState(() => new Animated.Value(0));
   useEffect(() => {
     const loop = Animated.loop(
       Animated.timing(spin, { toValue: 1, duration: 3600, easing: Easing.linear, useNativeDriver: true }),
@@ -243,7 +243,8 @@ function BackgammonTable({
       setCupFaces(next.lastRoll!.slice());
       setRolling(true);
     }
-    if (moved) checkerPlace();
+    // A single move slides on the board, which plays its sound when it lands (onLand below).
+    if (moved && !seenMove(prev, next)) checkerPlace();
   }
 
   function send(action: BackgammonAction) {
@@ -251,16 +252,19 @@ function BackgammonTable({
     emit("bg", action);
   }
 
+  // A new board from the server is adopted with the latest local state (selection, pending roll),
+  // and plays its sounds. That is syncing with the server, so it belongs in an effect.
+  const adoptRemote = useEffectEvent((next: Game) => adopt(next, true));
   useEffect(() => {
     if (!serverGame || typeof serverGame !== "object") return;
-    adopt(serverGame as Game, true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    adoptRemote(serverGame as Game);
   }, [serverGame]);
 
   function onMove(chosen: Move) {
     if (paused) return;
     const next = playMove(game, chosen);
     if (next === game) return;
-    checkerPlace();
     adopt(next, false);
     send({ type: "move", ...chosen });
   }
@@ -290,7 +294,7 @@ function BackgammonTable({
             </Pressable>
           </View>
           <View style={styles.boardAnchor}>
-            <BackgammonBoard game={game} perspective={myColor} selected={selected} enabled={iPlay} bare={waiting} onShare={shareTable} onSelect={setSelected} onMove={onMove} onAgain={won && !paused ? () => send({ type: "restart" }) : undefined} />
+            <BackgammonBoard game={game} perspective={myColor} selected={selected} enabled={iPlay} bare={waiting} onShare={shareTable} onSelect={setSelected} onMove={onMove} onLand={(kind) => (kind === "hit" ? playSfx("checkerHit") : checkerPlace())} onAgain={won && !paused ? () => send({ type: "restart" }) : undefined} />
             {won || waiting ? null : <View style={styles.diceCup}>
               <DiceCup
                 faces={rolling ? cupFaces : game.shown}
@@ -590,15 +594,17 @@ export default function TableScreen() {
   const turnLeftMs =
     state?.turnDeadline != null && state.serverNow != null ? Math.max(0, state.turnDeadline - state.serverNow) : undefined;
 
-  useEffect(() => {
+  // A different player at this phone starts with no seat open.
+  const [seatFor, setSeatFor] = useState(credentials?.playerId);
+  if (seatFor !== credentials?.playerId) {
+    setSeatFor(credentials?.playerId);
     setSeatId(null);
-  }, [credentials?.playerId]);
+  }
 
   const blockedKey = (state?.players ?? []).filter((player) => player.blocked).map((player) => player.id).join(" ");
-  const holdOff = useRef(video.holdOff);
-  holdOff.current = video.holdOff;
+  const holdOff = useEffectEvent((ids: string[]) => video.holdOff(ids));
   useEffect(() => {
-    holdOff.current(blockedKey ? blockedKey.split(" ") : []);
+    holdOff(blockedKey ? blockedKey.split(" ") : []);
   }, [blockedKey]);
 
   useEffect(() => {
@@ -752,7 +758,7 @@ export default function TableScreen() {
   }
 
   const winnerSeats = new Set(state?.round == null ? (state?.lastWinners ?? []).map((winner) => winner.seat) : []);
-  const seats: Array<SeatSlot | undefined> = [];
+  const seats: (SeatSlot | undefined)[] = [];
   for (const player of state?.players ?? []) {
     const isYou = player.id === you?.id;
     const track = video.tracks.get(player.id);

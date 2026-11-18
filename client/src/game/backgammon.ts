@@ -114,7 +114,7 @@ function entryPoint(color: Color, face: number) {
   return color === "white" ? 25 - face : face;
 }
 
-function step(color: Color, from: number, face: number): number | "off" | null {
+function step(color: Color, from: number, face: number): number | "off" {
   const raw = color === "white" ? from - face : from + face;
   if (color === "white" && raw < 1) return "off";
   if (color === "black" && raw > 24) return "off";
@@ -177,7 +177,7 @@ function candidate(game: Game, from: number | "bar", face: number): Move | null 
   return { from, to, die: face };
 }
 
-function sources(game: Game): Array<number | "bar"> {
+function sources(game: Game): (number | "bar")[] {
   if (game.bar[game.turn] > 0) return ["bar"];
   const found: number[] = [];
   for (let point = 1; point <= 24; point += 1) {
@@ -268,4 +268,43 @@ export function move(game: Game, chosen: Move): Game {
 
 export function sameMove(a: Move, b: Move) {
   return a.from === b.from && a.to === b.to && a.die === b.die;
+}
+
+/** One checker's move between two boards, found by comparing them. */
+export type SeenMove = { color: Color; from: number | "bar"; to: number | "off"; hit: boolean };
+
+type Spot = number | "bar" | "off";
+
+function changes(prev: Game, next: Game, color: Color) {
+  const delta = new Map<Spot, number>();
+  for (let point = 1; point <= 24; point += 1) {
+    const change = checkers(next, point, color) - checkers(prev, point, color);
+    if (change !== 0) delta.set(point, change);
+  }
+  if (next.bar[color] !== prev.bar[color]) delta.set("bar", next.bar[color] - prev.bar[color]);
+  if (next.off[color] !== prev.off[color]) delta.set("off", next.off[color] - prev.off[color]);
+  return delta;
+}
+
+/**
+ * The single move that turns `prev` into `next`, or null when the change is anything else:
+ * a new game, several moves arriving at once, or no move at all.
+ */
+export function seenMove(prev: Game, next: Game): SeenMove | null {
+  if (prev.phase !== "move") return null;
+  const color = prev.turn;
+  const mine = changes(prev, next, color);
+  if (mine.size !== 2) return null;
+  let from: Spot | null = null;
+  let to: Spot | null = null;
+  for (const [spot, change] of mine) {
+    if (change === -1 && spot !== "off") from = spot;
+    else if (change === 1 && spot !== "bar") to = spot;
+    else return null;
+  }
+  if (from == null || to == null) return null;
+  const theirs = changes(prev, next, opponent(color));
+  if (theirs.size === 0) return { color, from, to, hit: false };
+  const hit = theirs.size === 2 && to !== "off" && theirs.get(to) === -1 && theirs.get("bar") === 1;
+  return hit ? { color, from, to, hit: true } : null;
 }

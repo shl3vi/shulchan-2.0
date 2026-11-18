@@ -38,7 +38,7 @@ export type TableSnapshot = {
   you: {
     id: string;
     holeCards: Card[];
-    legalActions: Array<"fold" | "check" | "call" | "bet" | "raise">;
+    legalActions: ("fold" | "check" | "call" | "bet" | "raise")[];
     chipRange: { min: number; max: number } | null;
     isAdmin: boolean;
   } | null;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import type { VideoTrack } from "livekit-client";
 import { remoteConfig, type GameKind } from "@/game/remoteConfig";
@@ -28,16 +28,30 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
   const generation = useRef(0);
   const desired = useRef({ camera: false, mic: false });
   const held = useRef<Set<string>>(new Set());
+  // The latest props, for the async video callbacks. Updated after each render, before effects run.
   const credentialsRef = useRef(credentials);
   const suspendedRef = useRef(suspended);
-  credentialsRef.current = credentials;
-  suspendedRef.current = suspended;
   const kindRef = useRef(kind);
-  kindRef.current = kind;
+  useLayoutEffect(() => {
+    credentialsRef.current = credentials;
+    suspendedRef.current = suspended;
+    kindRef.current = kind;
+  });
 
   const gameId = credentials?.gameId;
   const playerId = credentials?.playerId;
   const playerSecret = credentials?.playerSecret;
+
+  function reset() {
+    desired.current = { camera: false, mic: false };
+    held.current = new Set();
+    setTracks(new Map());
+    setMicOn(false);
+    setCameraOn(false);
+    setLive(false);
+    setMuted(new Set());
+    setHidden(new Set());
+  }
 
   useEffect(() => {
     const ticket = generation.current;
@@ -50,28 +64,24 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
     };
   }, [gameId, playerId, playerSecret]);
 
+  // Pausing turns video off. The shown state is reset while rendering; the call is ended in the effect.
+  const [wasSuspended, setWasSuspended] = useState(suspended);
+  if (suspended !== wasSuspended) {
+    setWasSuspended(suspended);
+    if (suspended) {
+      setTracks(new Map());
+      setMicOn(false);
+      setCameraOn(false);
+      setLive(false);
+    }
+  }
   useEffect(() => {
     if (!suspended) return;
     desired.current = { camera: false, mic: false };
     starting.current = false;
     handle.current?.disconnect();
     handle.current = null;
-    setTracks(new Map());
-    setMicOn(false);
-    setCameraOn(false);
-    setLive(false);
   }, [suspended]);
-
-  function reset() {
-    desired.current = { camera: false, mic: false };
-    held.current = new Set();
-    setTracks(new Map());
-    setMicOn(false);
-    setCameraOn(false);
-    setLive(false);
-    setMuted(new Set());
-    setHidden(new Set());
-  }
 
   function ensure() {
     const current = credentialsRef.current;
