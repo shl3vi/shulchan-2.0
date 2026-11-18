@@ -56,7 +56,7 @@ function loadDebugConfig(): DebugConfig | null {
   return { tableId, dashboardId, smallBlind, buyIn, password };
 }
 
-export async function ensureDebugTable(config: DebugConfig) {
+export async function openDebugTable(config: DebugConfig) {
   let last: unknown;
   for (let attempt = 0; attempt < 25; attempt += 1) {
     try {
@@ -92,7 +92,15 @@ export async function ensureDebugTable(config: DebugConfig) {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
   }
-  console.error("Debug table was not created", last instanceof Error ? last.message : last);
+  throw last instanceof Error ? last : new Error("Debug table was not created");
+}
+
+export async function ensureDebugTable(config: DebugConfig) {
+  try {
+    await openDebugTable(config);
+  } catch (error) {
+    console.error("Debug table was not created", error instanceof Error ? error.message : error);
+  }
 }
 
 function sameToken(given: string, expected: string) {
@@ -239,6 +247,10 @@ export function debugRouter(config: DebugConfig) {
     }
   });
 
+  router.post("/:token/open", async (_req, res) => {
+    await respond(res, config, () => openDebugTable(config));
+  });
+
   router.post("/:token/reset", async (_req, res) => {
     await respond(res, config, () => resetTable(config));
   });
@@ -360,6 +372,7 @@ function debugPage() {
   <span id="actor" class="meta"></span>
   <span id="actions" class="ops"></span>
   <span id="sizing" class="ops"></span>
+  <button id="open" type="button">Open table</button>
   <button id="deal" type="button">Deal</button>
   <button id="reset" class="ghost" type="button">Reset</button>
 </div>
@@ -513,8 +526,13 @@ function debugPage() {
 
   async function refresh() {
     const response = await fetch(base + "/state");
-    if (!response.ok) return;
-    state = await response.json();
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      error.textContent = payload.error || "Table is closed";
+      return;
+    }
+    error.textContent = "";
+    state = payload;
     draw();
   }
 
@@ -523,6 +541,7 @@ function debugPage() {
     const name = new FormData(event.target).get("name");
     send("/players", { name }).then(() => { event.target.reset(); });
   };
+  document.getElementById("open").onclick = () => send("/open");
   document.getElementById("deal").onclick = () => send("/deal");
   document.getElementById("reset").onclick = () => {
     if (confirm("Clear every player and the current hand?")) send("/reset");
