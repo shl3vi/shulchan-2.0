@@ -4,6 +4,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { betAnchor, FELT, RAIL, SEAT_CENTERS, SEAT_H, SEAT_TOP, SEAT_W, STAGE_H, STAGE_W } from "@/game/tableStage";
 import type { Card } from "@/game/types";
+import { playSfx, type Sfx } from "@/game/sfx";
 import { t } from "@/i18n";
 
 export type SeatSlot = {
@@ -239,6 +240,7 @@ function SlidingBet({ amount, dx, dy, scale }: { amount: number; dx: number; dy:
   }
   useLayoutEffect(() => {
     if (pushes === 0) return;
+    playSfx("chip");
     slide.setValue(0);
     const run = Animated.timing(slide, { toValue: 1, duration: CHIP_SLIDE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true });
     run.start();
@@ -260,7 +262,16 @@ function SlidingBet({ amount, dx, dy, scale }: { amount: number; dx: number; dy:
   );
 }
 
-type ChipTrip = { id: number; from: { x: number; y: number }; to: { x: number; y: number }; amount: number; delay: number; ms: number };
+type ChipTrip = {
+  id: number;
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  amount: number;
+  delay: number;
+  ms: number;
+  /** Played when this chip starts moving. One chip of a batch carries it. */
+  sound?: Sfx;
+};
 
 /** One chip moving across the table, in stage pixels, then gone. */
 function ChipFlight({ trip, scale, onDone }: { trip: ChipTrip; scale: number; onDone: (id: number) => void }) {
@@ -275,7 +286,12 @@ function ChipFlight({ trip, scale, onDone }: { trip: ChipTrip; scale: number; on
       Animated.timing(move, { toValue: 1, duration: trip.ms, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
     ]);
     run.start(() => done.current(trip.id));
-    return () => run.stop();
+    const sound = trip.sound;
+    const timer = sound ? setTimeout(() => playSfx(sound), trip.delay) : null;
+    return () => {
+      run.stop();
+      if (timer) clearTimeout(timer);
+    };
   }, [move, trip]);
   return (
     <Animated.View
@@ -1066,6 +1082,11 @@ export function PokerTableLayout({
         }
       }
     }
+    // One sound per batch: bets into the pot, then the pot to the winners.
+    const collect = next.find((trip) => trip.to === POT_SPOT);
+    if (collect) collect.sound = "chipsCollect";
+    const push = next.find((trip) => trip.from === POT_SPOT);
+    if (push) push.sound = "chipsPush";
     if (next.length > 0) {
       setTripId(id);
       setTrips([...trips, ...next]);
