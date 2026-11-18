@@ -127,12 +127,15 @@ function FlipCard({
   scale,
   delay = 0,
   flipOnMount = false,
+  sound = false,
 }: {
   card?: Card;
   size: "board" | "hole";
   scale: number;
   delay?: number;
   flipOnMount?: boolean;
+  /** Play the card flip sound as it turns over. */
+  sound?: boolean;
 }) {
   const face = card ? `${card.rank}${card.suit}` : "";
   const [shown, setShown] = useState(flipOnMount ? "" : face);
@@ -151,7 +154,11 @@ function FlipCard({
       Animated.timing(turn, { toValue: 1, duration: FLIP_MS, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
     ]);
     run.start();
-    return () => run.stop();
+    const timer = sound ? setTimeout(() => playSfx("cardFlip"), delay) : null;
+    return () => {
+      run.stop();
+      if (timer) clearTimeout(timer);
+    };
     // Only a new face starts a flip; a changed delay does not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flips, turn]);
@@ -318,7 +325,7 @@ function ShownCards({ cards, scale }: { cards: Card[]; scale: number }) {
   return (
     <View style={{ flexDirection: "row", gap: u(2) }}>
       {cards.slice(0, 2).map((card, index) => (
-        <FlipCard key={index} card={card} size="hole" scale={scale} flipOnMount delay={index * 140} />
+        <FlipCard key={index} card={card} size="hole" scale={scale} flipOnMount sound delay={index * 140} />
       ))}
     </View>
   );
@@ -778,6 +785,7 @@ function TableFelt({
                 size="board"
                 scale={scale}
                 delay={Math.max(0, index - revealFrom) * FLIP_GAP_MS}
+                sound
               />
             ))}
           </View>
@@ -890,7 +898,12 @@ function DealLayer({ targets, scale, onDone }: { targets: number[]; scale: numbe
     run.start(({ finished }) => {
       if (finished) done.current();
     });
-    return () => run.stop();
+    // A card flick as each card leaves the middle.
+    const timers = flights.map((_, index) => setTimeout(() => playSfx("cardDeal"), index * DEAL_STAGGER_MS));
+    return () => {
+      run.stop();
+      timers.forEach(clearTimeout);
+    };
   }, [flights]);
   const s = scale * TUCK_SCALE;
   return (
