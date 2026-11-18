@@ -217,6 +217,86 @@ function BetChip({ amount, scale }: { amount: number; scale: number }) {
   );
 }
 
+const CHIP_SLIDE_MS = 280;
+const CHIP_FLIGHT_MS = 420;
+/** Where the chips that go into the pot land: the pot under the board. */
+const POT_SPOT = { x: FELT.x + FELT.w / 2, y: FELT.y + FELT.h / 2 + 31 };
+/** The pot reaches the winners this long after a hand ends; the spotlight waits for it. */
+const POT_PUSH_DELAY_MS = CHIP_SLIDE_MS + 60;
+const SPOTLIGHT_DELAY_MS = POT_PUSH_DELAY_MS + CHIP_FLIGHT_MS + 80;
+
+/**
+ * A seat's bet in front of it. A new or bigger bet slides out from the seat.
+ * Drawn while the bet is zero too, so it can tell when a bet appears.
+ */
+function SlidingBet({ amount, dx, dy, scale }: { amount: number; dx: number; dy: number; scale: number }) {
+  const [last, setLast] = useState(amount);
+  const [pushes, setPushes] = useState(0);
+  const [slide] = useState(() => new Animated.Value(1));
+  if (amount !== last) {
+    setLast(amount);
+    if (amount > last) setPushes((count) => count + 1);
+  }
+  useLayoutEffect(() => {
+    if (pushes === 0) return;
+    slide.setValue(0);
+    const run = Animated.timing(slide, { toValue: 1, duration: CHIP_SLIDE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    run.start();
+    return () => run.stop();
+  }, [pushes, slide]);
+  if (amount <= 0) return null;
+  return (
+    <Animated.View
+      style={{
+        opacity: slide.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 1, 1] }),
+        transform: [
+          { translateX: slide.interpolate({ inputRange: [0, 1], outputRange: [dx, 0] }) },
+          { translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [dy, 0] }) },
+        ],
+      }}
+    >
+      <BetChip amount={amount} scale={scale} />
+    </Animated.View>
+  );
+}
+
+type ChipTrip = { id: number; from: { x: number; y: number }; to: { x: number; y: number }; amount: number; delay: number; ms: number };
+
+/** One chip moving across the table, in stage pixels, then gone. */
+function ChipFlight({ trip, scale, onDone }: { trip: ChipTrip; scale: number; onDone: (id: number) => void }) {
+  const [move] = useState(() => new Animated.Value(0));
+  const done = useRef(onDone);
+  useEffect(() => {
+    done.current = onDone;
+  });
+  useEffect(() => {
+    const run = Animated.sequence([
+      Animated.delay(trip.delay),
+      Animated.timing(move, { toValue: 1, duration: trip.ms, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+    ]);
+    run.start(() => done.current(trip.id));
+    return () => run.stop();
+  }, [move, trip]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left: (trip.from.x - CHIP / 2) * scale,
+        top: (trip.from.y - CHIP / 2) * scale,
+        zIndex: 7,
+        opacity: move.interpolate({ inputRange: [0, 0.85, 1], outputRange: [1, 1, 0] }),
+        transform: [
+          { translateX: move.interpolate({ inputRange: [0, 1], outputRange: [0, (trip.to.x - trip.from.x) * scale] }) },
+          { translateY: move.interpolate({ inputRange: [0, 1], outputRange: [0, (trip.to.y - trip.from.y) * scale] }) },
+        ],
+      }}
+    >
+      <BetChip amount={trip.amount} scale={scale} />
+    </Animated.View>
+  );
+}
+
 function ShownCards({ cards, scale }: { cards: Card[]; scale: number }) {
   const u = (n: number) => n * scale;
   return (
@@ -838,6 +918,7 @@ const SPOTLIGHT_HOLD_MS = 3000;
 /** Moves the winner's seat to the middle of the table, enlarged, then back to its place. */
 function Spotlight({
   active,
+  delay = 0,
   scale,
   dx,
   dy,
@@ -846,6 +927,8 @@ function Spotlight({
   children,
 }: {
   active: boolean;
+  /** Wait this long before lifting, so the pot reaches the winner first. */
+  delay?: number;
   scale: number;
   dx: number;
   dy: number;
@@ -868,6 +951,7 @@ function Spotlight({
       return;
     }
     const run = Animated.sequence([
+      Animated.delay(delay),
       Animated.spring(progress, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }),
       Animated.delay(SPOTLIGHT_HOLD_MS),
       Animated.timing(progress, { toValue: 0, duration: 550, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
@@ -876,6 +960,8 @@ function Spotlight({
       if (done) setFinished(true);
     });
     return () => run.stop();
+    // The delay is read when the spotlight starts; changing it later does nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, progress]);
   // The video frame's center, measured from the seat widget's top left corner.
   const fx = (SEAT_W / 2) * scale;
@@ -937,7 +1023,7 @@ export function PokerTableLayout({
   community: Card[];
   pot: number;
   round: string | null;
-  winners?: { name: string; amount: number }[];
+  winners?: { seat?: number; name: string; amount: number }[];
   onDeal?: () => void;
   onSeat?: (seat: number) => void;
 }) {
@@ -951,10 +1037,39 @@ export function PokerTableLayout({
   // A new hand starts the deal. Joining in the middle of a hand does not.
   const [deal, setDeal] = useState<{ id: number; targets: number[] } | null>(null);
   const [lastRound, setLastRound] = useState(round);
-  if (lastRound !== round) {
-    setLastRound(round);
-    if (lastRound == null && round != null && dealtIn.length > 0) setDeal({ id: (deal?.id ?? 0) + 1, targets: dealtIn });
-    else if (round == null && deal) setDeal(null);
+  // Chips moving: bets into the pot when a betting round closes, the pot to the winners when a hand ends.
+  const [trips, setTrips] = useState<ChipTrip[]>([]);
+  const [tripId, setTripId] = useState(0);
+  const bets = Array.from({ length: SEAT_CENTERS.length }, (_, seatIndex) => seats[seatIndex]?.bet ?? 0);
+  const [lastBets, setLastBets] = useState(bets);
+  const betsChanged = bets.some((bet, index) => bet !== lastBets[index]);
+  if (betsChanged || lastRound !== round) {
+    const next: ChipTrip[] = [];
+    let id = tripId;
+    if (betsChanged) {
+      setLastBets(bets);
+      lastBets.forEach((before, seatIndex) => {
+        if (before <= 0 || (bets[seatIndex] ?? 0) > 0) return;
+        const from = betAnchor(visualOf(seatIndex));
+        next.push({ id: (id += 1), from, to: POT_SPOT, amount: before, delay: 0, ms: CHIP_SLIDE_MS });
+      });
+    }
+    if (lastRound !== round) {
+      setLastRound(round);
+      if (lastRound == null && round != null && dealtIn.length > 0) setDeal({ id: (deal?.id ?? 0) + 1, targets: dealtIn });
+      else if (round == null && deal) setDeal(null);
+      if (lastRound != null && round == null) {
+        for (const winner of winners) {
+          if (winner.seat == null || winner.amount <= 0) continue;
+          const to = SEAT_CENTERS[visualOf(winner.seat)] ?? SEAT_CENTERS[0];
+          next.push({ id: (id += 1), from: POT_SPOT, to, amount: winner.amount, delay: POT_PUSH_DELAY_MS, ms: CHIP_FLIGHT_MS });
+        }
+      }
+    }
+    if (next.length > 0) {
+      setTripId(id);
+      setTrips([...trips, ...next]);
+    }
   }
 
   return (
@@ -991,11 +1106,12 @@ export function PokerTableLayout({
                 </View>
               );
             }
-            if (!player || player.bet <= 0) return null;
+            if (!player) return null;
             const anchor = betAnchor(visual);
             return (
               <View
                 key={`bet-${visual}`}
+                pointerEvents="none"
                 style={{
                   position: "absolute",
                   left: u(anchor.x - CHIP / 2),
@@ -1003,7 +1119,7 @@ export function PokerTableLayout({
                   zIndex: 2,
                 }}
               >
-                <BetChip amount={player.bet} scale={scale} />
+                <SlidingBet amount={player.bet} dx={u(center.x - anchor.x)} dy={u(center.y - anchor.y)} scale={scale} />
               </View>
             );
           })}
@@ -1015,6 +1131,9 @@ export function PokerTableLayout({
               })
             : null}
           {deal ? <DealLayer key={deal.id} targets={deal.targets} scale={scale} onDone={() => setDeal(null)} /> : null}
+          {trips.map((trip) => (
+            <ChipFlight key={trip.id} trip={trip} scale={scale} onDone={(id) => setTrips((list) => list.filter((entry) => entry.id !== id))} />
+          ))}
           {SEAT_CENTERS.map((center, visual) => {
             const seatIndex = (hero + visual) % SEAT_CENTERS.length;
             const player = seats[seatIndex];
@@ -1022,6 +1141,7 @@ export function PokerTableLayout({
               <Spotlight
                 key={`seat-${visual}`}
                 active={player?.winner === true}
+                delay={SPOTLIGHT_DELAY_MS}
                 scale={scale}
                 dx={u(STAGE_W / 2 - center.x)}
                 dy={u(STAGE_H / 2 - center.y)}
