@@ -1238,8 +1238,7 @@ export function PokerTableLayout({
         if (width !== size.width || height !== size.height) setSize({ width, height });
       }}
     >
-      <View style={styles.wash} />
-      <View style={styles.roomGlow} />
+      <RoomLight />
       {scale > 0 ? (
         <View
           style={{
@@ -1313,6 +1312,16 @@ export function PokerTableLayout({
           })}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/** The dim room both games are played in, with warm light from the lamp over the table. Fills its parent. */
+export function RoomLight() {
+  return (
+    <View pointerEvents="none" style={styles.roomLight}>
+      <View style={styles.wash} />
+      <View style={styles.roomGlow} />
     </View>
   );
 }
@@ -1645,6 +1654,7 @@ const styles = StyleSheet.create({
     borderColor: "#1c2039",
     transform: [{ rotate: "-45deg" }],
   },
+  roomLight: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden" },
   wash: {
     position: "absolute",
     left: 0,
