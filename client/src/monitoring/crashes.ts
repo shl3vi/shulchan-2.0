@@ -1,4 +1,5 @@
 import PostHog from "posthog-react-native";
+import { Platform } from "react-native";
 
 /** Crash reports per app launch. One broken screen can't send more than this. */
 const MAX_REPORTS = 3;
@@ -34,5 +35,6 @@ export const crashes = enabled
   : null;
 
 export function reportCrash(error: unknown, where: string) {
-  crashes?.captureException(error, { where });
+  // platform is ios, android or web, so a crash in the browser build can be told apart.
+  crashes?.captureException(error, { where, platform: Platform.OS });
 }

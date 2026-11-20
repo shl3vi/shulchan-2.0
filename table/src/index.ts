@@ -1,5 +1,6 @@
 import express, { type Request, type Response } from "express";
 import helmet from "helmet";
+import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,6 +62,18 @@ const appAdsTxt = (process.env.APP_ADS_TXT || "google.com, pub-1060524753529308,
 app.get("/app-ads.txt", (_req, res) => {
   res.type("text/plain; charset=utf-8").set("Cache-Control", "public, max-age=3600").send(appAdsTxt);
 });
+// Ahead of rateLimit, like /assets: one page load fetches a dozen script files.
+// The web build of the app, for guests who open a table link without the app. It is not in git: `npm run web`
+// in client/ writes it to public/play. File names under _expo/static carry a content hash, so they can be cached.
+const playDir = join(publicDir, "play");
+const webBuild = existsSync(join(playDir, "index.html"));
+if (webBuild) {
+  app.use("/play/_expo/static", express.static(join(playDir, "_expo/static"), { maxAge: "365d", immutable: true, fallthrough: false }));
+  app.use("/play", express.static(playDir, { extensions: ["html"], maxAge: 0, index: "index.html" }));
+  app.get(/^\/play(\/.*)?$/, (_req, res) => {
+    res.sendFile(join(playDir, "index.html"), { maxAge: 0 });
+  });
+}
 app.use(cors);
 app.use(rateLimit);
 app.use(express.json({ limit: "8kb" }));
@@ -96,6 +109,11 @@ app.get("/health", async (_req, res) => {
   const ok = redisOk && postgresOk && engines.poker && engines.backgammon;
   res.status(ok ? 200 : 503).json({ ok, redis: redisOk, postgres: postgresOk, ...engines });
 });
+/** This server's own address as the browser sees it, behind Railway's proxy. */
+function publicOrigin(req: Request) {
+  return `${req.protocol}://${req.get("host") ?? "loochka.com"}`;
+}
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char: string) => {
     const escaped: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" };
@@ -104,11 +122,11 @@ function escapeHtml(value: string) {
 }
 
 const JOIN_COPY = {
-  en: { title: "Join the table", opening: "Opening the table…", sit: "Sit down" },
-  he: { title: "הצטרפות לשולחן", opening: "פותחים את השולחן…", sit: "לשבת" },
-  es: { title: "Unirse a la mesa", opening: "Abriendo la mesa…", sit: "Sentarse" },
-  ru: { title: "Сесть за стол", opening: "Открываем стол…", sit: "Сесть" },
-  ar: { title: "الانضمام إلى طاولة", opening: "جارٍ فتح الطاولة…", sit: "اجلس" },
+  en: { title: "Join the table", opening: "Opening the table…", sit: "Sit down", browser: "Play in the browser" },
+  he: { title: "הצטרפות לשולחן", opening: "פותחים את השולחן…", sit: "לשבת", browser: "לשחק בדפדפן" },
+  es: { title: "Unirse a la mesa", opening: "Abriendo la mesa…", sit: "Sentarse", browser: "Jugar en el navegador" },
+  ru: { title: "Сесть за стол", opening: "Открываем стол…", sit: "Сесть", browser: "Играть в браузере" },
+  ar: { title: "الانضمام إلى طاولة", opening: "جارٍ فتح الطاولة…", sit: "اجلس", browser: "العب في المتصفح" },
 };
 
 function joinLocale(req: Request) {
@@ -125,7 +143,11 @@ app.get("/join", (req, res) => {
   const password = String(req.query.password ?? "");
   const query = new URLSearchParams({ game, password }).toString();
   const appUrl = `${APP_SCHEME}://join?${query}`;
-  const intentUrl = `intent://join?${query}#Intent;scheme=${APP_SCHEME};package=com.loochka;end`;
+  // The web build serves guests who do not have the app. Without it, the link only tries the app.
+  const webUrl = webBuild ? `/play/join?${query}` : "";
+  // Chrome on Android opens the fallback itself when the app is not installed.
+  const fallback = webUrl ? `S.browser_fallback_url=${encodeURIComponent(new URL(webUrl, publicOrigin(req)).toString())};` : "";
+  const intentUrl = `intent://join?${query}#Intent;scheme=${APP_SCHEME};package=com.loochka;${fallback}end`;
   const lang = joinLocale(req);
   const copy = JOIN_COPY[lang];
   const dir = lang === "he" || lang === "ar" ? "rtl" : "ltr";
@@ -143,17 +165,35 @@ app.get("/join", (req, res) => {
   body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; align-content: center; gap: 0.4rem; padding: max(1.5rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left)); background: #07110d; color: #fafaf9; font-family: -apple-system, "Segoe UI", sans-serif; text-align: center; }
   p { margin: 0; font-size: 1.15rem; line-height: 1.4; }
   a { display: inline-flex; align-items: center; justify-content: center; min-height: 3rem; min-width: 8rem; margin-top: 0.8rem; background: #f6d36b; color: #1c1917; text-decoration: none; font-weight: 800; padding: 0.8rem 1.4rem; border-radius: 999px; }
+  a.web { background: transparent; color: #f6d36b; border: 1px solid rgba(246, 211, 107, 0.55); margin-top: 0.2rem; }
 </style>
 </head>
 <body>
 <p>${escapeHtml(copy.opening)}</p>
 <p><a id="open" href="${href}">${escapeHtml(copy.sit)}</a></p>
+${webUrl ? `<p><a class="web" href="${escapeHtml(webUrl)}">${escapeHtml(copy.browser)}</a></p>` : ""}
 <script>
   var app = ${JSON.stringify(appUrl)};
   var intent = ${JSON.stringify(intentUrl)};
+  var web = ${JSON.stringify(webUrl)};
+  var ua = navigator.userAgent;
+  var android = /Android/i.test(ua);
+  var ios = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
   var open = document.getElementById("open");
-  if (/Android/i.test(navigator.userAgent)) open.href = intent;
-  location.replace(/Android/i.test(navigator.userAgent) ? intent : app);
+  if (android) open.href = intent;
+  if (android) {
+    location.replace(intent);
+  } else if (ios) {
+    // When the app opens, this page goes to the background. If it is still in front, there is no app.
+    var timer = web ? setTimeout(function () { if (!document.hidden) location.replace(web); }, 1600) : 0;
+    document.addEventListener("visibilitychange", function () { if (document.hidden) clearTimeout(timer); });
+    location.replace(app);
+  } else if (web) {
+    // A computer has no app to open.
+    location.replace(web);
+  } else {
+    location.replace(app);
+  }
 </script>
 </body>
 </html>`);

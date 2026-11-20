@@ -1,7 +1,17 @@
 import * as Crypto from "expo-crypto";
+import { Platform } from "react-native";
 import { loadPersonKey } from "@/game/personKey";
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://loochka.com";
+/** The web build is served by the table service itself, so in a browser the API is the page's own origin. */
+function defaultApiUrl() {
+  if (Platform.OS === "web" && typeof location !== "undefined" && location.protocol === "https:") return location.origin;
+  return "https://loochka.com";
+}
+
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || defaultApiUrl();
+
+/** True in the browser build. A browser player is a guest: no sign-in, no opening tables, never admin. */
+export const isWeb = Platform.OS === "web";
 
 async function post<T>(path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
@@ -110,7 +120,8 @@ export function createTable(
 
 export async function joinTable(gameId: string, name: string, password: string, adminSecret?: string) {
   const personKey = await loadPersonKey();
-  return post<{ id: string; secret: string }>(`/api/games/${gameId}/join`, { name, password, adminSecret, personKey });
+  const platform = Platform.OS === "ios" || Platform.OS === "android" || Platform.OS === "web" ? Platform.OS : undefined;
+  return post<{ id: string; secret: string }>(`/api/games/${gameId}/join`, { name, password, adminSecret, personKey, ...(platform ? { platform } : {}) });
 }
 
 export function reportPlayer(

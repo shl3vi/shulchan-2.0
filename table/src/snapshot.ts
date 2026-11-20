@@ -83,6 +83,7 @@ export function snapshot(
         sittingOut: false,
         bought: player.bought ?? table.buyIn,
         ...(blockedIds?.has(player.id) ? { blocked: true } : {}),
+        ...(player.web ? { web: true } : {}),
       }];
     }),
     you: viewer

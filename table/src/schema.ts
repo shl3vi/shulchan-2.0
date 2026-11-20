@@ -22,6 +22,8 @@ export const joinBody = z.object({
   password: z.string().regex(/^\d{6}$/),
   adminSecret: z.string().regex(uuid).optional(),
   personKey: z.string().regex(uuid),
+  /** What the player joined from. Older apps send none. */
+  platform: z.enum(["ios", "android", "web"]).optional(),
 }).strict();
 
 export const reportBody = z.object({

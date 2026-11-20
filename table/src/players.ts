@@ -47,7 +47,8 @@ export async function releaseSeat(table: TableRecord, playerId: string) {
   const player = table.players.find((seat) => seat.id === playerId);
   if (!player) throw new Error("Player not found");
   if (table.adminId === player.id) {
-    const staying = table.players.filter((seat) => seat.id !== player.id && !seat.pendingRemoval);
+    // A browser player is a guest. With only guests left, the table has no admin until someone joins from the app.
+    const staying = table.players.filter((seat) => seat.id !== player.id && !seat.pendingRemoval && !seat.web);
     const next = staying.length === 0 ? null : staying[Math.floor(Math.random() * staying.length)]!.id;
     assignAdmin(table, next);
   }

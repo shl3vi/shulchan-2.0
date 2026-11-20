@@ -6,9 +6,9 @@ import { Image } from "expo-image";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
-import { useFocusEffect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { hostSession, redeemHostCode, signInUrl, signInWithApple } from "@/game/api";
+import { hostSession, isWeb, redeemHostCode, signInUrl, signInWithApple } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
 import { loadHost, saveHost, type Host } from "@/game/hostStore";
 import { nameProblem, playerName } from "@/game/name";
@@ -100,7 +100,13 @@ function ChipRow({
   );
 }
 
+/** A browser is for guests: it can join a table from a link or code, but not sign in or open one. */
 export default function HomeScreen() {
+  if (isWeb) return <Redirect href="/join" />;
+  return <AppHome />;
+}
+
+function AppHome() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const session = useGameSession();

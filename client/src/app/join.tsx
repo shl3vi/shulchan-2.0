@@ -4,6 +4,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { isWeb } from "@/game/api";
+import { GetTheApp } from "@/game/GetTheApp";
 import { useGameSession } from "@/game/GameSession";
 import { nameProblem, playerName } from "@/game/name";
 import { updateMode } from "@/game/remoteConfig";
@@ -64,7 +66,7 @@ export default function JoinScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 36, paddingBottom: insets.bottom + 20 }]}>
       <StatusBar style="light" />
-      {invite ? null : (
+      {invite || isWeb ? null : (
         <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.dismissTo("/")} hitSlop={8}>
           <Ionicons name="home" size={20} color="#fafaf9" />
         </Pressable>
@@ -112,6 +114,7 @@ export default function JoinScreen() {
         </Pressable>
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
+      <GetTheApp variant="card" />
       </>
       )}
     </View>

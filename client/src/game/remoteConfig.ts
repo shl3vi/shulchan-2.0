@@ -180,6 +180,8 @@ export function appVersion() {
 
 /** `ask` can be dismissed. `force` blocks opening or joining a table. */
 export function updateMode(): "ok" | "ask" | "force" {
+  // The browser always loads the build the server has now, so there is nothing to update.
+  if (Platform.OS === "web") return "ok";
   const { minVersion, force } = current.update;
   const version = appVersion();
   if (!minVersion || !version) return "ok";
@@ -190,5 +192,17 @@ export function updateMode(): "ok" | "ask" | "force" {
 export function storeUrl() {
   if (Platform.OS === "ios") return current.update.iosUrl;
   if (Platform.OS === "android") return current.update.androidUrl;
-  return current.update.androidUrl || current.update.iosUrl;
+  return webStoreUrl();
 }
+
+/** In a browser, the store for the phone it runs on. A computer gets Google Play, or the App Store when that is the only one set. */
+export function webStoreUrl() {
+  const agent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  const touchMac = /Macintosh/i.test(agent) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1;
+  if (/iPhone|iPad|iPod/i.test(agent) || touchMac) return current.update.iosUrl;
+  if (/Android/i.test(agent)) return current.update.androidUrl || ANDROID_STORE_URL;
+  return current.update.androidUrl || current.update.iosUrl || ANDROID_STORE_URL;
+}
+
+/** The Play listing is known from the package name, so it works before the config sets it. */
+const ANDROID_STORE_URL = "https://play.google.com/store/apps/details?id=com.loochka";

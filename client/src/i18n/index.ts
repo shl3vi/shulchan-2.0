@@ -2,6 +2,8 @@
  * Add a language by copying `en` and translating every key.
  * The device language is matched on its language code (`he`, `en`, …).
  */
+import { Platform } from "react-native";
+
 const catalogs = {
   en: {
     enterYourName: "how the table sees you",
@@ -142,6 +144,10 @@ const catalogs = {
     notNow: "Not now",
     hideVideo: "Hide video",
     videoUnsupported: "Video is not supported",
+    getAppTitle: "It's much better in the app",
+    getAppBody: "Smoother video, table sounds, and you can open a table of your own.",
+    getApp: "Get the app",
+    videoBlocked: "Allow the camera and microphone for this site in the browser settings",
     showVideo: "Show video",
     muteSeat: "Mute",
     unmuteSeat: "Unmute",
@@ -351,6 +357,10 @@ const catalogs = {
     notNow: "לא עכשיו",
     hideVideo: "הסתרת וידאו",
     videoUnsupported: "וידאו לא נתמך",
+    getAppTitle: "באפליקציה הרבה יותר נוח",
+    getAppBody: "וידאו חלק יותר, צלילי שולחן, ואפשר לפתוח שולחן משלך.",
+    getApp: "להורדת האפליקציה",
+    videoBlocked: "צריך לאשר מצלמה ומיקרופון לאתר הזה בהגדרות הדפדפן",
     showVideo: "הצגת וידאו",
     muteSeat: "השתקה",
     unmuteSeat: "ביטול השתקה",
@@ -560,6 +570,10 @@ const catalogs = {
     notNow: "Ahora no",
     hideVideo: "Ocultar vídeo",
     videoUnsupported: "El vídeo no está disponible",
+    getAppTitle: "En la app es mucho mejor",
+    getAppBody: "Vídeo más fluido, sonidos de mesa y puedes abrir tu propia mesa.",
+    getApp: "Descargar la app",
+    videoBlocked: "Permite la cámara y el micrófono para este sitio en los ajustes del navegador",
     showVideo: "Mostrar vídeo",
     muteSeat: "Silenciar",
     unmuteSeat: "Activar sonido",
@@ -769,6 +783,10 @@ const catalogs = {
     notNow: "Не сейчас",
     hideVideo: "Скрыть видео",
     videoUnsupported: "Видео недоступно",
+    getAppTitle: "В приложении гораздо удобнее",
+    getAppBody: "Плавнее видео, звуки стола, и можно открыть свой стол.",
+    getApp: "Скачать приложение",
+    videoBlocked: "Разрешите камеру и микрофон для этого сайта в настройках браузера",
     showVideo: "Показать видео",
     muteSeat: "Выключить звук",
     unmuteSeat: "Включить звук",
@@ -978,6 +996,10 @@ const catalogs = {
     notNow: "ليس الآن",
     hideVideo: "إخفاء الفيديو",
     videoUnsupported: "الفيديو غير متاح",
+    getAppTitle: "التطبيق أريح بكثير",
+    getAppBody: "فيديو أكثر سلاسة، وأصوات الطاولة، ويمكنك فتح طاولتك الخاصة.",
+    getApp: "حمّل التطبيق",
+    videoBlocked: "اسمح بالكاميرا والميكروفون لهذا الموقع في إعدادات المتصفح",
     showVideo: "إظهار الفيديو",
     muteSeat: "كتم",
     unmuteSeat: "إلغاء الكتم",
@@ -1081,6 +1103,13 @@ export async function loadLocale() {
     const saved = await AsyncStorage.getItem("shulchan.locale");
     if (saved && (LOCALES as readonly string[]).includes(saved)) {
       chosen = saved as Locale;
+      listeners.forEach((listener) => listener());
+      return;
+    }
+    // A guest arrives in the browser from a shared link, often in the language of the person who sent it.
+    const browser = Platform.OS === "web" && typeof navigator !== "undefined" ? navigator.language.toLowerCase().split("-")[0] : "";
+    if (browser && (LOCALES as readonly string[]).includes(browser)) {
+      chosen = browser as Locale;
       listeners.forEach((listener) => listener());
     }
   } catch {

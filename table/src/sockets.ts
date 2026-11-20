@@ -246,6 +246,7 @@ export function attachSockets(io: Server) {
         requireAdmin(current);
         const next = current.players.find((seat) => seat.id === parsed.playerId && !seat.pendingRemoval);
         if (!next || next.id === connected.id) throw new Error("Player not found");
+        if (next.web) throw new Error("A player in the browser cannot be admin");
         assignAdmin(current, next.id);
       });
     });

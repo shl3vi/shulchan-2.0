@@ -12,6 +12,8 @@ export type SeatPlayer = {
   seat: number;
   bought: number;
   pendingRemoval?: boolean;
+  /** Joined from a browser. A browser player is a guest and is never made admin. */
+  web?: boolean;
 };
 
 export type RebuyRule = "any" | "busted" | "off";

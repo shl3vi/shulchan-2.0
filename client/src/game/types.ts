@@ -10,6 +10,8 @@ export type PublicPlayer = {
   sittingOut: boolean;
   bought: number;
   blocked?: boolean;
+  /** Playing in the browser. The server never makes a browser player admin. */
+  web?: boolean;
 };
 
 export type RebuyRule = "any" | "busted" | "off";

@@ -63,3 +63,16 @@ test("a table with no admin gets a connected one at once", () => {
   assert.equal(settleAdmin(t, new Set(["b"]), 0, first), true);
   assert.equal(t.adminId, "b");
 });
+
+test("a browser player never takes over as admin", () => {
+  const t = { adminId: "a", adminAwaySince: undefined as number | undefined, players: [{ id: "a" }, { id: "w", web: true }, { id: "b" }] };
+  settleAdmin(t, new Set(["w", "b"]), 0, first);
+  assert.equal(settleAdmin(t, new Set(["w", "b"]), ADMIN_AWAY_MS, first), true);
+  assert.equal(t.adminId, "b");
+});
+
+test("with only browser players left, the admin role waits", () => {
+  const t = { adminId: undefined as string | undefined, adminAwaySince: undefined as number | undefined, players: [{ id: "w", web: true }] };
+  assert.equal(settleAdmin(t, new Set(["w"]), 0, first), false);
+  assert.equal(t.adminId, undefined);
+});

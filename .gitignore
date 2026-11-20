@@ -8,3 +8,5 @@ dist/
 shulchan-512018-*.json
 client_secret_*.json
 livekit.yaml
+# The web build of the app, written by `npm run export:web` in client/
+table/public/play/

@@ -38,6 +38,8 @@ function summary(id: string, tally: Tally, endReason: "closed" | "expired" | "id
       joinRefusals: tally.joinRefusals,
       errors: tally.errors,
       videoUsed: tally.videoUsed,
+      appJoins: tally.appJoins ?? 0,
+      webJoins: tally.webJoins ?? 0,
       endReason,
     },
   });
@@ -84,6 +86,15 @@ export async function noteBackgammon(
   const tally = await load(id);
   if (!tally || tally.kind !== "backgammon") return;
   applyBackgammon(tally, previous, next, gamesGained);
+  await save(id, tally);
+}
+
+/** One seat taken, from the app or from a browser. Counted in the summary, not sent on its own. */
+export async function noteJoin(id: string, web: boolean) {
+  const tally = await load(id);
+  if (!tally) return;
+  if (web) tally.webJoins = (tally.webJoins ?? 0) + 1;
+  else tally.appJoins = (tally.appJoins ?? 0) + 1;
   await save(id, tally);
 }
 

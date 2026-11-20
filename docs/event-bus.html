@@ -182,6 +182,8 @@
     "joinRefusals": 2,
     "errors": 1,
     "videoUsed": true,
+    "appJoins": 5,
+    "webJoins": 2,
     "endReason": "closed"
   }
 }</pre>
@@ -248,6 +250,7 @@
       <tr><td>How long a table lasts</td><td>Average <code>durationMs</code></td></tr>
       <tr><td>Closed vs left to expire</td><td><code>endReason</code></td></tr>
       <tr><td>Video used</td><td>Share where <code>videoUsed</code> is true</td></tr>
+      <tr><td>Browser vs app</td><td>Sum of <code>webJoins</code> and <code>appJoins</code>; tables with a browser guest are those with <code>webJoins</code> above 0</td></tr>
       <tr><td>Could not sit down</td><td>Sum of <code>joinRefusals</code></td></tr>
       <tr><td>Failures</td><td class="name">error</td></tr>
       <tr><td>Process up</td><td class="name">server.heartbeat</td></tr>

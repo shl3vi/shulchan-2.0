@@ -13,6 +13,9 @@ export type Tally = {
   errors: number;
   videoUsed: boolean;
   pokerRound: PokerRound;
+  /** Seats taken from the app and from a browser. Absent on a ledger written before these were counted. */
+  appJoins?: number;
+  webJoins?: number;
 };
 
 const STREETS: PokerRound[] = ["preflop", "flop", "turn", "river"];
@@ -29,6 +32,8 @@ export function freshTally(kind: TableKind, now: number): Tally {
     errors: 0,
     videoUsed: false,
     pokerRound: null,
+    appJoins: 0,
+    webJoins: 0,
   };
 }
 

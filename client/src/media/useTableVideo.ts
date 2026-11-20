@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
 import type { VideoTrack } from "livekit-client";
 import { remoteConfig, type GameKind } from "@/game/remoteConfig";
 import type { Credentials } from "@/game/types";
 import { allowCapture } from "@/media/capturePermission";
 import { videoSupported } from "@/media/videoSupport";
+import type { MessageKey } from "@/i18n";
 
 type VideoHandle = {
   disconnect: (failed?: boolean) => void;
@@ -22,7 +22,8 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
   const [live, setLive] = useState(false);
   const [muted, setMuted] = useState<Set<string>>(new Set());
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const [videoNotice, setVideoNotice] = useState(false);
+  /** A note shown over the table: this device has no video, or the browser was told no. */
+  const [videoNotice, setVideoNotice] = useState<MessageKey | null>(null);
   const handle = useRef<VideoHandle | null>(null);
   const starting = useRef(false);
   const generation = useRef(0);
@@ -85,7 +86,7 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
 
   function ensure() {
     const current = credentialsRef.current;
-    if (suspendedRef.current || Platform.OS === "web" || !videoSupported || !current || handle.current || starting.current) return;
+    if (suspendedRef.current || !videoSupported || !current || handle.current || starting.current) return;
     const ticket = generation.current;
     starting.current = true;
     void import("@/media/tableVideoSession").then((mod) => {
@@ -94,7 +95,12 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
       const session = mod.startTableVideo(current, setTracks, setMicOn, () => {
         handle.current = null;
         reset();
-      }, desired.current, remoteConfig().video[kindRef.current]);
+      }, desired.current, remoteConfig().video[kindRef.current], (denied) => {
+        desired.current[denied === "camera" ? "camera" : "mic"] = false;
+        if (denied === "camera") setCameraOn(false);
+        else setMicOn(false);
+        setVideoNotice("videoBlocked");
+      });
       if (ticket !== generation.current || suspendedRef.current) {
         session.disconnect();
         return;
@@ -120,7 +126,7 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
   return {
     videoNotice,
     dismissVideoNotice() {
-      setVideoNotice(false);
+      setVideoNotice(null);
     },
     tracks: visible,
     micOn,
@@ -151,7 +157,7 @@ export function useTableVideo(credentials: Credentials | null, suspended = false
     setCamera(enabled: boolean) {
       if (suspendedRef.current) return;
       if (!videoSupported) {
-        if (enabled) setVideoNotice(true);
+        if (enabled) setVideoNotice("videoUnsupported");
         return;
       }
       void (async () => {

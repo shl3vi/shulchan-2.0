@@ -10,7 +10,7 @@ import { chooseSeat } from "./seats.js";
 import { avoidSeats, blockPerson, blockedSeatIds, storeReport, unblockPerson } from "./safety.js";
 import { openingBackgammon } from "./backgammon.js";
 import { blockBody, createBody, joinBody, liveKitBody, readSchema, reportBody } from "./schema.js";
-import { openTable, noteJoinRefused, notePlayers, noteVideo } from "./events/ledger.js";
+import { openTable, noteJoin, noteJoinRefused, notePlayers, noteVideo } from "./events/ledger.js";
 import { reportError, reportCaught } from "./events/report.js";
 import { sameSecret, seatedCount, tablePassword } from "./players.js";
 import { clearPasswordFailures, noteWrongPassword, passwordRetryAfter } from "./password.js";
@@ -109,6 +109,8 @@ router.post("/:id/join", async (req, res) => {
   const password = body.password;
   const adminSecret = body.adminSecret ?? "";
   const personKey = body.personKey;
+  // A browser always sends Origin on a POST; the app never does. So a page cannot pass itself off as the app.
+  const web = body.platform === "web" || req.get("origin") != null;
   const ip = req.ip ?? "unknown";
   if (!name || problem) {
     await noteJoinRefused(id);
@@ -125,13 +127,14 @@ router.post("/:id/join", async (req, res) => {
       const avoid = await avoidSeats(personKey, table.players).catch(() => []);
       const seat = chooseSeat(taken, avoid, table.kind === "backgammon" ? "backgammon" : "poker");
       if (seat === undefined) throw new JoinRefused(400, "Table is full");
-      const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), personKey, seat, bought: table.buyIn };
+      const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), personKey, seat, bought: table.buyIn, ...(web ? { web: true } : {}) };
       await seatPoker(table, seat, table.buyIn);
       table.players.push(player);
-      if (table.adminSecret && sameSecret(adminSecret, table.adminSecret)) {
+      // Only the app can be admin. The browser cannot open a table, so it never holds the admin secret.
+      if (!web && table.adminSecret && sameSecret(adminSecret, table.adminSecret)) {
         table.adminId = player.id;
         delete table.adminSecret;
-      } else if (!table.adminId) {
+      } else if (!web && !table.adminId) {
         table.adminId = player.id;
       }
       return { player, seated: seatedCount(table) };
@@ -139,6 +142,7 @@ router.post("/:id/join", async (req, res) => {
     await publishTable(id);
     void considerAutoDeal(id);
     await notePlayers(id, joined.seated);
+    await noteJoin(id, web);
     await clearPasswordFailures(id, ip).catch(() => undefined);
     res.status(201).json({ id: joined.player.id, secret: joined.player.secret });
   } catch (error) {

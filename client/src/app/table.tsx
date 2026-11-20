@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AdBanner } from "@/ads/AdBanner";
+import { GetTheApp } from "@/game/GetTheApp";
 import { useTableAdAllowed } from "@/ads/placement";
 import { UpdateNotice } from "@/game/UpdateNotice";
 import { updateMode } from "@/game/remoteConfig";
@@ -19,7 +20,7 @@ import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
 import { move as playMove, newGame, opponent, seenMove, type BackgammonAction, type Color, type Game, type Move } from "@/game/backgammon";
 import { checkerPlace } from "@/game/diceSound";
 import { playSfx, preloadSfx, sleepSfx } from "@/game/sfx";
-import { t } from "@/i18n";
+import { t, type MessageKey } from "@/i18n";
 import { SeatSafety } from "@/game/SeatSafety";
 import { TableHold } from "@/game/TableHold";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
@@ -142,7 +143,7 @@ function BackgammonTable({
   gameId?: string;
   password?: string;
   onLeave: () => void;
-  videoNotice?: boolean;
+  videoNotice?: MessageKey | null;
   onDismissVideo?: () => void;
   isAdmin: boolean;
   paused: boolean;
@@ -457,14 +458,13 @@ function BackgammonTable({
             </Pressable>
           </View>
         ) : null}
-        {videoNotice ? <VideoNotice onClose={onDismissVideo} /> : null}
-        {Platform.OS !== "web" ? (
-          <CameraButton on={cameraOn} held={paused} onToggle={setCamera} />
-        ) : null}
-        {Platform.OS !== "web" ? <TalkButton on={micOn} onTalk={setMic} /> : null}
+        {videoNotice ? <VideoNotice message={videoNotice} onClose={onDismissVideo} /> : null}
+        <CameraButton on={cameraOn} held={paused} onToggle={setCamera} />
+        <TalkButton on={micOn} onTalk={setMic} />
       </View>
       <View style={{ paddingBottom: insets.bottom, backgroundColor: "#090b16" }}>
         {showAd ? <View style={styles.ad}><AdBanner /></View> : null}
+        <GetTheApp variant="strip" />
       </View>
     </View>
   );
@@ -478,10 +478,10 @@ function tableError(message: string, range?: { min: number; max: number } | null
   return message;
 }
 
-function VideoNotice({ onClose }: { onClose?: () => void }) {
+function VideoNotice({ message, onClose }: { message: MessageKey; onClose?: () => void }) {
   return (
     <View style={styles.error}>
-      <Text style={styles.errorText}>{t("videoUnsupported")}</Text>
+      <Text style={styles.errorText}>{t(message)}</Text>
       <Pressable onPress={onClose} hitSlop={8}>
         <Ionicons name="close" size={18} color="#fecaca" />
       </Pressable>
@@ -903,9 +903,11 @@ export default function TableScreen() {
                       <Text style={styles.statsLine}>{player.name}</Text>
                       {player.id !== you?.id ? (
                         <View style={styles.statsActions}>
-                          <Pressable onPress={() => transferAdmin(player.id)}>
-                            <Text style={styles.makeAdmin}>{t("makeAdmin")}</Text>
-                          </Pressable>
+                          {player.web ? null : (
+                            <Pressable onPress={() => transferAdmin(player.id)}>
+                              <Text style={styles.makeAdmin}>{t("makeAdmin")}</Text>
+                            </Pressable>
+                          )}
                           <Pressable onPress={() => removePlayer(player.id)} hitSlop={8}>
                             <Ionicons name="trash-outline" size={20} color="#fecaca" />
                           </Pressable>
@@ -971,7 +973,7 @@ export default function TableScreen() {
           isAdmin={state?.you?.isAdmin === true}
           onPause={setPaused}
         />
-        {video.videoNotice ? <VideoNotice onClose={video.dismissVideoNotice} /> : null}
+        {video.videoNotice ? <VideoNotice message={video.videoNotice} onClose={video.dismissVideoNotice} /> : null}
         {error ? (
           <View style={styles.error}>
             <Text style={styles.errorText}>{tableError(error, you?.chipRange)}</Text>
@@ -1013,10 +1015,8 @@ export default function TableScreen() {
             ]}
           />
         </View>
-        {Platform.OS !== "web" ? (
-          <CameraButton on={video.cameraOn} held={state?.paused} onToggle={video.setCamera} />
-        ) : null}
-        {Platform.OS !== "web" ? <TalkButton on={video.micOn} onTalk={video.setMic} /> : null}
+        <CameraButton on={video.cameraOn} held={state?.paused} onToggle={video.setCamera} />
+        <TalkButton on={video.micOn} onTalk={video.setMic} />
         <Modal visible={seatId != null} transparent animationType="fade" onRequestClose={() => setSeatId(null)}>
           <Pressable style={styles.sheetBackdrop} onPress={() => setSeatId(null)}>
             <Pressable style={styles.sheet} onPress={() => {}}>
@@ -1068,6 +1068,7 @@ export default function TableScreen() {
       />
       <View style={{ paddingBottom: insets.bottom, backgroundColor: "#090b16" }}>
         {showAd ? <View style={styles.ad}><AdBanner /></View> : null}
+        <GetTheApp variant="strip" />
       </View>
     </View>
   );

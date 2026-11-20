@@ -5,7 +5,7 @@ type AdminTable = {
   adminId?: string;
   /** Server time the admin was first seen without a connection. Absent while they are connected. */
   adminAwaySince?: number;
-  players: { id: string; pendingRemoval?: boolean }[];
+  players: { id: string; pendingRemoval?: boolean; web?: boolean }[];
 };
 
 /**
@@ -21,7 +21,8 @@ export function settleAdmin(table: AdminTable, connected: Set<string>, now: numb
     delete table.adminAwaySince;
     return true;
   }
-  const candidates = table.players.filter((player) => !player.pendingRemoval && player.id !== admin && connected.has(player.id));
+  // A browser player is a guest, so the role waits for someone in the app.
+  const candidates = table.players.filter((player) => !player.pendingRemoval && !player.web && player.id !== admin && connected.has(player.id));
   if (!admin) {
     if (candidates.length === 0) return false;
     table.adminId = pick(candidates).id;
