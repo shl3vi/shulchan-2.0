@@ -60,16 +60,29 @@ function PlayingCard({
     height: u(board ? 38 : 28),
     borderRadius: u(4),
     backgroundColor: "#fffdf7",
+    // Paper lit from above: bright at the top, a touch warmer where it meets the felt.
+    backgroundImage: "linear-gradient(172deg, #ffffff 0%, #fbf8f1 55%, #eee6d6 100%)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
     borderWidth: Math.max(0.5, u(0.65)),
     borderColor: "rgba(96,72,48,0.35)",
-    boxShadow: `0 ${u(2)}px ${u(3)}px rgba(0,0,0,0.48)`,
+    // A tight contact shadow under the card and a soft one around it.
+    boxShadow: `0 ${u(1)}px ${u(1)}px rgba(0,0,0,0.4), 0 ${u(3)}px ${u(6)}px rgba(0,0,0,0.38)`,
     elevation: 3,
   };
   if (back) {
     return (
-      <View style={[box, { backgroundColor: "#18243f", borderWidth: u(1), borderColor: "#b9c7dd" }]}>
+      <View
+        style={[
+          box,
+          {
+            backgroundColor: "#18243f",
+            backgroundImage: "linear-gradient(160deg, #2b4170 0%, #1a2847 52%, #101a30 100%)",
+            borderWidth: u(1),
+            borderColor: "#b9c7dd",
+          },
+        ]}
+      >
         <View
           style={{
             position: "absolute",
@@ -92,10 +105,12 @@ function PlayingCard({
         style={[
           box,
           {
-            backgroundColor: "transparent",
+            // An empty slot is pressed into the felt rather than drawn on it.
+            backgroundColor: "rgba(0,0,0,0.14)",
+            backgroundImage: "none",
             borderWidth: u(1),
-            borderColor: "rgba(255,255,255,0.22)",
-            boxShadow: "none",
+            borderColor: "rgba(255,255,255,0.13)",
+            boxShadow: `inset 0 ${u(1.5)}px ${u(3)}px rgba(0,0,0,0.4)`,
             elevation: 0,
           },
         ]}
@@ -116,6 +131,8 @@ function PlayingCard({
   );
 }
 
+/** Half of one slow breath of the lamp over the table. */
+const LAMP_BREATH_MS = 4600;
 const FLIP_MS = 260;
 const FLIP_GAP_MS = 220;
 
@@ -187,21 +204,33 @@ function FlipCard({
   );
 }
 
+/**
+ * A chip seen from slightly above: a domed face lit from the top, and a solid
+ * darker band under it for the chip's edge, then its shadow on the felt.
+ */
+function chipLook(size: number, scale: number) {
+  const u = (n: number) => n * scale;
+  return {
+    width: u(size),
+    height: u(size),
+    borderRadius: u(size / 2),
+    backgroundColor: "#b45309",
+    backgroundImage: "radial-gradient(circle farthest-side at 50% 30%, #e08a2c 0%, #b45309 62%, #8f3f07 100%)",
+    borderWidth: Math.max(1, u(size > 18 ? 2 : 1.5)),
+    borderColor: "#f3dfa6",
+    boxShadow: `0 ${u(1.6)}px 0 #6a2e05, 0 ${u(2.5)}px ${u(4)}px rgba(0,0,0,0.55)`,
+    elevation: 3,
+  } as const;
+}
+
 function BetChip({ amount, scale }: { amount: number; scale: number }) {
   const u = (n: number) => n * scale;
   return (
     <View
       style={{
-        width: u(CHIP),
-        height: u(CHIP),
-        borderRadius: u(CHIP / 2),
-        backgroundColor: "#b45309",
-        borderWidth: Math.max(1, u(2)),
-        borderColor: "#f6e2a8",
+        ...chipLook(CHIP, scale),
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: `0 ${u(2)}px ${u(3)}px rgba(0,0,0,0.5)`,
-        elevation: 3,
       }}
     >
       <View
@@ -549,7 +578,7 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
   const video = player?.video ?? lastVideo;
   const [showVideo, setShowVideo] = useState(cameraOn);
   if (cameraOn && !showVideo) setShowVideo(true);
-  const ring = player?.toAct ? "#f6d36b" : occupied ? "#44403c" : "#57534e";
+  const ring = player?.toAct ? "#f6d36b" : occupied ? "#4a4440" : "rgba(214,211,209,0.2)";
 
   useEffect(() => {
     if (cameraOn) return;
@@ -562,7 +591,7 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
       {occupied && showVideo && video ? (
         video
       ) : (
-        <Text style={{ color: occupied ? "#fafaf9" : "#78716c", fontSize: u(16), fontWeight: "700" }}>
+        <Text style={{ color: occupied ? "#fafaf9" : "rgba(214,211,209,0.38)", fontSize: u(16), fontWeight: occupied ? "700" : "400" }}>
           {player ? player.name.trim().slice(0, 1).toUpperCase() : "+"}
         </Text>
       )}
@@ -587,15 +616,20 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
               height: u(96),
               borderRadius: u(8),
               overflow: "hidden",
-              borderWidth: u(2),
+              borderWidth: occupied ? u(2) : Math.max(1, u(1.2)),
+              borderStyle: occupied ? "solid" : "dashed",
               borderColor: ring,
-              backgroundColor: "#1c1917",
+              // A taken seat is a lit tile; an open one is a quiet outline the room shows through.
+              backgroundColor: occupied ? "#1c1917" : "rgba(13,13,19,0.92)",
+              backgroundImage: occupied ? "linear-gradient(180deg, #2c2724 0%, #1c1917 52%, #121010 100%)" : "none",
               alignItems: "center",
               justifyContent: "center",
               boxShadow: player?.toAct
-                ? `0 0 ${u(9)}px rgba(246,211,107,0.52)`
-                : `0 ${u(4)}px ${u(7)}px rgba(0,0,0,0.58)`,
-              elevation: player?.toAct ? 7 : 4,
+                ? `0 0 ${u(10)}px rgba(246,211,107,0.5), inset 0 ${u(1)}px 0 rgba(255,255,255,0.1)`
+                : occupied
+                  ? `0 ${u(1)}px ${u(1)}px rgba(0,0,0,0.5), 0 ${u(6)}px ${u(12)}px rgba(0,0,0,0.5), inset 0 ${u(1)}px 0 rgba(255,255,255,0.08)`
+                  : "none",
+              elevation: player?.toAct ? 7 : occupied ? 4 : 0,
             }}
           >
             {face}
@@ -609,18 +643,27 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
           height: u(28),
           borderRadius: u(8),
           paddingHorizontal: u(4),
-          backgroundColor: occupied ? "rgba(12,10,9,0.92)" : "rgba(12,10,9,0.45)",
-          borderWidth: u(1),
+          backgroundColor: occupied ? "rgba(12,10,9,0.92)" : "transparent",
+          backgroundImage: occupied ? "linear-gradient(180deg, rgba(40,36,33,0.96) 0%, rgba(14,12,11,0.96) 100%)" : "none",
+          borderWidth: occupied ? u(1) : 0,
           borderColor: player?.toAct ? "#e8c98a" : "rgba(255,255,255,0.08)",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: `0 ${u(2)}px ${u(4)}px rgba(0,0,0,0.45)`,
-          elevation: 2,
+          boxShadow: occupied ? `0 ${u(3)}px ${u(6)}px rgba(0,0,0,0.45), inset 0 ${u(1)}px 0 rgba(255,255,255,0.07)` : "none",
+          elevation: occupied ? 2 : 0,
         }}
       >
         <Text
           numberOfLines={1}
-          style={{ color: occupied ? "#fafaf9" : "#a8a29e", fontSize: u(10), lineHeight: u(12), fontWeight: "700" }}
+          style={{
+            color: occupied ? "#fafaf9" : "rgba(214,211,209,0.5)",
+            fontSize: u(10),
+            lineHeight: u(12),
+            fontWeight: occupied ? "700" : "600",
+            textShadowColor: "rgba(0,0,0,0.8)",
+            textShadowOffset: { width: 0, height: u(1) },
+            textShadowRadius: u(3),
+          }}
         >
           {player?.name ?? t("openSeat")}
         </Text>
@@ -655,9 +698,22 @@ function TableFelt({
     setRevealFrom(Math.min(seen, community.length));
     setSeen(community.length);
   }
+  // The lamp over the table breathes very slowly, so the room never looks frozen.
+  const [lamp] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(lamp, { toValue: 1, duration: LAMP_BREATH_MS, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(lamp, { toValue: 0, duration: LAMP_BREATH_MS, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [lamp]);
   const railW = FELT.w + RAIL * 2;
   const railH = FELT.h + RAIL * 2;
   const radius = u(railW / 2);
+  const feltRadius = u(FELT.w / 2);
   return (
     <View
       style={{
@@ -667,12 +723,20 @@ function TableFelt({
         width: u(railW),
         height: u(railH),
         borderRadius: radius,
+        // Padded leather rail, lit from above: warm on top, falling into shadow at the bottom.
         backgroundColor: "#28150d",
-        borderWidth: Math.max(1, u(2)),
-        borderColor: "#765033",
+        backgroundImage: "linear-gradient(180deg, #5b3a25 0%, #3d2518 34%, #29170f 68%, #1a0e09 100%)",
+        borderWidth: Math.max(1, u(1)),
+        borderColor: "rgba(0,0,0,0.65)",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: `0 ${u(13)}px ${u(22)}px rgba(0,0,0,0.68)`,
+        // Contact shadow, then the table's long soft shadow on the floor, then the rail's own roundness.
+        boxShadow: [
+          `0 ${u(3)}px ${u(4)}px rgba(0,0,0,0.6)`,
+          `0 ${u(18)}px ${u(36)}px rgba(0,0,0,0.62)`,
+          `inset 0 ${u(2)}px ${u(2)}px rgba(255,222,180,0.22)`,
+          `inset 0 -${u(3)}px ${u(5)}px rgba(0,0,0,0.55)`,
+        ].join(", "),
         elevation: 12,
       }}
     >
@@ -680,88 +744,69 @@ function TableFelt({
         pointerEvents="none"
         style={{
           position: "absolute",
-          left: u(4),
-          right: u(4),
-          top: u(4),
-          bottom: u(4),
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
           borderRadius: radius,
-          borderWidth: Math.max(1, u(1.5)),
-          borderColor: "rgba(226,175,110,0.35)",
+          // The lamp's reflection along the top of the rail.
+          backgroundImage: "radial-gradient(ellipse farthest-side at 50% 0%, rgba(255,226,186,0.2) 0%, rgba(255,226,186,0.06) 45%, rgba(255,226,186,0) 75%)",
         }}
       />
       <View
         pointerEvents="none"
         style={{
           position: "absolute",
-          left: u(8),
-          right: u(8),
-          top: u(8),
-          height: "42%",
-          borderRadius: radius,
-          backgroundColor: "rgba(255,207,145,0.055)",
-        }}
-      />
-      <View
-        pointerEvents="none"
-        style={{
-          position: "absolute",
-          left: u(RAIL - 3),
-          top: u(RAIL - 3),
-          width: u(FELT.w + 6),
-          height: u(FELT.h + 6),
-          borderRadius: u(FELT.w / 2),
-          backgroundColor: "#100a07",
-          boxShadow: `inset 0 ${u(2)}px ${u(4)}px rgba(0,0,0,0.8)`,
+          left: u(RAIL - 4),
+          top: u(RAIL - 4),
+          width: u(FELT.w + 8),
+          height: u(FELT.h + 8),
+          borderRadius: u(FELT.w / 2 + 4),
+          // A thin brass bead where the rail meets the felt.
+          borderWidth: Math.max(1, u(1)),
+          borderColor: "rgba(214,170,105,0.45)",
+          backgroundColor: "#0e0805",
         }}
       />
       <View
         style={{
           width: u(FELT.w),
           height: u(FELT.h),
-          borderRadius: u(FELT.w / 2),
-          backgroundColor: "#116c3b",
-          borderWidth: Math.max(1, u(2)),
-          borderColor: "#1b8b50",
+          borderRadius: feltRadius,
+          // Felt under an overhead lamp: brightest just above the board, darker toward the rail.
+          backgroundColor: "#0f5f35",
+          backgroundImage:
+            "radial-gradient(ellipse farthest-side at 50% 44%, #1d8a4e 0%, #16753f 38%, #0e5a31 74%, #083c21 100%)",
           alignItems: "center",
           justifyContent: "center",
           overflow: "hidden",
         }}
       >
-        <View
+        <Animated.View
           pointerEvents="none"
           style={{
             position: "absolute",
-            left: "5%",
-            top: "4%",
-            width: "90%",
-            height: "42%",
-            borderRadius: u(FELT.h),
-            backgroundColor: "rgba(82,190,119,0.11)",
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            opacity: lamp.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }),
+            backgroundImage:
+              "radial-gradient(ellipse closest-side at 50% 42%, rgba(255,236,190,0.13) 0%, rgba(255,236,190,0.05) 55%, rgba(255,236,190,0) 100%)",
           }}
         />
         <View
           pointerEvents="none"
           style={{
             position: "absolute",
-            left: "9%",
-            top: "12%",
-            width: "82%",
-            height: "76%",
+            left: "10%",
+            top: "11%",
+            width: "80%",
+            height: "78%",
             borderRadius: u(FELT.h),
+            // The betting line, printed into the felt.
             borderWidth: Math.max(1, u(1)),
-            borderColor: "rgba(194,238,207,0.12)",
-          }}
-        />
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            left: "17%",
-            top: "20%",
-            width: "66%",
-            height: "60%",
-            borderRadius: u(FELT.h),
-            backgroundColor: "rgba(12,91,49,0.2)",
+            borderColor: "rgba(214,240,220,0.1)",
           }}
         />
           <Text
@@ -796,17 +841,17 @@ function TableFelt({
           <View style={{ height: u(20), marginTop: u(6), flexDirection: "row", alignItems: "center", gap: u(6) }}>
             {pot > 0 ? (
               <>
-                <View
-                  style={{
-                    width: u(16),
-                    height: u(16),
-                    borderRadius: u(8),
-                    backgroundColor: "#b45309",
-                    borderWidth: Math.max(1, u(2)),
-                    borderColor: "#f6e2a8",
-                  }}
-                />
-                <Text style={{ color: "#ecfccb", fontWeight: "800", fontSize: u(14) }}>{pot}</Text>
+                <View style={{ width: u(16), height: u(16) }}>
+                  {[0, 1, 2].map((chip) => (
+                    <View
+                      key={chip}
+                      style={{ ...chipLook(16, scale), position: "absolute", left: 0, top: u(2) - chip * u(2.4) }}
+                    />
+                  ))}
+                </View>
+                <Text style={{ color: "#ecfccb", fontWeight: "800", fontSize: u(14), textShadowColor: "rgba(0,0,0,0.45)", textShadowOffset: { width: 0, height: u(1) }, textShadowRadius: u(2) }}>
+                  {pot}
+                </Text>
               </>
             ) : null}
           </View>
@@ -815,15 +860,30 @@ function TableFelt({
               style={{
                 marginTop: u(4),
                 backgroundColor: "#e8c98a",
+                backgroundImage: "linear-gradient(180deg, #f4dfae 0%, #e3c07c 100%)",
                 borderRadius: u(14),
                 paddingHorizontal: u(18),
                 paddingVertical: u(6),
+                boxShadow: `0 ${u(2)}px ${u(5)}px rgba(0,0,0,0.45), inset 0 ${u(1)}px 0 rgba(255,255,255,0.55)`,
               }}
               onPress={onDeal}
             >
               <Text style={{ color: "#1c1917", fontWeight: "800", fontSize: u(13) }}>{t("deal")}</Text>
             </Pressable>
           ) : null}
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            borderRadius: feltRadius,
+            // The rail's shadow falling on the felt, deeper on the far side from the lamp.
+            boxShadow: `inset 0 ${u(7)}px ${u(14)}px rgba(0,0,0,0.5), inset 0 0 ${u(5)}px rgba(0,0,0,0.55)`,
+          }}
+        />
       </View>
     </View>
   );
@@ -1474,16 +1534,18 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     backgroundColor: "#090b16",
+    // A dim room: the app's indigo, lifted where the table stands and falling off to the corners.
+    backgroundImage: "radial-gradient(ellipse farthest-side at 50% 47%, #1a1c33 0%, #10122a 42%, #090b16 78%, #05060c 100%)",
     pointerEvents: "none",
   },
   roomGlow: {
     position: "absolute",
-    width: "118%",
-    height: "72%",
-    left: "-9%",
-    top: "12%",
-    borderRadius: 999,
-    backgroundColor: "rgba(92, 77, 216, 0.16)",
+    width: "150%",
+    height: "86%",
+    left: "-25%",
+    top: "4%",
+    // Warm spill from the lamp over the table onto the floor around it.
+    backgroundImage: "radial-gradient(ellipse closest-side, rgba(255,214,160,0.09) 0%, rgba(255,214,160,0.035) 50%, rgba(255,214,160,0) 100%)",
     pointerEvents: "none",
   },
   mic: { width: 18, height: 24, alignItems: "center" },
