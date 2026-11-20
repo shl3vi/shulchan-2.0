@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance, type TextInputInstance } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Image } from "expo-image";
@@ -105,7 +105,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const session = useGameSession();
   const keyboard = useKeyboardInset();
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
     if (keyboard > 0) scroll.current?.scrollToEnd({ animated: true });
@@ -139,7 +139,7 @@ export default function HomeScreen() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const currentLocale = useSyncExternalStore(subscribeLocale, locale, locale);
-  const nameInput = useRef<TextInput>(null);
+  const nameInput = useRef<TextInputInstance>(null);
 
   function normalizeCode(code: string) {
     const trimmed = code.trim();

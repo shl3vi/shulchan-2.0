@@ -64,6 +64,7 @@ function Shell() {
 function AppStack() {
   return (
     <Stack
+      activityEnabled={1}
       screenOptions={{
         headerShown: false,
         animation: "simple_push",
@@ -71,7 +72,6 @@ function AppStack() {
         animationMatchesGesture: true,
         fullScreenGestureEnabled: true,
         gestureEnabled: true,
-        freezeOnBlur: true,
         contentStyle: styles.home,
       }}
     >
