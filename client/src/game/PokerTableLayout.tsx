@@ -620,7 +620,7 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
               borderStyle: occupied ? "solid" : "dashed",
               borderColor: ring,
               // A taken seat is a lit tile; an open one is a quiet outline the room shows through.
-              backgroundColor: occupied ? "#1c1917" : "rgba(13,13,19,0.92)",
+              backgroundColor: occupied ? "#1c1917" : "rgba(13,13,19,0.45)",
               backgroundImage: occupied ? "linear-gradient(180deg, #2c2724 0%, #1c1917 52%, #121010 100%)" : "none",
               alignItems: "center",
               justifyContent: "center",
@@ -1258,11 +1258,60 @@ export function PokerTableLayout({
   );
 }
 
+/**
+ * The round camera and mic buttons. Both share one look: a dark glass face when off,
+ * with the same slash across the icon, and a lit face with a soft glow when on.
+ */
+function MediaButton({
+  icon,
+  on,
+  held = false,
+  style,
+  ...press
+}: {
+  icon: "videocam" | "mic";
+  on: boolean;
+  held?: boolean;
+  style: object;
+  onPress: () => void;
+  onLongPress?: () => void;
+  onPressOut?: () => void;
+  delayLongPress?: number;
+}) {
+  return (
+    <Pressable
+      {...press}
+      style={({ pressed }) => [styles.media, on ? styles.mediaOn : null, style, held ? styles.mediaHeld : null, pressed ? styles.mediaPressed : null]}
+    >
+      <View style={styles.mediaIcon}>
+        <Ionicons name={icon} size={22} color={on ? "#171b35" : "#d4d8ff"} />
+        {on ? null : <View style={styles.mediaSlash} />}
+      </View>
+    </Pressable>
+  );
+}
+
+export function CameraButton({ on, held, onToggle }: { on: boolean; held?: boolean; onToggle: (on: boolean) => void }) {
+  return (
+    <MediaButton
+      icon="videocam"
+      on={on}
+      held={held}
+      style={styles.cameraSpot}
+      onPress={() => {
+        if (!held) onToggle(!on);
+      }}
+    />
+  );
+}
+
 export function TalkButton({ on, onTalk }: { on: boolean; onTalk: (on: boolean) => void }) {
   const held = useRef(false);
   return (
-    <Pressable
-      style={[styles.talk, on && styles.talkOn]}
+    <MediaButton
+      icon="mic"
+      on={on}
+      style={styles.talkSpot}
       delayLongPress={280}
       onPress={() => {
         if (held.current) return;
@@ -1279,20 +1328,7 @@ export function TalkButton({ on, onTalk }: { on: boolean; onTalk: (on: boolean) 
           held.current = false;
         }, 0);
       }}
-    >
-      <MicIcon muted={!on} active={on} />
-    </Pressable>
-  );
-}
-
-function MicIcon({ muted, active }: { muted: boolean; active: boolean }) {
-  return (
-    <View style={styles.mic}>
-      <View style={[styles.micHead, active && styles.micActive, muted && styles.micMuted]} />
-      <View style={[styles.micArc, active && styles.micActiveBorder, muted && styles.micMutedBorder]} />
-      <View style={[styles.micStem, active && styles.micActive, muted && styles.micMuted]} />
-      {muted ? <View style={styles.micSlash} /> : null}
-    </View>
+    />
   );
 }
 
@@ -1512,21 +1548,44 @@ export function TableMenu({
 
 const styles = StyleSheet.create({
   room: { flex: 1, minHeight: 0, backgroundColor: "#090b16", overflow: "hidden" },
-  talk: {
+  media: {
     position: "absolute",
-    right: 16,
     bottom: 16,
     zIndex: 8,
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "rgba(20, 23, 42, 0.9)",
+    // Dark glass, lit from above like the table.
+    backgroundColor: "#171a30",
+    backgroundImage: "linear-gradient(180deg, #2a2f52 0%, #1a1d36 55%, #11132a 100%)",
     borderWidth: 1,
-    borderColor: "rgba(205, 210, 255, 0.24)",
+    borderColor: "rgba(205, 210, 255, 0.2)",
     alignItems: "center",
     justifyContent: "center",
+    boxShadow: "0 1px 1px rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -2px 4px rgba(0,0,0,0.35)",
   },
-  talkOn: { backgroundColor: "#a8b2ff", borderColor: "#c8ceff" },
+  mediaOn: {
+    backgroundColor: "#a8b2ff",
+    backgroundImage: "linear-gradient(180deg, #d0d6ff 0%, #a8b2ff 55%, #8e99f2 100%)",
+    borderColor: "#dde1ff",
+    boxShadow: "0 1px 1px rgba(0,0,0,0.4), 0 0 16px rgba(168,178,255,0.5), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -2px 4px rgba(60,70,170,0.35)",
+  },
+  mediaPressed: { transform: [{ scale: 0.94 }] },
+  mediaHeld: { opacity: 0.35 },
+  cameraSpot: { right: 76 },
+  talkSpot: { right: 16 },
+  mediaIcon: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
+  /** The same "off" slash on both buttons: a soft red line, edged in the button's face so it cuts the icon. */
+  mediaSlash: {
+    position: "absolute",
+    width: 5,
+    height: 31,
+    borderRadius: 2.5,
+    backgroundColor: "#f19c9c",
+    borderWidth: 1.5,
+    borderColor: "#1c2039",
+    transform: [{ rotate: "-45deg" }],
+  },
   wash: {
     position: "absolute",
     left: 0,
@@ -1547,31 +1606,6 @@ const styles = StyleSheet.create({
     // Warm spill from the lamp over the table onto the floor around it.
     backgroundImage: "radial-gradient(ellipse closest-side, rgba(255,214,160,0.09) 0%, rgba(255,214,160,0.035) 50%, rgba(255,214,160,0) 100%)",
     pointerEvents: "none",
-  },
-  mic: { width: 18, height: 24, alignItems: "center" },
-  micHead: { width: 8, height: 12, borderRadius: 4, backgroundColor: "white" },
-  micArc: {
-    width: 14,
-    height: 8,
-    marginTop: -4,
-    borderBottomWidth: 2,
-    borderLeftWidth: 2,
-    borderRightWidth: 2,
-    borderColor: "white",
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-  micStem: { width: 2, height: 5, backgroundColor: "white" },
-  micActive: { backgroundColor: "#171b35" },
-  micActiveBorder: { borderColor: "#171b35" },
-  micMuted: { backgroundColor: "#a8a29e" },
-  micMutedBorder: { borderColor: "#a8a29e" },
-  micSlash: {
-    position: "absolute",
-    width: 2,
-    height: 26,
-    backgroundColor: "#fca5a5",
-    transform: [{ rotate: "35deg" }],
   },
 });
 

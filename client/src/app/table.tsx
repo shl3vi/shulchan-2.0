@@ -12,7 +12,7 @@ import { updateMode } from "@/game/remoteConfig";
 import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
-import { ActionDock, heroDealDelays, PokerTableLayout, SPOTLIGHT_DELAY_MS, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
+import { ActionDock, CameraButton, heroDealDelays, PokerTableLayout, SPOTLIGHT_DELAY_MS, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
 import type { Card, Credentials, RebuyRule, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
@@ -459,9 +459,7 @@ function BackgammonTable({
         ) : null}
         {videoNotice ? <VideoNotice onClose={onDismissVideo} /> : null}
         {Platform.OS !== "web" ? (
-          <Pressable style={[styles.cameraToggle, cameraOn && styles.cameraToggleOn, paused && styles.held]} onPress={() => { if (!paused) setCamera(!cameraOn); }}>
-            <Ionicons name={cameraOn ? "videocam" : "videocam-off"} size={22} color={cameraOn ? "#171b35" : "#c8ceff"} />
-          </Pressable>
+          <CameraButton on={cameraOn} held={paused} onToggle={setCamera} />
         ) : null}
         {Platform.OS !== "web" ? <TalkButton on={micOn} onTalk={setMic} /> : null}
       </View>
@@ -1016,9 +1014,7 @@ export default function TableScreen() {
           />
         </View>
         {Platform.OS !== "web" ? (
-          <Pressable style={[styles.cameraToggle, video.cameraOn && styles.cameraToggleOn, state?.paused && styles.held]} onPress={() => { if (!state?.paused) video.setCamera(!video.cameraOn); }}>
-            <Ionicons name={video.cameraOn ? "videocam" : "videocam-off"} size={22} color={video.cameraOn ? "#171b35" : "#c8ceff"} />
-          </Pressable>
+          <CameraButton on={video.cameraOn} held={state?.paused} onToggle={video.setCamera} />
         ) : null}
         {Platform.OS !== "web" ? <TalkButton on={video.micOn} onTalk={video.setMic} /> : null}
         <Modal visible={seatId != null} transparent animationType="fade" onRequestClose={() => setSeatId(null)}>
@@ -1213,20 +1209,4 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   errorText: { color: "#fecaca", flex: 1 },
-  cameraToggle: {
-    position: "absolute",
-    right: 76,
-    bottom: 16,
-    zIndex: 8,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(20, 23, 42, 0.9)",
-    borderWidth: 1,
-    borderColor: "rgba(205, 210, 255, 0.24)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cameraToggleOn: { backgroundColor: "#a8b2ff", borderColor: "#c8ceff" },
-  held: { opacity: 0.35 },
 });
