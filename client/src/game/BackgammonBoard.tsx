@@ -51,9 +51,12 @@ type Flight = {
   progress: Animated.Value;
 };
 
-/** Ivory and oxblood points, each lit at its base by the rail and falling darker toward the tip. */
+/**
+ * Sand and oxblood points, each lit at its base by the rail and falling darker toward the tip.
+ * Sand rather than ivory, so the ivory checkers never sit on a point of their own color.
+ */
 const POINT_SHADES = {
-  ivory: { base: "#f1e6cc", tip: "#c4ad84", edge: "rgba(90,66,36,0.45)" },
+  ivory: { base: "#cfab72", tip: "#9a7646", edge: "rgba(70,48,22,0.55)" },
   oxblood: { base: "#93303c", tip: "#5a1520", edge: "rgba(30,4,8,0.55)" },
 };
 
@@ -124,6 +127,8 @@ function PipDie({ value, size = 22 }: { value: number; size?: number }) {
 function Checker({ color, size, overlap, up }: { color: Color; size: number; overlap: boolean; up?: boolean }) {
   const light = color === "white";
   const edge = Math.max(1, size * 0.08);
+  // A rim that stands out from any point: dark walnut on the ivory checkers, brass on the ebony ones.
+  const rim = Math.max(1.25, size * 0.07);
   return (
     <View
       style={[
@@ -133,9 +138,10 @@ function Checker({ color, size, overlap, up }: { color: Color; size: number; ove
           width: size,
           height: size,
           borderRadius: size / 2,
-          marginTop: up ? 0 : overlap ? -size * 0.34 : 2,
+          marginTop: up ? 0 : overlap ? -size * 0.34 : 0,
           marginBottom: up && overlap ? -size * 0.34 : 0,
-          boxShadow: `0 ${edge}px 0 ${light ? "#a8977a" : "#000000"}, 0 ${edge * 1.6}px ${size * 0.18}px rgba(0,0,0,0.55)`,
+          borderWidth: rim,
+          boxShadow: `0 ${edge}px 0 ${light ? "#5a4528" : "#000000"}, 0 ${edge * 1.6}px ${size * 0.18}px rgba(0,0,0,0.55)`,
         },
       ]}
     >
@@ -330,7 +336,7 @@ export function BackgammonBoard({
       return { x, y: half + spot.y + spot.height / 2 + (far ? -checker * 1.1 : checker * 0.1) - BOARD_BORDER };
     }
     const step = Math.min(index, 4) * checker * 0.66;
-    const y = spot.up ? spot.y + spot.height - checker - step : spot.y + 2 + step;
+    const y = spot.up ? spot.y + spot.height - checker - step : spot.y + step;
     return { x, y: half + y - BOARD_BORDER };
   }
 
@@ -580,12 +586,12 @@ const styles = StyleSheet.create({
   white: {
     backgroundColor: "#f5f0e6",
     backgroundImage: "radial-gradient(circle farthest-side at 50% 30%, #ffffff 0%, #f4ecdc 55%, #d9cbb0 100%)",
-    borderColor: "#cbbd9f",
+    borderColor: "#6b5233",
   },
   black: {
     backgroundColor: "#1c1917",
     backgroundImage: "radial-gradient(circle farthest-side at 50% 30%, #57524d 0%, #26221f 55%, #0f0d0c 100%)",
-    borderColor: "rgba(246,211,107,0.55)",
+    borderColor: "#c9a35a",
   },
   count: { color: "#f6d36b", fontSize: 10, fontWeight: "900" },
   barCenter: { justifyContent: "center", gap: 2 },
