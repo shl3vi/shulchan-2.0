@@ -12,7 +12,7 @@ import { updateMode } from "@/game/remoteConfig";
 import { useGameSession } from "@/game/GameSession";
 import { SeatVideo } from "@/media/SeatVideo";
 import { useTableVideo } from "@/media/useTableVideo";
-import { ActionDock, CameraButton, heroDealDelays, PokerTableLayout, SPOTLIGHT_DELAY_MS, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
+import { ActionDock, CameraButton, heroDealDelays, PokerTableLayout, RoomLight, SPOTLIGHT_DELAY_MS, TableMenu, TalkButton, type SeatSlot } from "@/game/PokerTableLayout";
 import type { Card, Credentials, RebuyRule, TableSnapshot } from "@/game/types";
 import { API_URL } from "@/game/api";
 import { BackgammonBoard, DiceCup } from "@/game/BackgammonBoard";
@@ -282,6 +282,7 @@ function BackgammonTable({
     <View style={styles.screen}>
       <StatusBar style="light" />
       <View style={styles.stage}>
+        <RoomLight />
         <View style={[styles.bgColumn, { paddingTop: insets.top + 52 }]}>
           <View style={[styles.seatRow, ((actor != null && actor !== myColor) || (won && game.winner !== myColor)) && styles.seatOn]}>
             <Pressable disabled={!otherId} onPress={() => setSeat(true)}>
@@ -1108,15 +1109,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "800",
   },
-  circleLit: { borderWidth: 4, borderColor: "#86efac" },
+  // Whose move it is: a soft mint ring with a glow, not a hard outline.
+  circleLit: { borderWidth: 3, borderColor: "#86e3c4", boxShadow: "0 0 16px rgba(134,227,196,0.5), 0 8px 16px rgba(0,0,0,0.5)" },
   circle: {
     width: 92,
     height: 92,
     borderRadius: 46,
     overflow: "hidden",
     borderWidth: 2,
-    borderColor: "#f6d36b",
+    borderColor: "rgba(246,211,107,0.75)",
     backgroundColor: "#1c1917",
+    backgroundImage: "linear-gradient(180deg, #2c2724 0%, #1c1917 55%, #121010 100%)",
+    boxShadow: "0 2px 2px rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
   },
