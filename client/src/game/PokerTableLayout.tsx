@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { betAnchor, FELT, RAIL, SEAT_CENTERS, SEAT_H, SEAT_TOP, SEAT_W, STAGE_H, STAGE_W } from "@/game/tableStage";
@@ -371,7 +372,7 @@ function WinnerFrame({ scale, children }: { scale: number; children: ReactNode }
     const loop = Animated.loop(
       Animated.timing(spin, {
         toValue: 1,
-        duration: 1400,
+        duration: 2600,
         easing: Easing.linear,
         useNativeDriver: true,
       }),
@@ -383,36 +384,53 @@ function WinnerFrame({ scale, children }: { scale: number; children: ReactNode }
   const h = u(96);
   const span = Math.hypot(w, h);
   return (
-    <View style={{ width: w, height: h, borderRadius: u(8), overflow: "hidden" }}>
-      <Animated.View
-        style={{
-          position: "absolute",
-          width: span,
-          height: span,
-          left: (w - span) / 2,
-          top: (h - span) / 2,
-          transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
-        }}
-      >
-        <View style={{ flex: 1, backgroundColor: "#b45309" }} />
-        <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "46%", backgroundColor: "#fbbf24" }} />
-        <View style={{ position: "absolute", left: "38%", top: 0, bottom: 0, width: "14%", backgroundColor: "#fff7d6" }} />
-      </Animated.View>
+    // Polished gold with a warm glow around it, and a soft glint travelling round the frame.
+    <View
+      style={{
+        width: w,
+        height: h,
+        borderRadius: u(8),
+        boxShadow: `0 0 ${u(8)}px rgba(246,211,107,0.55), 0 0 ${u(22)}px rgba(246,211,107,0.25), 0 ${u(6)}px ${u(12)}px rgba(0,0,0,0.5)`,
+      }}
+    >
       <View
         style={{
-          position: "absolute",
-          top: u(3),
-          left: u(3),
-          right: u(3),
-          bottom: u(3),
-          borderRadius: u(6),
+          flex: 1,
+          borderRadius: u(8),
           overflow: "hidden",
-          backgroundColor: "#1c1917",
-          alignItems: "center",
-          justifyContent: "center",
+          backgroundColor: "#f6d36b",
+          backgroundImage: "linear-gradient(155deg, #fff4c8 0%, #f6d36b 32%, #dcab4c 64%, #f8dd92 100%)",
         }}
       >
-        {children}
+        <Animated.View
+          style={{
+            position: "absolute",
+            width: span,
+            height: span,
+            left: (w - span) / 2,
+            top: (h - span) / 2,
+            transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] }) }],
+            backgroundImage:
+              "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 40%, rgba(255,252,236,0.95) 50%, rgba(255,255,255,0) 60%, rgba(255,255,255,0) 100%)",
+          }}
+        />
+        <View
+          style={{
+            position: "absolute",
+            top: u(3),
+            left: u(3),
+            right: u(3),
+            bottom: u(3),
+            borderRadius: u(6),
+            overflow: "hidden",
+            backgroundColor: "#1c1917",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: `inset 0 0 ${u(4)}px rgba(0,0,0,0.6)`,
+          }}
+        >
+          {children}
+        </View>
       </View>
     </View>
   );
@@ -473,16 +491,46 @@ function SeatCurtain({ open }: { open: boolean }) {
 /** Used when the server does not send the table's turn length. */
 const DEFAULT_TURN_MS = 30_000;
 
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+
 /**
- * A line around the video frame that drains clockwise from the top middle as the
- * turn runs out, gold until the last 10 seconds, then red.
+ * A rounded rectangle traced clockwise from the top middle, `inset` in from a w×h box,
+ * with its length, so a dash along it can show how much of the loop is left.
+ */
+function roundedLoop(w: number, h: number, inset: number, radius: number) {
+  const x0 = inset;
+  const y0 = inset;
+  const x1 = w - inset;
+  const y1 = h - inset;
+  const r = Math.max(0, Math.min(radius, (x1 - x0) / 2, (y1 - y0) / 2));
+  const d = [
+    `M ${w / 2} ${y0}`,
+    `H ${x1 - r}`,
+    `A ${r} ${r} 0 0 1 ${x1} ${y0 + r}`,
+    `V ${y1 - r}`,
+    `A ${r} ${r} 0 0 1 ${x1 - r} ${y1}`,
+    `H ${x0 + r}`,
+    `A ${r} ${r} 0 0 1 ${x0} ${y1 - r}`,
+    `V ${y0 + r}`,
+    `A ${r} ${r} 0 0 1 ${x0 + r} ${y0}`,
+    "Z",
+  ].join(" ");
+  const length = 2 * (x1 - x0 - 2 * r) + 2 * (y1 - y0 - 2 * r) + 2 * Math.PI * r;
+  return { d, length };
+}
+
+/**
+ * The turn clock drawn around the video frame: one unbroken line that follows the frame's
+ * rounded corners and runs out clockwise from the top middle, over a faint track of the
+ * whole loop. Warm gold with a soft glow, then coral for the last 10 seconds.
  */
 function TurnRing({ leftMs, totalMs, scale }: { leftMs: number; totalMs: number; scale: number }) {
   const u = (n: number) => n * scale;
+  const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   const [box, setBox] = useState({ w: u(60), h: u(92) });
   const { w, h } = box;
-  const t = u(3);
-  const perimeter = 2 * (w + h);
+  const stroke = u(3);
+  const { d, length } = roundedLoop(w, h, stroke / 2, u(6) - stroke / 2);
   // Share of the full turn still left, 1 to 0, so a new layout size does not restart it.
   const [left] = useState(() => new Animated.Value(Math.min(1, leftMs / totalMs)));
   useEffect(() => {
@@ -491,28 +539,21 @@ function TurnRing({ leftMs, totalMs, scale }: { leftMs: number; totalMs: number;
     return () => run.stop();
   }, [leftMs, left]);
   const urgentAt = 10_000 / totalMs;
-  const color = left.interpolate({
-    inputRange: [urgentAt - 0.001, urgentAt],
-    outputRange: ["#ef4444", "#f6d36b"],
-    extrapolate: "clamp",
-  });
-  // Segments in clockwise order from the top middle: [start, size].
-  const segments: [number, number][] = [
-    [0, w / 2],
-    [w / 2, h],
-    [w / 2 + h, w],
-    [w * 1.5 + h, h],
-    [w * 1.5 + 2 * h, w / 2],
-  ];
-  const part = (index: number) => {
-    const [start, size] = segments[index];
-    return left.interpolate({
-      inputRange: [start / perimeter, (start + size) / perimeter],
-      outputRange: [0, size],
-      extrapolate: "clamp",
-    });
-  };
-  const bar = { position: "absolute" as const, backgroundColor: color };
+  const offset = left.interpolate({ inputRange: [0, 1], outputRange: [length, 0], extrapolate: "clamp" });
+  const calm = left.interpolate({ inputRange: [urgentAt - 0.001, urgentAt], outputRange: [0, 1], extrapolate: "clamp" });
+  const urgent = left.interpolate({ inputRange: [urgentAt - 0.001, urgentAt], outputRange: [1, 0], extrapolate: "clamp" });
+  const line = (paint: string, width: number, opacity: Animated.AnimatedInterpolation<number>, glow: boolean) => (
+    <AnimatedPath
+      d={d}
+      fill="none"
+      stroke={paint}
+      strokeWidth={width}
+      strokeLinecap="round"
+      strokeDasharray={[length, length]}
+      strokeDashoffset={offset}
+      opacity={glow ? Animated.multiply(opacity, 0.28) : opacity}
+    />
+  );
   return (
     <View
       pointerEvents="none"
@@ -522,11 +563,25 @@ function TurnRing({ leftMs, totalMs, scale }: { leftMs: number; totalMs: number;
       }}
       style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, zIndex: 4 }}
     >
-      <Animated.View style={[bar, { top: 0, left: w / 2, height: t, width: part(0) }]} />
-      <Animated.View style={[bar, { top: 0, right: 0, width: t, height: part(1) }]} />
-      <Animated.View style={[bar, { bottom: 0, right: 0, height: t, width: part(2) }]} />
-      <Animated.View style={[bar, { bottom: 0, left: 0, width: t, height: part(3) }]} />
-      <Animated.View style={[bar, { top: 0, left: 0, height: t, width: part(4) }]} />
+      <Svg width={w} height={h}>
+        <Defs>
+          <LinearGradient id={`gold${id}`} x1="0" y1="0" x2="0.35" y2="1">
+            <Stop offset="0" stopColor="#fff3c4" />
+            <Stop offset="0.45" stopColor="#f6d36b" />
+            <Stop offset="1" stopColor="#e3a53c" />
+          </LinearGradient>
+          <LinearGradient id={`coral${id}`} x1="0" y1="0" x2="0.35" y2="1">
+            <Stop offset="0" stopColor="#ffc2b8" />
+            <Stop offset="0.5" stopColor="#f87171" />
+            <Stop offset="1" stopColor="#dc2626" />
+          </LinearGradient>
+        </Defs>
+        <Path d={d} fill="none" stroke="rgba(255,244,214,0.13)" strokeWidth={stroke} />
+        {line(`url(#gold${id})`, stroke * 2.6, calm, true)}
+        {line(`url(#gold${id})`, stroke, calm, false)}
+        {line(`url(#coral${id})`, stroke * 2.6, urgent, true)}
+        {line(`url(#coral${id})`, stroke, urgent, false)}
+      </Svg>
     </View>
   );
 }
@@ -578,7 +633,9 @@ function SeatView({ player, scale }: { player?: SeatSlot; scale: number }) {
   const video = player?.video ?? lastVideo;
   const [showVideo, setShowVideo] = useState(cameraOn);
   if (cameraOn && !showVideo) setShowVideo(true);
-  const ring = player?.toAct ? "#f6d36b" : occupied ? "#4a4440" : "rgba(214,211,209,0.2)";
+  // While the turn clock runs, the clock is the frame; the border underneath steps back.
+  const timed = player?.toAct === true && player.turnLeftMs != null;
+  const ring = timed ? "#3a332c" : player?.toAct ? "#f6d36b" : occupied ? "#4a4440" : "rgba(214,211,209,0.2)";
 
   useEffect(() => {
     if (cameraOn) return;
