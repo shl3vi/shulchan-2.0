@@ -4,7 +4,7 @@ import { loadPersonKey } from "@/game/personKey";
 
 /** The web build is served by the table service itself, so in a browser the API is the page's own origin. */
 function defaultApiUrl() {
-  if (Platform.OS === "web" && typeof location !== "undefined" && location.protocol === "https:") return location.origin;
+  if (Platform.OS === "web" && typeof location !== "undefined") return location.origin;
   return "https://loochka.com";
 }
 

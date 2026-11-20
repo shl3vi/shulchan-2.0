@@ -34,10 +34,8 @@ That build talks to `https://loochka.com`. Sideload the APK; it does not need Me
 
 A guest without the app can play in the browser. The table service serves the web build at `/play`, and the share link (`/join`) opens the app when it is installed and `/play/join` when it is not. A browser player can join a table and use camera and mic, but cannot sign in or open a table, and the server never makes them admin. `session.summary` counts `appJoins` and `webJoins`.
 
-Build it from `client/` before starting the table service; without it, `/play` is off and the link only opens the app:
+`npm run build --prefix table` (Railway's build command) also builds it, into `table/public/play`, which is not in git. If that step fails, the server still deploys, without `/play`, and the link only opens the app. `SKIP_WEB=1` skips it. To build only the browser version, from `client/`:
 
 ```bash
 npm run export:web
 ```
-
-That writes `table/public/play`, which is not in git.

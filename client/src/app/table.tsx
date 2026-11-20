@@ -179,9 +179,10 @@ function BackgammonTable({
   useEffect(() => {
     const live = !paused && !waiting && game.phase !== "over";
     if (!live) return;
-    void activateKeepAwakeAsync("backgammon");
+    // A browser can refuse to keep the screen on (no permission, page in the background). The game goes on.
+    void activateKeepAwakeAsync("backgammon").catch(() => undefined);
     return () => {
-      void deactivateKeepAwake("backgammon");
+      void Promise.resolve().then(() => deactivateKeepAwake("backgammon")).catch(() => undefined);
     };
   }, [paused, waiting, game.phase]);
   const iPlay = !paused && !waiting && myColor != null && actor === myColor;
@@ -652,9 +653,10 @@ export default function TableScreen() {
     const backgammon = kind === "backgammon" || state?.kind === "backgammon";
     const live = !backgammon && state?.round != null && state?.paused !== true;
     if (!live) return;
-    void activateKeepAwakeAsync("poker");
+    // A browser can refuse to keep the screen on (no permission, page in the background). The game goes on.
+    void activateKeepAwakeAsync("poker").catch(() => undefined);
     return () => {
-      void deactivateKeepAwake("poker");
+      void Promise.resolve().then(() => deactivateKeepAwake("poker")).catch(() => undefined);
     };
   }, [kind, state?.kind, state?.paused, state?.round]);
 

@@ -280,6 +280,7 @@ async function changeAdmin(config: DebugConfig, playerId: string) {
   await withTable(config.tableId, async (table) => {
     const next = table.players.find((player) => player.id === playerId && !player.pendingRemoval);
     if (!next) throw new Error("Player not found");
+    if (next.web) throw new Error("A player in the browser cannot be admin");
     assignAdmin(table, next.id);
   });
   await publishTable(config.tableId);
