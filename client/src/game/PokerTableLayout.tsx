@@ -521,7 +521,7 @@ function roundedLoop(w: number, h: number, inset: number, radius: number) {
 
 /**
  * The turn clock drawn around the video frame: one unbroken line that follows the frame's
- * rounded corners and runs out clockwise from the top middle, over a faint track of the
+ * rounded corners and is used up clockwise from the top middle, over a faint track of the
  * whole loop. Warm gold with a soft glow, then coral for the last 10 seconds.
  */
 function TurnRing({ leftMs, totalMs, scale }: { leftMs: number; totalMs: number; scale: number }) {
@@ -539,7 +539,9 @@ function TurnRing({ leftMs, totalMs, scale }: { leftMs: number; totalMs: number;
     return () => run.stop();
   }, [leftMs, left]);
   const urgentAt = 10_000 / totalMs;
-  const offset = left.interpolate({ inputRange: [0, 1], outputRange: [length, 0], extrapolate: "clamp" });
+  // The dash is the part still left. Shifting it by length + used shows the loop's last
+  // stretch, so the gap opens at the top middle and sweeps clockwise like a clock hand.
+  const offset = left.interpolate({ inputRange: [0, 1], outputRange: [length, 2 * length], extrapolate: "clamp" });
   const calm = left.interpolate({ inputRange: [urgentAt - 0.001, urgentAt], outputRange: [0, 1], extrapolate: "clamp" });
   const urgent = left.interpolate({ inputRange: [urgentAt - 0.001, urgentAt], outputRange: [1, 0], extrapolate: "clamp" });
   const line = (paint: string, width: number, opacity: Animated.AnimatedInterpolation<number>, glow: boolean) => (
