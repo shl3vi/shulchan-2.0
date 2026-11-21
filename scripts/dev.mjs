@@ -89,6 +89,7 @@ const engineToken = randomBytes(32).toString("hex");
 start("npm", ["run", "dev", "--prefix", "poker-engine"], "poker", { ...process.env, ENGINE_TOKEN: engineToken });
 start("npm", ["run", "dev", "--prefix", "backgammon-engine"], "backgammon", { ...process.env, ENGINE_TOKEN: engineToken });
 start("npm", ["run", "dev", "--prefix", "dice-engine"], "dice", { ...process.env, ENGINE_TOKEN: engineToken });
+start("npm", ["run", "dev", "--prefix", "tiles-engine"], "tiles", { ...process.env, ENGINE_TOKEN: engineToken });
 start("npm", ["run", "dev", "--prefix", "table"], "table", {
   ...process.env,
   ENGINE_TOKEN: engineToken,

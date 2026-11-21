@@ -1,10 +1,11 @@
 import { backgammon } from "./backgammon/index.js";
 import { dice } from "./dice/index.js";
 import { poker } from "./poker/index.js";
+import { tiles } from "./tiles/index.js";
 import type { GameModule } from "./types.js";
 
 /** The list of games. Adding or removing a game is one line here. */
-export const games = { poker, backgammon, dice } satisfies Record<string, GameModule<any>>;
+export const games = { poker, backgammon, dice, tiles } satisfies Record<string, GameModule<any>>;
 
 export type GameKind = keyof typeof games;
 

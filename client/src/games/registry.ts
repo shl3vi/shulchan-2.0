@@ -1,10 +1,11 @@
 import { backgammon } from "@/games/backgammon";
 import { dice } from "@/games/dice";
 import { poker } from "@/games/poker";
+import { tiles } from "@/games/tiles";
 import type { GameEntry } from "@/games/types";
 
 /** The list of games, in the order the lobby shows them. Adding or removing a game is one line here. */
-export const games = { backgammon, poker, dice } satisfies Record<string, GameEntry>;
+export const games = { backgammon, poker, dice, tiles } satisfies Record<string, GameEntry>;
 
 export type GameKind = keyof typeof games;
 
