@@ -1,14 +1,14 @@
 import { engineAnswers, enginePost } from "../../engines.js";
+import { TableRefused } from "../../errors.js";
 import type { TableRecord } from "../../store.js";
 import type { BackgammonAction } from "./schema.js";
+import { backgammonOf, colorOf, settledColors, type BackgammonState } from "./state.js";
 
 const backgammonUrl = process.env.BACKGAMMON_ENGINE_URL ?? "http://127.0.0.1:4002";
 
 export function backgammonEngineAnswers() {
   return engineAnswers(backgammonUrl);
 }
-
-type Color = "white" | "black";
 
 export function openingBackgammon() {
   return enginePost<unknown>(backgammonUrl, "/games");
@@ -23,52 +23,48 @@ export async function backgammonMoves(game: unknown) {
   return payload.moves ?? [];
 }
 
-/** White is the lower seat of the first two seated players, black the other. Everyone else watches. */
-function colorOf(table: TableRecord, playerId: string): Color | null {
-  const seated = table.players.filter((player) => !player.pendingRemoval).sort((a, b) => a.seat - b.seat);
-  const index = seated.findIndex((player) => player.id === playerId);
-  return index === 0 ? "white" : index === 1 ? "black" : null;
-}
-
-/** Applies one player's action to the table's game. The engine rolls the dice and enforces turns and rules. */
+/**
+ * Applies one player's action to the table's game and stores the result. The engine rolls the
+ * dice and enforces turns and rules. Colours are settled first, so a newcomer can fill an empty one.
+ */
 export async function playBackgammon(table: TableRecord, playerId: string, action: BackgammonAction) {
-  const current = table.backgammon as { phase?: unknown } | undefined;
+  const state = backgammonOf(table);
+  const current = state.board as { phase?: unknown } | undefined;
+  state.colors = settledColors(table);
+  const color = colorOf(state.colors, playerId);
   if (action.type === "restart") {
-    const color = colorOf(table, playerId);
     if (playerId !== table.adminId && !(color && current?.phase === "over")) {
-      throw new Error("Only the table admin can restart a game in progress");
+      throw new TableRefused("forbidden", "Only the table admin can restart a game in progress");
     }
-    return openingBackgammon();
+    const board = await openingBackgammon();
+    noteBackgammonWin(table, board as Finished);
+    state.board = board;
+    // A new game: the first two seated play it.
+    state.colors = {};
+    state.colors = settledColors(table);
+    return board;
   }
-  const color = colorOf(table, playerId);
-  if (!color) throw new Error("You are watching this game");
+  if (!color) throw new TableRefused("invalid", "You are watching this game");
   const game = current ?? (await openingBackgammon());
-  return enginePost<unknown>(backgammonUrl, "/apply", { game, color, action });
+  const board = await enginePost<unknown>(backgammonUrl, "/apply", { game, color, action });
+  noteBackgammonWin(table, board as Finished);
+  state.board = board;
+  return board;
 }
 
-export type BackgammonWin = {
-  whiteName: string;
-  blackName: string;
-  winner: "white" | "black";
-  points: number;
-};
+type Finished = { phase?: unknown; winner?: unknown; score?: unknown };
 
-/** Records a finished game once, including one already on the table before the log existed. */
-export function noteBackgammonWin(
-  table: { players: { name: string; seat: number }[]; backgammon?: unknown; backgammonLog?: BackgammonWin[] },
-  next: { phase?: unknown; winner?: unknown; score?: unknown },
-) {
-  const previous = table.backgammon as { phase?: unknown; winner?: unknown; score?: unknown } | undefined;
-  const log = table.backgammonLog ?? [];
-  const fresh = next.phase === "over" && previous?.phase !== "over";
-  const source = fresh ? next : previous?.phase === "over" && log.length === 0 ? previous : null;
-  if (!source || (source.winner !== "white" && source.winner !== "black") || !Number.isInteger(source.score)) return;
-  const winner: "white" | "black" = source.winner;
-  const seated = [...table.players].sort((a, b) => a.seat - b.seat);
-  table.backgammonLog = [...log, {
-    whiteName: seated[0]?.name ?? "",
-    blackName: seated[1]?.name ?? "",
-    winner,
-    points: source.score as number,
+/** Records a finished game once, as the game ends. */
+function noteBackgammonWin(table: TableRecord, next: Finished) {
+  const state: BackgammonState = backgammonOf(table);
+  const previous = state.board as Finished | undefined;
+  if (next.phase !== "over" || previous?.phase === "over") return;
+  if ((next.winner !== "white" && next.winner !== "black") || !Number.isInteger(next.score)) return;
+  const nameOf = (id?: string) => table.players.find((player) => player.id === id)?.name ?? "";
+  state.log = [...state.log, {
+    whiteName: nameOf(state.colors.white),
+    blackName: nameOf(state.colors.black),
+    winner: next.winner as "white" | "black",
+    points: next.score as number,
   }].slice(-40);
 }

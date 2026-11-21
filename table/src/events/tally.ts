@@ -1,7 +1,5 @@
 import type { GameKind } from "../games/index.js";
 
-export type PokerRound = "preflop" | "flop" | "turn" | "river" | null;
-
 export type Tally = {
   kind: GameKind;
   createdAt: number;
@@ -12,7 +10,8 @@ export type Tally = {
   joinRefusals: number;
   errors: number;
   videoUsed: boolean;
-  pokerRound: PokerRound;
+  /** The game's own memory between events, such as the betting round poker last saw. */
+  game?: Record<string, unknown>;
   /** Seats taken from the app and from a browser. Absent on a ledger written before these were counted. */
   appJoins?: number;
   webJoins?: number;
@@ -29,7 +28,6 @@ export function freshTally(kind: GameKind, now: number): Tally {
     joinRefusals: 0,
     errors: 0,
     videoUsed: false,
-    pokerRound: null,
     appJoins: 0,
     webJoins: 0,
   };

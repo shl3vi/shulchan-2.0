@@ -17,13 +17,13 @@ export const backgammonBody = z.discriminatedUnion("type", [
 
 export type BackgammonAction = z.infer<typeof backgammonBody>;
 
-/** The app still sends blinds and a buy-in for the hidden poker hand. Auto-deal and turn time are ignored. */
+/** Backgammon needs no settings. Blinds, buy-in, auto-deal and turn time from older apps are accepted and ignored. */
 export const openBody = z.object({
-  smallBlind: z.number().int().positive(),
-  buyIn: z.number().int().positive(),
   kind: z.literal("backgammon"),
+  smallBlind: z.number().int().positive().optional(),
+  buyIn: z.number().int().positive().optional(),
   autoDeal: z.boolean().optional(),
   turnSeconds: z.number().int().optional(),
 }).strict();
 
-export type BackgammonSettings = { smallBlind: number; buyIn: number };
+export type BackgammonSettings = Record<string, never>;

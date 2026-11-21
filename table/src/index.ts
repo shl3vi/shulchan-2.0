@@ -112,7 +112,8 @@ app.get("/health", async (_req, res) => {
     answers(() => pool.query("SELECT 1")),
     enginesReady(),
   ]);
-  const ok = redisOk && postgresOk && Object.values(engines).every(Boolean);
+  // One game's engine being down does not take the tables of the other games down with it.
+  const ok = redisOk && postgresOk;
   res.status(ok ? 200 : 503).json({ ok, redis: redisOk, postgres: postgresOk, ...engines });
 });
 /** This server's own address as the browser sees it, behind Railway's proxy. */

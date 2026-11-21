@@ -397,8 +397,11 @@ export function BackgammonScreen({ credentials }: { credentials: Credentials }) 
   const topTrack = other ? video.tracks.get(other.id) : undefined;
   const bottomTrack = youId ? video.tracks.get(youId) : undefined;
   const ordered = [...(state?.players ?? [])].sort((a, b) => a.seat - b.seat);
+  const colors = state?.backgammonColors;
   const mineIndex = ordered.findIndex((player) => player.id === youId);
-  const myColor: Color | null = mineIndex === 0 ? "white" : mineIndex === 1 ? "black" : null;
+  const myColor: Color | null = colors
+    ? colors.white != null && colors.white === youId ? "white" : colors.black != null && colors.black === youId ? "black" : null
+    : mineIndex === 0 ? "white" : mineIndex === 1 ? "black" : null;
   return (
     <BackgammonTable
       topVideo={topTrack ? <SeatVideo track={topTrack} /> : undefined}

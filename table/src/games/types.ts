@@ -1,15 +1,11 @@
 import type { Router } from "express";
 import type { ZodType } from "zod";
-import type { KindedTable, SeatPlayer, TableRecord } from "../store.js";
+import type { GameState, SeatPlayer, TableRecord } from "../store.js";
 
 /**
  * What every game gives the shared table code. Shared code reaches a game only through
  * this contract, by way of `gameOf(table)` in games/index.ts, and never names a game.
  */
-
-/** A new table before its game has set it up: everything shared, nothing about the game. */
-export type NewTable = Pick<TableRecord, "id" | "password" | "players"> &
-  Partial<Pick<TableRecord, "adminSecret" | "hostEmail" | "lastActivityAt">>;
 
 /** Given to a move while it holds the table lock. The move may run again after a save conflict, so it only changes `table`. */
 export type MoveContext = {
@@ -72,8 +68,8 @@ export type GameModule<Settings extends OpenSettings = OpenSettings> = {
   seats: { max: number };
   /** Reads and checks the body of "open a table". Returns the settings, or the message to send back with a 400. */
   settings(body: unknown): { settings: Settings } | { error: string };
-  /** Sets up the game on a new table. */
-  open(table: NewTable, settings: Settings): Promise<KindedTable>;
+  /** The game's state for a new table. It becomes `table.game`. */
+  open(settings: Settings): Promise<GameState>;
   /** The seat a joining player gets, or undefined when the table is full. */
   chooseSeat(taken: number[], avoid: number[]): number | undefined;
   /** Seats a player the shared code has just created. */
@@ -86,12 +82,13 @@ export type GameModule<Settings extends OpenSettings = OpenSettings> = {
   snapshot(table: TableRecord, viewerId?: string, blockedIds?: Set<string>): Promise<unknown>;
   /** Socket events this game accepts, by event name. */
   moves: Record<string, GameMove>;
-  /** After any saved change to the table. */
-  changed?(tableId: string): void;
-  /** After every publish, on every table process: start or stop this process's timers. */
-  arm?(table: TableRecord): void;
-  /** From the idle sweep: act on timers lost to a restart. */
-  sweep?(table: TableRecord, now: number): Promise<void>;
+  /**
+   * When the game next acts on its own (a turn clock, the next deal), as server epoch ms, or null.
+   * Read from the stored table, so every table process and a restarted one agree.
+   */
+  deadline?(table: TableRecord): number | null;
+  /** The deadline has passed. Takes the table lock itself and checks again, since several processes may call it. */
+  onDeadline?(tableId: string): Promise<void>;
   /** The admin resumed a paused table. */
   resume?(table: TableRecord, now: number): void;
   /** True when this game's engine service answers. */

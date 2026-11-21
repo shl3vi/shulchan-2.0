@@ -3,9 +3,10 @@ import { readSchema } from "../../schema.js";
 import { publishTable, readTable, TableNotFound, withTable, type TableRecord } from "../../store.js";
 import type { GameDebug } from "../types.js";
 import { dropRemovedPlayers } from "./departures.js";
-import { actPoker, addChips, createPokerTable, readPoker, startPoker, type ActionName } from "./engine.js";
+import { actPoker, addChips, openHand, readPoker, startPoker, type ActionName } from "./engine.js";
 import { blindsProblem, chipAmount, MAX_CHIPS, type PokerSettings } from "./schema.js";
 import { snapshot } from "./snapshot.js";
+import { pokerOf } from "./state.js";
 
 const rebuyBody = z.object({ playerId: z.string().min(1), amount: chipAmount }).strict();
 const actBody = z.object({
@@ -13,23 +14,24 @@ const actBody = z.object({
   amount: chipAmount.optional(),
 }).strict();
 
-/** Seat settings shared by every game that still carries a poker hand. */
-export function debugBlinds(read: (name: string) => string | undefined): { settings: PokerSettings } | { error: string } {
+/** The debug table's blinds and buy-in, from its environment variables. */
+function debugBlinds(read: (name: string) => string | undefined): { settings: PokerSettings } | { error: string } {
   const smallBlind = Number(read("SMALL_BLIND") ?? 1);
   const buyIn = Number(read("BUY_IN") ?? 100);
   if (blindsProblem(smallBlind, buyIn)) return { error: "Check the SMALL_BLIND and BUY_IN table settings." };
   return { settings: { smallBlind, buyIn } };
 }
 
-/** A debug table saved before its poker hand existed, or whose hand the engine no longer reads, gets a new one. */
-export async function repairPokerHand(tableId: string) {
+/** A debug table whose hand the engine no longer reads gets a new one. */
+async function repairPokerHand(tableId: string) {
   const table = await readTable(tableId);
   if (!table) throw new Error("Debug table missing");
   try {
     await readPoker(table);
   } catch {
     await withTable(tableId, async (current) => {
-      await createPokerTable(current, current.smallBlind);
+      const state = pokerOf(current);
+      await openHand(state, state.smallBlind);
     });
   }
 }
@@ -62,13 +64,14 @@ async function state(table: TableRecord) {
 
 async function rebuy(tableId: string, playerId: string, amount: number) {
   await withTable(tableId, async (table) => {
-    if (!Number.isInteger(amount) || amount < 1 || amount > table.buyIn) {
+    const state = pokerOf(table);
+    if (!Number.isInteger(amount) || amount < 1 || amount > state.buyIn) {
       throw new Error("Buy-in must be a whole number up to the table buy-in");
     }
     const seated = table.players.find((player) => player.id === playerId && !player.pendingRemoval);
     if (!seated) throw new Error("Player not found");
     await addChips(table, seated.seat, amount);
-    seated.bought = (seated.bought ?? table.buyIn) + amount;
+    state.bought[seated.id] = (state.bought[seated.id] ?? state.buyIn) + amount;
   });
   await publishTable(tableId);
 }
@@ -108,7 +111,11 @@ export const pokerDebug: GameDebug<PokerSettings> = {
   state,
   repair: repairPokerHand,
   async reset(table) {
-    await createPokerTable(table, table.smallBlind);
+    const state = pokerOf(table);
+    state.bought = {};
+    delete state.turn;
+    delete state.autoDealAt;
+    await openHand(state, state.smallBlind);
   },
   routes(router, respond) {
     router.post("/:token/rebuy", async (req, res) => {

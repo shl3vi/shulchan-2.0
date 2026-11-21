@@ -1,34 +1,34 @@
 import { defineGame, type GameModule } from "../types.js";
-import { considerAutoDeal } from "./autodeal.js";
+import { pokerDeadline, pokerOnDeadline, pokerResume } from "./deadline.js";
 import { pokerDebug } from "./debug.js";
 import { dropRemovedPlayers, foldDeparted } from "./departures.js";
-import { createPokerTable, pokerEngineAnswers, readPoker, seatPoker, unseatPoker } from "./engine.js";
+import { openHand, pokerEngineAnswers, readPoker, seatPoker, unseatPoker } from "./engine.js";
 import { pokerMoves } from "./moves.js";
 import { readOpenSettings, type PokerSettings } from "./schema.js";
 import { chooseSeat, SEATS } from "./seats.js";
 import { snapshot } from "./snapshot.js";
-import { restartTurn } from "./turn.js";
-import { armTurn, expireTurn, overdueTurn } from "./turnWatch.js";
+import { pokerOf, type PokerState } from "./state.js";
 
 export const poker: GameModule<PokerSettings> = defineGame<PokerSettings>({
   seats: { max: SEATS },
   settings: readOpenSettings,
-  async open(base, settings) {
-    const table = {
-      ...base,
+  async open(settings) {
+    const state: PokerState = {
+      kind: "poker",
       smallBlind: settings.smallBlind,
       buyIn: settings.buyIn,
-      kind: "poker" as const,
+      bought: {},
       ...(settings.autoDeal ? { autoDeal: true } : {}),
       ...(settings.turnSeconds != null ? { turnSeconds: settings.turnSeconds } : {}),
     };
-    await createPokerTable(table, settings.smallBlind);
-    return table;
+    await openHand(state, settings.smallBlind);
+    return state;
   },
   chooseSeat,
   async seat(table, player) {
-    player.bought = table.buyIn;
-    await seatPoker(table, player.seat, table.buyIn);
+    const state = pokerOf(table);
+    await seatPoker(table, player.seat, state.buyIn);
+    state.bought[player.id] = state.buyIn;
   },
   async unseat(table, player) {
     await unseatPoker(table, player.seat);
@@ -42,16 +42,9 @@ export const poker: GameModule<PokerSettings> = defineGame<PokerSettings>({
     return snapshot(table, await readPoker(table), viewerId, blockedIds);
   },
   moves: pokerMoves,
-  changed(tableId) {
-    void considerAutoDeal(tableId);
-  },
-  arm: armTurn,
-  async sweep(table, now) {
-    if (overdueTurn(table, now)) await expireTurn(table.id);
-  },
-  resume(table, now) {
-    restartTurn(table, now);
-  },
+  deadline: pokerDeadline,
+  onDeadline: pokerOnDeadline,
+  resume: pokerResume,
   health: pokerEngineAnswers,
   debug: pokerDebug,
 });

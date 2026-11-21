@@ -7,22 +7,22 @@ export const games = { poker, backgammon } satisfies Record<string, GameModule<a
 
 export type GameKind = keyof typeof games;
 
-/** A table saved before tables had a kind is the first game in the list. */
+/** The game a request gets when it names none: the first in the list. */
 const DEFAULT_KIND = Object.keys(games)[0] as GameKind;
 
 export function isGameKind(value: unknown): value is GameKind {
   return typeof value === "string" && Object.hasOwn(games, value);
 }
 
-export function kindOf(table: { kind?: string }): GameKind {
-  return isGameKind(table.kind) ? table.kind : DEFAULT_KIND;
+export function kindOf(table: { game: { kind: string } }): GameKind {
+  return isGameKind(table.game.kind) ? table.game.kind : DEFAULT_KIND;
 }
 
 export function gameFor(kind: GameKind): GameModule<any> {
   return games[kind];
 }
 
-export function gameOf(table: { kind?: string }): GameModule<any> {
+export function gameOf(table: { game: { kind: string } }): GameModule<any> {
   return gameFor(kindOf(table));
 }
 

@@ -1,6 +1,7 @@
 import type { TableRecord } from "../../store.js";
 import { actPoker, readPoker } from "./engine.js";
 import { SEATS } from "./seats.js";
+import { pokerOf } from "./state.js";
 
 /** A departed player no longer has a socket that can act, so fold them when the hand is waiting on that seat. */
 export async function foldDeparted(table: TableRecord) {
@@ -19,4 +20,7 @@ export async function dropRemovedPlayers(table: TableRecord) {
   const view = await readPoker(table);
   const live = new Set(view.seats.map((seat) => seat.seat));
   table.players = table.players.filter((player) => !player.pendingRemoval || live.has(player.seat));
+  const state = pokerOf(table);
+  const here = new Set(table.players.map((player) => player.id));
+  for (const id of Object.keys(state.bought)) if (!here.has(id)) delete state.bought[id];
 }

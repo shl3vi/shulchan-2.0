@@ -17,14 +17,20 @@ import {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** These tests only need two numbers that both sides of a race can change. They live in the game state. */
+type Numbers = { kind: "poker"; smallBlind: number; buyIn: number };
+
+function g(table: TableRecord) {
+  return table.game as Numbers;
+}
+
 function freshTable(): TableRecord {
   return {
+    v: 2,
     id: `TEST-${crypto.randomUUID().slice(0, 8)}`,
-    smallBlind: 1,
-    buyIn: 100,
     password: "123456",
-    kind: "poker",
     players: [],
+    game: { kind: "poker", smallBlind: 1, buyIn: 100 } as Numbers,
   };
 }
 
@@ -52,16 +58,16 @@ test("a save from an old copy is refused and does not overwrite the newer one", 
   const stale = (await readTable(id))!;
   const readAt = stale.revision;
   const fresh = (await readTable(id))!;
-  fresh.buyIn = 200;
+  g(fresh).buyIn = 200;
   await writeTable(fresh);
 
-  stale.smallBlind = 5;
+  g(stale).smallBlind = 5;
   await assert.rejects(writeTable(stale), TableConflict);
   assert.equal(stale.revision, readAt, "a refused save leaves the copy at the revision it was read at");
 
   const saved = (await readTable(id))!;
-  assert.equal(saved.buyIn, 200);
-  assert.equal(saved.smallBlind, 1);
+  assert.equal(g(saved).buyIn, 200);
+  assert.equal(g(saved).smallBlind, 1);
   assert.equal(saved.revision, fresh.revision);
 });
 
@@ -80,7 +86,7 @@ test("a record saved before revisions existed can still be saved", async () => {
 
   const copy = (await readTable(id))!;
   assert.equal(copy.revision, undefined);
-  copy.buyIn = 300;
+  g(copy).buyIn = 300;
   await writeTable(copy);
   assert.equal((await readTable(id))!.revision, 1);
 });
@@ -93,14 +99,14 @@ test("when a slow change outlives the lock, both changes survive", async () => {
   const slow = withTable(id, async (table) => {
     slowRuns += 1;
     if (slowRuns === 1) await sleep(5600);
-    table.buyIn = 400;
+    g(table).buyIn = 400;
     return "slow";
   });
 
   // Once the lock has expired a second change gets in and saves first.
   await sleep(5200);
   await withTable(id, async (table) => {
-    table.smallBlind = 7;
+    g(table).smallBlind = 7;
   });
 
   assert.equal(await slow, "slow");
@@ -109,8 +115,8 @@ test("when a slow change outlives the lock, both changes survive", async () => {
   assert.ok(slowRuns >= 2, `the slow change ran ${slowRuns} times`);
 
   const saved = (await readTable(id))!;
-  assert.equal(saved.smallBlind, 7, "the change that saved first is kept");
-  assert.equal(saved.buyIn, 400, "the slow change is applied on top of it");
+  assert.equal(g(saved).smallBlind, 7, "the change that saved first is kept");
+  assert.equal(g(saved).buyIn, 400, "the slow change is applied on top of it");
   assert.ok((saved.revision ?? 0) >= 3, `revision ${saved.revision}`);
 });
 
@@ -129,13 +135,13 @@ test("a change that keeps losing gives up as a busy table", async () => {
     withTable(id, async (table) => {
       // Someone else saves after every read, so this copy is always out of date.
       const other = (await readTable(id))!;
-      other.buyIn += 1;
+      g(other).buyIn += 1;
       await writeTable(other);
-      table.smallBlind = 9;
+      g(table).smallBlind = 9;
     }),
     /Table is busy/,
   );
   const saved = (await readTable(id))!;
-  assert.equal(saved.smallBlind, 1, "the losing change never landed");
-  assert.equal(saved.buyIn, 103, "every competing save was kept");
+  assert.equal(g(saved).smallBlind, 1, "the losing change never landed");
+  assert.equal(g(saved).buyIn, 103, "every competing save was kept");
 });

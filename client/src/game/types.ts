@@ -32,6 +32,8 @@ export type TableSnapshot = {
   rebuy?: RebuyRule;
   backgammon?: unknown;
   backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
+  /** Which player holds each backgammon colour. A player keeps their colour when the other leaves. */
+  backgammonColors?: { white: string | null; black: string | null };
   communityCards: Card[];
   pots: { size: number; eligiblePlayers: number[] }[];
   round: "preflop" | "flop" | "turn" | "river" | null;

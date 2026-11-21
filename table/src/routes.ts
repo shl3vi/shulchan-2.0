@@ -9,7 +9,7 @@ import { openTable, noteJoin, noteJoinRefused, notePlayers, noteVideo } from "./
 import { reportError, reportCaught } from "./events/report.js";
 import { sameSecret, seatedCount, tablePassword } from "./players.js";
 import { clearPasswordFailures, noteWrongPassword, passwordRetryAfter } from "./password.js";
-import { HostTableLimit, insertHostTable, OPEN_TABLE_CAP, openTableCount, publishTable, readTable, TableNotFound, withTable } from "./store.js";
+import { HostTableLimit, insertHostTable, OPEN_TABLE_CAP, openTableCount, publishTable, readTable, RECORD_VERSION, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 export const router = Router();
 // No 0/O or 1/I, so a code read aloud or copied by hand still matches.
@@ -38,14 +38,16 @@ router.post("/", async (req, res) => {
     res.status(429).json({ error: "You already have two tables open" });
     return;
   }
-  const table = await game.open({
+  const table: TableRecord = {
+    v: RECORD_VERSION,
     id: tableCode(),
     adminSecret: crypto.randomUUID(),
     password: tablePassword(),
     hostEmail: host.email,
     lastActivityAt: Date.now(),
     players: [],
-  }, read.settings);
+    game: await game.open(read.settings),
+  };
   try {
     while (!(await insertHostTable(table))) table.id = tableCode();
     await openTable(table.id, kind);
@@ -113,10 +115,9 @@ router.post("/:id/join", async (req, res) => {
       } else if (!web && !table.adminId) {
         table.adminId = player.id;
       }
-      return { player, seated: seatedCount(table), kind: kindOf(table) };
+      return { player, seated: seatedCount(table) };
     });
     await publishTable(id);
-    gameFor(joined.kind).changed?.(id);
     await notePlayers(id, joined.seated);
     await noteJoin(id, web);
     await clearPasswordFailures(id, ip).catch(() => undefined);

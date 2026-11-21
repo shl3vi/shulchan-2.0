@@ -14,8 +14,15 @@ export class EngineTimeout extends Error {
   }
 }
 
-/** The text of an engine error that came without its own message. */
-export const ENGINE_FAILED = "Game engine failed";
+/** The engine could not be reached, or answered with an error and no message. */
+export class EngineFailed extends Error {
+  constructor(message = "Game engine failed") {
+    super(message);
+  }
+}
+
+/** The engine answered and refused the move, for example "Not your turn". The text is the engine's. */
+export class EngineRefused extends Error {}
 
 /** Calls one game engine service. Each game's folder knows its own engine's address and paths. */
 export async function enginePost<T>(base: string, path: string, body?: unknown): Promise<T> {
@@ -28,11 +35,13 @@ export async function enginePost<T>(base: string, path: string, body?: unknown):
       signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
     });
     const payload = (await response.json()) as T & { error?: string };
-    if (!response.ok) throw new Error(payload.error ?? ENGINE_FAILED);
+    if (!response.ok) throw payload.error ? new EngineRefused(payload.error) : new EngineFailed();
     return payload;
   } catch (error) {
+    if (error instanceof EngineRefused || error instanceof EngineFailed) throw error;
     if (error instanceof Error && error.name === "TimeoutError") throw new EngineTimeout();
-    throw error;
+    // fetch itself failed: the engine is down or its address does not resolve.
+    throw new EngineFailed(error instanceof Error ? error.message : "Game engine failed");
   }
 }
 

@@ -1,11 +1,12 @@
 import type { Server } from "socket.io";
-import { isDebugTable } from "./debug.js";
+import { debugConfigs, isDebugTable } from "./debug.js";
 import { summarizeIdle } from "./events/ledger.js";
 import { reportCaught } from "./events/report.js";
 import { needsIdleWrite, sweepIdle } from "./idle.js";
 import { stopMedia } from "./livekit.js";
-import { gameOf, kindOf } from "./games/index.js";
-import { extendPausedTables, listOpenTables, publishTable, removeTable, TABLE_UNCHANGED, TableNotFound, withTable, type TableRecord } from "./store.js";
+import { deadlineOverdue, fireDeadline } from "./deadlines.js";
+import { kindOf } from "./games/index.js";
+import { extendKeptTables, listOpenTables, publishTable, removeTable, TABLE_UNCHANGED, TableNotFound, withTable, type TableRecord } from "./store.js";
 import { settleAdmin } from "./admin.js";
 
 const SWEEP_MS = 10_000;
@@ -46,14 +47,14 @@ async function watch(io: Server) {
   for (const row of open) {
     const now = Date.now();
     if (isDebugTable(row.id)) {
-      // A debug table never closes or changes admin, but its game's timers still run.
-      await gameOf(row.record).sweep?.(row.record, now);
+      // A debug table never closes or changes admin, but its game's deadline still fires.
+      if (deadlineOverdue(row.record, now)) await fireDeadline(row.id);
       continue;
     }
     try {
       // Before the pause check: a paused table whose admin left can only be resumed by a new admin.
       await handOffAdmin(io, row.id, row.record, now);
-      await gameOf(row.record).sweep?.(row.record, now);
+      if (deadlineOverdue(row.record, now)) await fireDeadline(row.id);
       if (row.record.paused) {
         await stopMedia(row.id, row.record.mediaEpoch, false);
         continue;
@@ -76,7 +77,7 @@ async function watch(io: Server) {
       reportCaught(row.id, error, "idle", kindOf(row.record));
     }
   }
-  await extendPausedTables();
+  await extendKeptTables(debugConfigs().map((config) => config.tableId));
 }
 
 export function startIdleWatch(io: Server) {

@@ -1,108 +1,55 @@
-import type { EngineView } from "./engine.js";
 import type { TableRecord } from "../../store.js";
+import { sharedView } from "../../view.js";
+import type { EngineView } from "./engine.js";
+import { pokerOf } from "./state.js";
 import { turnMs } from "./turn.js";
 
-/** Every table's snapshot today: the poker hand's view, which backgammon tables also carry. */
-export type BaseSnapshot = {
-  id: string;
-  status: "waiting" | "playing";
-  smallBlind: number;
-  bigBlind: number;
-  communityCards: EngineView["communityCards"];
-  pots: EngineView["pots"];
-  round: EngineView["round"];
-  playerToActId: string | null;
-  players: {
-    id: string;
-    name: string;
-    seat: number;
-    stack: number;
-    betSize: number;
-    inHand: boolean;
-    sittingOut: boolean;
-    bought: number;
-    blocked?: boolean;
-  }[];
-  you: {
-    id: string;
-    holeCards: EngineView["communityCards"];
-    legalActions: EngineView["legalActions"];
-    chipRange: { min: number; max: number } | null;
-    isAdmin: boolean;
-  } | null;
-  buyIn: number;
-  kind?: string;
-  password?: string;
-  paused?: boolean;
-  /** Server epoch ms. Present only while the idle warning is up. */
-  idleCloseAt?: number;
-  /** Server epoch ms when this snapshot was built. */
-  serverNow: number;
-  lastWinners: { seat: number; name: string; amount: number }[];
-  shownCards: { seat: number; cards: EngineView["communityCards"] }[];
-};
-
-export type TableSnapshot = BaseSnapshot & {
-  autoDeal?: boolean;
-  /** Server epoch ms when the player to act runs out of time. Absent while paused or between hands. */
-  turnDeadline?: number;
-  /** Seconds each player has to act. */
-  turnSeconds?: number;
-  /** New small blind that starts with the next hand. */
-  nextSmallBlind?: number;
-  /** Who may buy more chips. */
-  rebuy?: "any" | "busted" | "off";
-};
-
-export function baseSnapshot(
-  table: TableRecord,
-  view: EngineView,
-  viewerId?: string,
-  blockedIds?: Set<string>,
-): BaseSnapshot {
+/** The snapshot the app reads today: the shared view, with poker's fields mixed in. */
+export function snapshot(table: TableRecord, view: EngineView, viewerId?: string, blockedIds?: Set<string>) {
+  const state = pokerOf(table);
+  const shared = sharedView(table, viewerId, blockedIds);
   const bySeat = new Map(table.players.map((player) => [player.seat, player]));
   const actor = view.playerToActSeat == null ? null : bySeat.get(view.playerToActSeat);
   const viewer = viewerId ? table.players.find((player) => player.id === viewerId) : undefined;
   const yourTurn = viewer != null && actor?.id === viewer.id;
   return {
-    id: table.id,
-    status: view.round ? "playing" : "waiting",
-    smallBlind: table.smallBlind,
-    bigBlind: table.smallBlind * 2,
+    ...shared,
+    status: view.round ? ("playing" as const) : ("waiting" as const),
+    smallBlind: state.smallBlind,
+    bigBlind: state.smallBlind * 2,
+    buyIn: state.buyIn,
     communityCards: view.communityCards,
     pots: view.pots,
     round: view.round,
     playerToActId: actor?.id ?? null,
-    players: table.players.flatMap((player) => {
+    players: shared.players.map((player) => {
       const seat = view.seats.find((entry) => entry.seat === player.seat);
-      return [{
-        id: player.id,
-        name: player.name,
-        seat: player.seat,
+      return {
+        ...player,
         stack: seat?.stack ?? 0,
         betSize: seat?.betSize ?? 0,
         inHand: seat?.inHand ?? false,
         sittingOut: false,
-        bought: player.bought ?? table.buyIn,
-        ...(blockedIds?.has(player.id) ? { blocked: true } : {}),
-        ...(player.web ? { web: true } : {}),
-      }];
+        bought: state.bought[player.id] ?? state.buyIn,
+      };
     }),
-    you: viewer
+    you: shared.you && viewer
       ? {
-          id: viewer.id,
+          ...shared.you,
           holeCards: view.holeCards.find((cards) => cards.seat === viewer.seat)?.cards ?? [],
           legalActions: yourTurn ? view.legalActions : [],
           chipRange: yourTurn ? view.chipRange : null,
-          isAdmin: viewer.id === table.adminId,
         }
       : null,
-    buyIn: table.buyIn,
-    kind: table.kind ?? "poker",
-    ...(viewer && viewer.id === table.adminId ? { password: table.password } : {}),
-    paused: table.paused === true,
-    serverNow: Date.now(),
-    ...(table.idleCloseAt != null && table.paused !== true ? { idleCloseAt: table.idleCloseAt } : {}),
+    autoDeal: state.autoDeal === true,
+    /** Seconds each player has to act. */
+    turnSeconds: turnMs(state) / 1000,
+    /** Who may buy more chips. */
+    rebuy: state.rebuy ?? "any",
+    /** New small blind that starts with the next hand. */
+    ...(view.nextSmallBlind != null ? { nextSmallBlind: view.nextSmallBlind } : {}),
+    /** Server epoch ms when the player to act runs out of time. Absent while paused or between hands. */
+    ...(state.turn && actor && table.paused !== true && table.closing !== true ? { turnDeadline: state.turn.deadline } : {}),
     shownCards: view.shownCards ?? [],
     lastWinners: view.lastWinners.flatMap((winner) => {
       const player = bySeat.get(winner.seat);
@@ -111,22 +58,4 @@ export function baseSnapshot(
   };
 }
 
-export function snapshot(
-  table: TableRecord,
-  view: EngineView,
-  viewerId?: string,
-  blockedIds?: Set<string>,
-): TableSnapshot {
-  const base = baseSnapshot(table, view, viewerId, blockedIds);
-  const actor = view.playerToActSeat == null ? null : table.players.find((player) => player.seat === view.playerToActSeat);
-  return {
-    ...base,
-    autoDeal: table.autoDeal === true,
-    turnSeconds: turnMs(table) / 1000,
-    rebuy: table.rebuy ?? "any",
-    ...(view.nextSmallBlind != null ? { nextSmallBlind: view.nextSmallBlind } : {}),
-    ...(table.turn && actor && table.paused !== true && table.closing !== true
-      ? { turnDeadline: table.turn.deadline }
-      : {}),
-  };
-}
+export type TableSnapshot = ReturnType<typeof snapshot>;

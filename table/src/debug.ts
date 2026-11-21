@@ -8,7 +8,7 @@ import { playerName } from "./name.js";
 import { assignAdmin, releaseSeat, tablePassword } from "./players.js";
 import { readSchema } from "./schema.js";
 import { freeSeats } from "./seats.js";
-import { insertTable, publishTable, readTable, TableNotFound, withTable } from "./store.js";
+import { insertTable, publishTable, readTable, RECORD_VERSION, TableNotFound, withTable, type TableRecord } from "./store.js";
 
 const addBody = z.object({ name: z.string() }).strict();
 const playerBody = z.object({ playerId: z.string().min(1) }).strict();
@@ -82,11 +82,13 @@ export async function openDebugTable(config: DebugConfig) {
   for (let attempt = 0; attempt < 25; attempt += 1) {
     try {
       if (!(await readTable(config.tableId))) {
-        const table = await game.open({
+        const table: TableRecord = {
+          v: RECORD_VERSION,
           id: config.tableId,
           password: config.password ?? tablePassword(),
           players: [],
-        }, config.settings);
+          game: await game.open(config.settings),
+        };
         if (await insertTable(table)) await openTable(table.id, config.kind);
       }
       const table = await readTable(config.tableId);

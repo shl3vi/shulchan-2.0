@@ -1,34 +1,50 @@
-import { hiddenHand } from "../poker/hiddenHand.js";
+import { sharedView } from "../../view.js";
 import { defineGame, type GameModule } from "../types.js";
 import { backgammonDebug } from "./debug.js";
 import { backgammonEngineAnswers, openingBackgammon } from "./engine.js";
 import { backgammonMoves } from "./moves.js";
 import { openBody, type BackgammonSettings } from "./schema.js";
 import { chooseSeat, SEATS } from "./seats.js";
+import { backgammonOf, settledColors, type BackgammonState } from "./state.js";
 
 export const backgammon: GameModule<BackgammonSettings> = defineGame<BackgammonSettings>({
   seats: { max: SEATS },
   settings(body) {
-    const parsed = openBody.safeParse(body);
-    if (!parsed.success) return { error: "Invalid request" };
-    const problem = hiddenHand.blindsProblem(parsed.data.smallBlind, parsed.data.buyIn);
-    if (problem) return { error: problem };
-    return { settings: { smallBlind: parsed.data.smallBlind, buyIn: parsed.data.buyIn } };
+    return openBody.safeParse(body).success ? { settings: {} } : { error: "Invalid request" };
   },
-  async open(base, settings) {
-    const table = { ...base, smallBlind: settings.smallBlind, buyIn: settings.buyIn, kind: "backgammon" as const };
-    await hiddenHand.open(table, settings.smallBlind);
-    return { ...table, backgammon: await openingBackgammon() };
+  async open() {
+    const state: BackgammonState = { kind: "backgammon", board: await openingBackgammon(), log: [], colors: {} };
+    return state;
   },
   chooseSeat,
-  seat: hiddenHand.seat,
-  unseat: hiddenHand.unseat,
-  dropDeparted: hiddenHand.dropDeparted,
+  async seat() {},
+  // A leaving player's colour is freed the next time colours are settled.
+  async unseat() {},
+  async dropDeparted(table) {
+    table.players = table.players.filter((player) => !player.pendingRemoval);
+  },
   async snapshot(table, viewerId, blockedIds) {
+    const shared = sharedView(table, viewerId, blockedIds);
+    const state = backgammonOf(table);
+    const colors = settledColors(table);
+    // The poker-shaped fields stay, empty, until the app reads the new snapshot.
     return {
-      ...(await hiddenHand.snapshot(table, viewerId, blockedIds)),
-      backgammon: table.backgammon,
-      backgammonLog: table.backgammonLog ?? [],
+      ...shared,
+      status: "waiting" as const,
+      smallBlind: 0,
+      bigBlind: 0,
+      buyIn: 0,
+      communityCards: [],
+      pots: [],
+      round: null,
+      playerToActId: null,
+      players: shared.players.map((player) => ({ ...player, stack: 0, betSize: 0, inHand: false, sittingOut: false, bought: 0 })),
+      you: shared.you ? { ...shared.you, holeCards: [], legalActions: [], chipRange: null } : null,
+      shownCards: [],
+      lastWinners: [],
+      backgammon: state.board,
+      backgammonLog: state.log,
+      backgammonColors: { white: colors.white ?? null, black: colors.black ?? null },
     };
   },
   moves: backgammonMoves,

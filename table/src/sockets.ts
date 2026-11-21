@@ -1,4 +1,6 @@
 import type { Server, Socket } from "socket.io";
+import { armDeadline } from "./deadlines.js";
+import { TableRefused } from "./errors.js";
 import { notePlayers } from "./events/ledger.js";
 import { reportCaught, reportError } from "./events/report.js";
 import { gameFor, gameOf, kindOf } from "./games/index.js";
@@ -27,7 +29,7 @@ async function personal(table: TableRecord, viewerId: string) {
 async function broadcast(io: Server, tableId: string) {
   const table = await readTable(tableId);
   if (!table) return;
-  gameOf(table).arm?.(table);
+  armDeadline(table);
   const room = io.of("/table").adapter.rooms.get(tableId);
   if (!room) return;
   for (const socketId of room) {
@@ -82,7 +84,6 @@ export function attachSockets(io: Server) {
         });
         if (result === TABLE_UNCHANGED) return undefined;
         await publishTable(tableId);
-        game.changed?.(tableId);
         return result;
       } catch (error) {
         if (error instanceof LeftTable) {
@@ -102,7 +103,7 @@ export function attachSockets(io: Server) {
     }
 
     function requireAdmin(current: TableRecord) {
-      if (connected.id !== current.adminId) throw new Error("Not the table admin");
+      if (connected.id !== current.adminId) throw new TableRefused("forbidden", "Not the table admin");
     }
 
     const onEvent = (event: string, handler: (body: unknown) => void) => {
@@ -209,7 +210,7 @@ export function attachSockets(io: Server) {
           return;
         }
         void change(move.failure, async (current, seat) => {
-          if (kindOf(current) !== kind) throw new Error(`This table is not ${kind}`);
+          if (kindOf(current) !== kind) throw new TableRefused("forbidden", `This table is not ${kind}`);
           return move.run({
             table: current,
             seat,

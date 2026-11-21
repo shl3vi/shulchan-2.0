@@ -1,8 +1,10 @@
+import { TableRefused } from "../../errors.js";
 import { assertPlaying, noteActivity } from "../../idle.js";
 import { seatedCount } from "../../players.js";
 import type { GameMove } from "../types.js";
-import { noteBackgammonWin, playBackgammon } from "./engine.js";
+import { playBackgammon } from "./engine.js";
 import { backgammonBody, type BackgammonAction } from "./schema.js";
+import { backgammonOf } from "./state.js";
 import { noteBackgammon } from "./tally.js";
 
 type Turn = { phase?: unknown; turn?: unknown };
@@ -15,15 +17,14 @@ const play: GameMove<BackgammonAction, MoveMark> = {
   async run({ table, seat }, action) {
     assertPlaying(table);
     if (seatedCount(table) < 2) {
-      throw new Error("Waiting for a second player");
+      throw new TableRefused("invalid", "Waiting for a second player");
     }
-    const previous = table.backgammon as Turn | undefined;
-    const before = table.backgammonLog?.length ?? 0;
+    const state = backgammonOf(table);
+    const previous = state.board as Turn | undefined;
+    const before = state.log.length;
     const game = (await playBackgammon(table, seat.id, action)) as Turn;
-    noteBackgammonWin(table, game);
-    table.backgammon = game;
     noteActivity(table, Date.now());
-    return { previous: previous ?? null, game, games: (table.backgammonLog?.length ?? 0) - before };
+    return { previous: previous ?? null, game, games: state.log.length - before };
   },
   async after(context, mark) {
     // A refused move leaves this phone showing its own guess, so send it the real board.

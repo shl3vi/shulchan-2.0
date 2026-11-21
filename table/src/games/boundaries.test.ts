@@ -12,14 +12,8 @@ import { fileURLToPath } from "node:url";
  * entry is no longer needed, so the list can only shrink.
  */
 const ALLOWED = new Set<string>([
-  // The stored table record still carries poker's hand, view and turn clock.
-  "store.ts -> games/poker/engine.ts",
-  "store.ts -> games/poker/turn.ts",
   // The app config still has a poker section with turn-time bounds.
   "publicConfig.ts -> games/poker/turn.ts",
-  // Backgammon tables still run a hidden poker hand for seats and the snapshot.
-  "games/backgammon/debug.ts -> games/poker/hiddenHand.ts",
-  "games/backgammon/index.ts -> games/poker/hiddenHand.ts",
 ]);
 
 const src = resolve(dirname(fileURLToPath(import.meta.url)), "..");

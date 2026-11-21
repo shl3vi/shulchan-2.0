@@ -1,6 +1,7 @@
-import { ENGINE_FAILED, EngineTimeout } from "../engines.js";
+import { EngineFailed, EngineTimeout } from "../engines.js";
+import { TableRefused } from "../errors.js";
 import type { GameKind } from "../games/index.js";
-import { TableNotFound } from "../store.js";
+import { TableBusy, TableNotFound } from "../store.js";
 import { publish, type ErrorArea } from "./bus.js";
 import { noteError } from "./ledger.js";
 
@@ -28,27 +29,16 @@ function logError(tableId: string | undefined, route: string, error: unknown) {
 
 export function reportCaught(tableId: string | undefined, error: unknown, route: string, kind?: GameKind) {
   if (error instanceof TableNotFound) return;
-  const message = error instanceof Error ? error.message : "";
-  if (message === "Not the table admin" || message.startsWith("This table is not ")) {
-    reportError({ area: "forbidden", tableId, route, kind });
+  if (error instanceof TableRefused) {
+    reportError({ area: error.reason === "forbidden" ? "forbidden" : "validation", tableId, route, kind });
     return;
   }
-  if (
-    message === "Table is paused" ||
-    message === "Table is closing" ||
-    message.startsWith("Buy-in") ||
-    message === "Rebuys are off at this table" ||
-    message === "You can buy more chips once you have none left"
-  ) {
-    reportError({ area: "validation", tableId, route, kind });
-    return;
-  }
-  if (message === "Table is busy") {
+  if (error instanceof TableBusy) {
     logError(tableId, route, error);
     reportError({ area: "store", tableId, op: "lock", kind });
     return;
   }
-  if (error instanceof EngineTimeout || message === ENGINE_FAILED || /fetch failed|ECONNREFUSED|EAI_AGAIN/i.test(message)) {
+  if (error instanceof EngineTimeout || error instanceof EngineFailed) {
     logError(tableId, route, error);
     reportError({ area: "store", tableId, op: "engine", kind });
     return;

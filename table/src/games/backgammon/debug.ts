@@ -1,12 +1,12 @@
 import { readSchema } from "../../schema.js";
 import { publishTable, readTable, withTable, type TableRecord } from "../../store.js";
-import { hiddenHand } from "../poker/hiddenHand.js";
 import type { GameDebug } from "../types.js";
-import { backgammonMoves as legalMoves, noteBackgammonWin, openingBackgammon, playBackgammon } from "./engine.js";
+import { backgammonMoves as legalMoves, openingBackgammon, playBackgammon } from "./engine.js";
 import { backgammonBody, type BackgammonAction, type BackgammonSettings } from "./schema.js";
+import { backgammonOf, colorOf, settledColors } from "./state.js";
 
 async function state(table: TableRecord) {
-  const game = table.backgammon;
+  const game = backgammonOf(table).board;
   let moves: Awaited<ReturnType<typeof legalMoves>> = [];
   if (game) {
     try {
@@ -15,40 +15,38 @@ async function state(table: TableRecord) {
       moves = [];
     }
   }
-  const seated = table.players.filter((player) => !player.pendingRemoval).sort((a, b) => a.seat - b.seat);
+  const colors = settledColors(table);
   return {
     id: table.id,
     password: table.password,
     kind: "backgammon" as const,
-    buyIn: table.buyIn,
     players: table.players.map((player) => ({
       id: player.id,
       name: player.name,
       seat: player.seat,
       isAdmin: player.id === table.adminId,
-      color: seated[0]?.id === player.id ? "white" as const : seated[1]?.id === player.id ? "black" as const : null,
+      color: colorOf(colors, player.id),
     })),
     game: game ?? null,
     moves,
-    log: table.backgammonLog ?? [],
+    log: backgammonOf(table).log,
   };
 }
 
+/** The debug page plays for whoever is to act. */
 function actor(table: TableRecord, action: BackgammonAction) {
-  const seated = table.players.filter((player) => !player.pendingRemoval).sort((a, b) => a.seat - b.seat);
-  const game = table.backgammon as { phase?: string; turn?: "white" | "black" } | undefined;
-  if (action.type === "restart" || !game || game.phase === "over") return table.adminId ?? seated[0]?.id ?? null;
+  const colors = settledColors(table);
+  const game = backgammonOf(table).board as { phase?: string; turn?: "white" | "black" } | undefined;
+  if (action.type === "restart" || !game || game.phase === "over") return table.adminId ?? colors.white ?? null;
   const color = game.phase === "offer" ? (game.turn === "white" ? "black" : "white") : game.turn;
-  return (color === "black" ? seated[1] : seated[0])?.id ?? null;
+  return (color === "black" ? colors.black : colors.white) ?? null;
 }
 
 async function play(tableId: string, action: BackgammonAction) {
   await withTable(tableId, async (table) => {
     const who = actor(table, action);
     if (!who) throw new Error("Seat the players first");
-    const next = await playBackgammon(table, who, action);
-    noteBackgammonWin(table, next as { phase?: unknown; winner?: unknown; score?: unknown });
-    table.backgammon = next;
+    await playBackgammon(table, who, action);
   });
   await publishTable(tableId);
 }
@@ -56,27 +54,23 @@ async function play(tableId: string, action: BackgammonAction) {
 export const backgammonDebug: GameDebug<BackgammonSettings> = {
   path: "backgammon",
   envPrefix: "DEBUG_BG",
-  fallbackPrefixes: ["DEBUG"],
   label: "Backgammon debug",
-  settings: hiddenHand.debugBlinds,
+  settings: () => ({ settings: {} }),
   page: backgammonPage,
   state,
   async repair(tableId) {
     const table = await readTable(tableId);
     if (!table) throw new Error("Debug table missing");
-    if (table.kind !== "backgammon" || !table.backgammon) {
-      await withTable(tableId, async (current) => {
-        current.kind = "backgammon";
-        if (!current.backgammon) current.backgammon = await openingBackgammon();
-      });
-    }
-    await hiddenHand.repair(tableId);
+    if (backgammonOf(table).board) return;
+    await withTable(tableId, async (current) => {
+      backgammonOf(current).board = await openingBackgammon();
+    });
   },
   async reset(table) {
-    await hiddenHand.open(table, table.smallBlind);
-    table.kind = "backgammon";
-    table.backgammon = await openingBackgammon();
-    delete table.backgammonLog;
+    const state = backgammonOf(table);
+    state.board = await openingBackgammon();
+    state.log = [];
+    state.colors = {};
   },
   routes(router, respond) {
     router.post("/:token/play", async (req, res) => {
