@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View, type LayoutRectangle } from "react-native";
 import Svg, { Defs, LinearGradient, Polygon, Stop } from "react-native-svg";
-import { stepDice } from "@/game/diceSound";
+import { stepDice } from "@/games/backgammon/diceSound";
 import {
   checkers,
   legalMoves,
@@ -9,7 +9,7 @@ import {
   type Color,
   type Game,
   type Move,
-} from "@/game/backgammon";
+} from "@/games/backgammon/rules";
 import { t, type MessageKey } from "@/i18n";
 
 const STATUS: Record<string, MessageKey> = {

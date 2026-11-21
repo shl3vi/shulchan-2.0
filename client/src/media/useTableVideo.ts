@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { VideoTrack } from "livekit-client";
-import { remoteConfig, type GameKind } from "@/game/remoteConfig";
+import { remoteConfig } from "@/game/remoteConfig";
+import type { GameKind } from "@/games/registry";
 import type { Credentials } from "@/game/types";
 import { allowCapture } from "@/media/capturePermission";
 import { videoSupported } from "@/media/videoSupport";
@@ -15,7 +16,7 @@ type VideoHandle = {
   block: (ids: string[]) => void;
 };
 
-export function useTableVideo(credentials: Credentials | null, suspended = false, kind: GameKind = "poker") {
+export function useTableVideo(credentials: Credentials | null, suspended: boolean, kind: GameKind) {
   const [tracks, setTracks] = useState<Map<string, VideoTrack>>(new Map());
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);

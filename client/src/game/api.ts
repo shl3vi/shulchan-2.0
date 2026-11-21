@@ -1,6 +1,7 @@
 import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
 import { loadPersonKey } from "@/game/personKey";
+import type { GameKind } from "@/games/registry";
 
 /** The web build is served by the table service itself, so in a browser the API is the page's own origin. */
 function defaultApiUrl() {
@@ -100,19 +101,11 @@ export async function deleteHostAccount(token: string) {
   }
 }
 
-export function createTable(
-  smallBlind: number,
-  buyIn: number,
-  hostToken: string,
-  kind: "poker" | "backgammon" = "poker",
-  autoDeal = false,
-  turnSeconds?: number,
-) {
+/** Opens a table. `settings` comes from the game's own opening form; the server checks it for that game. */
+export function createTable(hostToken: string, kind: GameKind, settings: object) {
   return post<{ gameId: string; adminSecret: string; password: string }>("/api/games", {
-    smallBlind,
-    buyIn,
+    ...settings,
     kind,
-    ...(kind === "poker" ? { autoDeal, ...(turnSeconds != null ? { turnSeconds } : {}) } : {}),
   }, {
     authorization: `Bearer ${hostToken}`,
   });

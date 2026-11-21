@@ -4,12 +4,12 @@ import { Platform } from "react-native";
 import { API_URL } from "@/game/api";
 import { setNameExtras } from "@/game/name";
 import { compareVersions } from "@/game/version";
+import type { GameKind } from "@/games/registry";
 
 export type AdsMode = "off" | "test" | "live";
 
 /** How this phone captures and sends its camera at a table. */
 export type VideoQuality = { width: number; height: number; frameRate: number; maxKbps: number };
-export type GameKind = "poker" | "backgammon";
 
 export type RemoteConfig = {
   /** off: no banner. test: Google's sample banner. live: this app's own ad units. */

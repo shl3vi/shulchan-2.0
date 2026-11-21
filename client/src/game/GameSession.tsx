@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { io, type Socket } from "socket.io-client";
 import { API_URL, createTable, joinTable, tableExists } from "@/game/api";
 import { loadSeat, saveSeat } from "@/game/sessionStore";
-import type { Credentials, RebuyRule, TableSnapshot } from "@/game/types";
+import type { Credentials, TableSnapshot } from "@/game/types";
+import type { GameKind } from "@/games/registry";
 import { t } from "@/i18n";
 
 type GameSessionValue = {
@@ -10,28 +11,16 @@ type GameSessionValue = {
   state: TableSnapshot | null;
   error: string | null;
   dismissError: () => void;
-  createAndSit: (
-    name: string,
-    smallBlind: number,
-    buyIn: number,
-    hostToken: string,
-    kind?: "poker" | "backgammon",
-    autoDeal?: boolean,
-    turnSeconds?: number,
-  ) => Promise<void>;
+  /** Opens a table of this game with the settings its opening form chose, and sits down as admin. */
+  createAndSit: (name: string, hostToken: string, kind: GameKind, settings: object) => Promise<void>;
   join: (name: string, gameId: string, password: string) => Promise<void>;
   ready: boolean;
   leave: () => Promise<void>;
   removePlayer: (playerId: string) => void;
   transferAdmin: (playerId: string) => void;
-  startHand: () => void;
-  setAutoDeal: (enabled: boolean) => void;
-  setTurnSeconds: (seconds: number) => void;
-  setTableSettings: (settings: { smallBlind?: number; buyIn?: number; rebuy?: RebuyRule }) => void;
   setPaused: (paused: boolean) => void;
-  act: (action: string, amount?: number) => void;
-  rebuy: (amount: number) => void;
-  emit: (event: string, body: unknown) => void;
+  /** Sends a game's move. Each game's folder knows its own events. */
+  emit: (event: string, body?: unknown) => void;
   subscribe: (event: string, handler: (body: unknown) => void) => () => void;
 };
 
@@ -123,9 +112,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         setError(null);
       },
       ready,
-      async createAndSit(name, smallBlind, buyIn, hostToken, kind = "poker", autoDeal = false, turnSeconds) {
+      async createAndSit(name, hostToken, kind, settings) {
         if (credentials) throw new Error(t("alreadyAtTable"));
-        const table = await createTable(smallBlind, buyIn, hostToken, kind, autoDeal, turnSeconds);
+        const table = await createTable(hostToken, kind, settings);
         const player = await joinTable(table.gameId, name, table.password, table.adminSecret);
         remember({
           gameId: table.gameId,
@@ -156,34 +145,13 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         if (!state?.you?.isAdmin) return;
         socket?.emit("transfer-admin", { playerId });
       },
-      startHand() {
-        if (!state?.you?.isAdmin) return;
-        socket?.emit("start-hand");
-      },
-      setAutoDeal(enabled) {
-        if (!state?.you?.isAdmin) return;
-        socket?.emit("auto-deal", { enabled });
-      },
-      setTurnSeconds(seconds) {
-        if (!state?.you?.isAdmin) return;
-        socket?.emit("turn-time", { seconds });
-      },
-      setTableSettings(settings) {
-        if (!state?.you?.isAdmin) return;
-        socket?.emit("table-settings", settings);
-      },
       setPaused(paused) {
         if (!state?.you?.isAdmin) return;
         socket?.emit("pause", { paused });
       },
-      act(action, amount) {
-        socket?.emit("act", { action, amount });
-      },
-      rebuy(amount) {
-        socket?.emit("rebuy", { amount });
-      },
       emit(event, body) {
-        socket?.emit(event, body);
+        if (body === undefined) socket?.emit(event);
+        else socket?.emit(event, body);
       },
       subscribe(event, handler) {
         if (!socket) return () => {};

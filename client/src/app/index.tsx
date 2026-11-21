@@ -15,90 +15,10 @@ import { nameProblem, playerName } from "@/game/name";
 import { updateMode } from "@/game/remoteConfig";
 import { UpdateNotice, useRemoteConfig } from "@/game/UpdateNotice";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
+import { gameList, games, type GameKind } from "@/games/registry";
 import { isRtl, LOCALES, LOCALE_LABEL, locale, setLocale, subscribeLocale, t } from "@/i18n";
 
 WebBrowser.maybeCompleteAuthSession();
-
-const BLINDS = [1, 2, 5, 10];
-const BUY_INS = [50, 100, 200, 500];
-
-function ChipRow({
-  values,
-  selected,
-  minimum,
-  onSelect,
-  onValidity,
-}: {
-  values: number[];
-  selected: number;
-  minimum: number;
-  onSelect: (value: number) => void;
-  onValidity: (valid: boolean) => void;
-}) {
-  const preset = values.includes(selected);
-  const [custom, setCustom] = useState(false);
-  const [draft, setDraft] = useState(preset ? "" : String(selected));
-  const [invalid, setInvalid] = useState(false);
-
-  function commit(text: string) {
-    const value = Number(text);
-    const valid = Number.isInteger(value) && value >= minimum;
-    setInvalid(!valid);
-    onValidity(valid);
-    if (valid) onSelect(value);
-  }
-
-  return (
-    <View style={styles.customWrap}>
-      <View style={styles.chips}>
-        {values.map((value) => (
-          <Pressable
-            key={value}
-            style={[styles.chip, selected === value && !custom && styles.chipOn]}
-            onPress={() => {
-              setCustom(false);
-              setInvalid(false);
-              onValidity(true);
-              onSelect(value);
-            }}
-          >
-            <Text style={[styles.chipText, selected === value && !custom && styles.chipTextOn]}>{value}</Text>
-          </Pressable>
-        ))}
-        <Pressable
-          style={[styles.chip, (custom || !preset) && styles.chipOn]}
-          onPress={() => {
-            setCustom(true);
-            if (!preset) setDraft(String(selected));
-          }}
-        >
-          <Ionicons name="add" size={18} color={custom || !preset ? "#171b35" : "#c7c9d9"} />
-        </Pressable>
-      </View>
-      {custom ? (
-        <TextInput
-          style={[styles.input, { textAlign: isRtl() ? "right" : "left" }]}
-          value={draft}
-          onChangeText={(text) => {
-            setDraft(text);
-            const value = Number(text);
-            if (Number.isInteger(value) && value >= minimum) {
-              setInvalid(false);
-              onValidity(true);
-              onSelect(value);
-            } else onValidity(false);
-          }}
-          onBlur={() => commit(draft)}
-          keyboardType="number-pad"
-          placeholder={minimum > 1 ? t("moreThan", { n: minimum - 1 }) : t("yourAmount")}
-          placeholderTextColor="#73758b"
-          autoFocus
-        />
-      ) : null}
-      {invalid ? <Text style={styles.error}>{t("wholeNumber", { n: minimum })}</Text> : null}
-    </View>
-  );
-}
 
 /** A browser is for guests: it can join a table from a link or code, but not sign in or open one. */
 export default function HomeScreen() {
@@ -119,24 +39,17 @@ function AppHome() {
   const seated = session.credentials != null;
   const align = isRtl() ? "right" : "left";
   const [name, setName] = useState("");
-  const [smallBlind, setSmallBlind] = useState(1);
-  const [buyIn, setBuyIn] = useState(100);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [blindOk, setBlindOk] = useState(true);
-  const [buyInOk, setBuyInOk] = useState(true);
   const [nameMissing, setNameMissing] = useState(false);
   const [host, setHost] = useState<Host | null>(null);
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [kind, setKind] = useState<"poker" | "backgammon" | null>(null);
-  const [autoDeal, setAutoDeal] = useState(true);
-  const autoDealTouched = useRef(false);
+  const [kind, setKind] = useState<GameKind | null>(null);
+  /** What the chosen game's opening form reports. Null while it is not valid. */
+  const [settings, setSettings] = useState<object | null>(null);
   const config = useRemoteConfig();
   const mode = updateMode();
-  useEffect(() => {
-    if (!autoDealTouched.current) setAutoDeal(config.poker.autoDealDefault);
-  }, [config]);
   const [joinGame, setJoinGame] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
   const [joinName, setJoinName] = useState("");
@@ -261,7 +174,7 @@ function AppHome() {
     }
   }
 
-  async function create(nextKind: "poker" | "backgammon" = "poker") {
+  async function create(nextKind: GameKind) {
     if (updateMode() === "force") return;
     const seatedName = playerName(name);
     if (!seatedName) {
@@ -275,9 +188,9 @@ function AppHome() {
     setError(null);
     setBusy(true);
     try {
-      if (!host) return;
-      await session.createAndSit(seatedName, smallBlind, buyIn, host.token, nextKind, nextKind === "poker" && autoDeal, config.poker.turnSecondsDefault);
-      router.push(nextKind === "backgammon" ? { pathname: "/table", params: { kind: "backgammon" } } : "/table");
+      if (!host || !settings) return;
+      await session.createAndSit(seatedName, host.token, nextKind, settings);
+      router.push({ pathname: "/table", params: { kind: nextKind } });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : t("serverUnreachable");
       if (message === "Sign in to open a table" || message === "Sign in with Google to open a table") {
@@ -433,24 +346,17 @@ function AppHome() {
       ) : null}
       {mode !== "force" && creating && host && kind == null ? (
         <View style={[styles.kindGrid, isRtl() && styles.kindGridRtl]}>
-          <Pressable
-            style={styles.kindCard}
-            onPress={() => setKind("backgammon")}
-          >
-            <View style={styles.kindIcon}>
-              <Ionicons name="dice" size={31} color="#f3a66f" />
-            </View>
-            <Text style={styles.kindTitle} numberOfLines={2}>{t("backgammonTable")}</Text>
-          </Pressable>
-          <Pressable style={styles.kindCard} onPress={() => setKind("poker")}>
-            <View style={styles.kindIcon}>
-              <Ionicons name="diamond" size={29} color="#f3a66f" />
-            </View>
-            <Text style={styles.kindTitle} numberOfLines={2}>{t("pokerTable")}</Text>
-          </Pressable>
+          {gameList().map(([gameKind, game]) => (
+            <Pressable key={gameKind} style={styles.kindCard} onPress={() => setKind(gameKind)}>
+              <View style={styles.kindIcon}>
+                <Ionicons name={game.lobby.icon} size={game.lobby.iconSize} color="#f3a66f" />
+              </View>
+              <Text style={styles.kindTitle} numberOfLines={2}>{t(game.lobby.title)}</Text>
+            </Pressable>
+          ))}
         </View>
       ) : null}
-      {mode !== "force" && creating && host && (kind === "poker" || kind === "backgammon") ? (
+      {mode !== "force" && creating && host && kind != null ? (
         <View style={[styles.felt, seated && styles.feltOff]}>
           <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
           <TextInput
@@ -466,33 +372,14 @@ function AppHome() {
             placeholderTextColor="#73758b"
             maxLength={24}
           />
-          {kind === "poker" ? (
-            <>
-          <Text style={[styles.label, { textAlign: align }]}>{t("smallBlind")}</Text>
-          <ChipRow values={BLINDS} selected={smallBlind} minimum={1} onSelect={setSmallBlind} onValidity={setBlindOk} />
-          <Text style={[styles.label, { textAlign: align }]}>{t("buyIn")}</Text>
-          <ChipRow values={BUY_INS} selected={buyIn} minimum={11} onSelect={setBuyIn} onValidity={setBuyInOk} />
+          {(() => {
+            const { OpenOptions } = games[kind];
+            return <OpenOptions key={kind} onChange={setSettings} />;
+          })()}
           <Pressable
-            style={[styles.autoDeal, isRtl() && styles.autoDealRtl]}
-            onPress={() => {
-              autoDealTouched.current = true;
-              setAutoDeal((on) => !on);
-            }}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: autoDeal }}
-          >
-            <Ionicons name={autoDeal ? "checkbox" : "square-outline"} size={22} color="#a8b2ff" />
-            <View style={styles.autoDealCopy}>
-              <Text style={[styles.autoDealText, { textAlign: align }]}>{t("autoDeal")}</Text>
-              <Text style={[styles.autoDealHint, { textAlign: align }]}>{t("autoDealHint")}</Text>
-            </View>
-          </Pressable>
-            </>
-          ) : null}
-          <Pressable
-            style={[styles.deal, (busy || seated || (kind === "poker" && (!blindOk || !buyInOk))) && styles.dealBusy]}
-            disabled={busy || seated || (kind === "poker" && (!blindOk || !buyInOk))}
-            onPress={() => void create(kind === "backgammon" ? "backgammon" : "poker")}
+            style={[styles.deal, (busy || seated || settings == null) && styles.dealBusy]}
+            disabled={busy || seated || settings == null}
+            onPress={() => void create(kind)}
           >
             <Text style={styles.dealText}>{busy ? t("shuffling") : t("dealMeIn")}</Text>
           </Pressable>
@@ -884,25 +771,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   inputMissing: { borderColor: "#f87171", borderWidth: 2 },
-  customWrap: { gap: 8 },
-  chips: { flexDirection: "row", gap: 8 },
-  chip: {
-    flex: 1,
-    backgroundColor: "rgba(8, 10, 23, 0.72)",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(198, 203, 255, 0.2)",
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  chipOn: { backgroundColor: "#a8b2ff", borderColor: "#a8b2ff" },
-  chipText: { color: "#c7c9d9", fontWeight: "800" },
-  chipTextOn: { color: "#171b35" },
-  autoDeal: { marginTop: 14, flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  autoDealRtl: { flexDirection: "row-reverse" },
-  autoDealCopy: { flex: 1, gap: 2 },
-  autoDealText: { color: "#fafaf9", fontWeight: "800", fontSize: 16 },
-  autoDealHint: { color: "#a8a29e", fontSize: 13 },
   deal: {
     marginTop: 12,
     backgroundColor: "#f3a66f",
