@@ -235,6 +235,7 @@
     }
     .tag.server { color: var(--green); border-color: var(--green-line); background: var(--green-bg); }
     .tag.app { color: var(--purple); border-color: var(--purple-line); background: var(--purple-bg); }
+    .tag.done { color: var(--green); border-color: var(--green-line); background: var(--green-bg); margin-left: 8px; }
     .tag.both { color: var(--amber); border-color: var(--amber-line); background: var(--amber-bg); }
     .left-out { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .left-out .box p { font-size: 13px; }
@@ -254,7 +255,7 @@
 <body>
 <main>
   <h1>Game separation</h1>
-  <p class="lead">Where the server and the app end up, and the four phases to get there. Shared code never names a game. Each game is one folder on the server and one in the app, plus one line in a list of games on each side. To remove a game, delete its two folders and its two lines.</p>
+  <p class="lead">How the server and the app are split by game, and the four phases that got there. All four are done and live on loochka.com. Shared code never names a game. Each game is one folder on the server and one in the app, plus one line in a list of games on each side. To remove a game, delete its two folders and its two lines.</p>
 
   <div class="legend">
     <span><i class="sw" style="background:var(--blue-bg);border-color:var(--blue)"></i>Shared code (no game names)</span>
@@ -461,13 +462,13 @@
 
   <!-- ───────────────────────── PLAN ───────────────────────── -->
   <h2>3 · Phases</h2>
-  <p class="sub">Each phase is one push to main. Before every push: typecheck, lint and tests, then a check on the live server.</p>
+  <p class="sub">Each phase was one push to main. Before every push: typecheck, lint and tests, then both games played on the live debug tables. All four are done.</p>
 
   <ol class="phases">
     <li class="phase">
       <span class="num">1</span>
       <div>
-        <h3>Move the server code<span class="tag server">server</span></h3>
+        <h3>Move the server code<span class="tag done">done</span><span class="tag server">server</span></h3>
         <p class="meta">No behaviour change. Snapshot, socket events and stored records stay as they are.</p>
         <ul>
           <li>Create <code>games/types.ts</code>, <code>games/index.ts</code>, <code>games/poker/</code> and <code>games/backgammon/</code>, and move each game's code into its folder.</li>
@@ -480,7 +481,7 @@
     <li class="phase">
       <span class="num">2</span>
       <div>
-        <h3>Move the app code<span class="tag app">app</span></h3>
+        <h3>Move the app code<span class="tag done">done</span><span class="tag app">app</span></h3>
         <p class="meta">Still on today's snapshot and socket events.</p>
         <ul>
           <li>Move the shared table parts out of <code>PokerTableLayout.tsx</code> and <code>table.tsx</code> into <code>client/src/table/</code>.</li>
@@ -493,7 +494,7 @@
     <li class="phase">
       <span class="num">3a</span>
       <div>
-        <h3>Fix the server internals<span class="tag server">server</span></h3>
+        <h3>Fix the server internals<span class="tag done">done</span><span class="tag server">server</span></h3>
         <p class="meta">The record changes, but the server still builds today's snapshot from it, so the current app keeps working.</p>
         <ul>
           <li>The <code>v: 2</code> record with <code>game: { kind, … }</code>. At boot, delete older rows through the expiry path (stats summaries still sent) and recreate the debug tables.</li>
@@ -509,7 +510,7 @@
     <li class="phase">
       <span class="num">3b</span>
       <div>
-        <h3>Switch the contract<span class="tag both">server + app, one push</span></h3>
+        <h3>Switch the contract<span class="tag done">done</span><span class="tag both">server + app, one push</span></h3>
         <p class="meta">The app isn't published, so there's no old version to keep working.</p>
         <ul>
           <li>Snapshot becomes <code>{ ...shared, status, game: { kind, … } }</code>; ads, keep-awake and the turn chime read <code>status</code>.</li>
@@ -523,7 +524,7 @@
     <li class="phase">
       <span class="num">4</span>
       <div>
-        <h3>Lock it in<span class="tag both">server + app</span></h3>
+        <h3>Lock it in<span class="tag done">done</span><span class="tag both">server + app</span></h3>
         <ul>
           <li>Empty both import-graph allowlists.</li>
           <li>Removal test: on a scratch branch, delete backgammon's two folders and two list lines, then check that typecheck and tests pass. The branch isn't committed.</li>
@@ -551,7 +552,7 @@
       <li>Delete <code>backgammon-engine/</code>, its line in <code>scripts/dev.mjs</code>, and the Railway service.</li>
       <li>Remove its <code>bg*</code> strings, its <code>PUBLIC_CONFIG</code> section and its pages on the website.</li>
     </ol>
-    <p>Typecheck and the import-graph test then pass with no other change. Phase 4 checks exactly this on a scratch branch.</p>
+    <p>Checked in phase 4 on a scratch copy that was never committed: with backgammon deleted this way, typecheck, lint and every test pass on both sides, and the server starts, reports only poker, refuses a backgammon table and plays poker. The only fix it needed was the shared config test, which named both games; it now checks whatever games the list holds, and poker tests its own config keys.</p>
   </div>
 </main>
 </body>

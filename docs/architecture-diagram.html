@@ -108,7 +108,7 @@
 </head>
 <body>
   <h1>Shulchan architecture</h1>
-  <p class="lead">The table is one service. Each game engine is its own service, a separate pod in production. Phones talk only to the table. The table calls the engine pod for that game. Video goes through LiveKit.</p>
+  <p class="lead">The table is one service. Each game engine is its own service, a separate pod in production. Phones talk only to the table. The table calls the engine pod for that game. Video goes through LiveKit. How the code is split by game: <a href="game-separation.html">game separation</a>.</p>
 
   <div class="legend">
     <span><i class="sw" style="background:#1d4f91"></i>Shared table</span>
@@ -152,7 +152,7 @@
       </div>
       <div class="link">
         <b>/table</b>
-        <span>Live game only: start, act, state</span>
+        <span>Live game: <code>move</code> in, <code>state</code> and <code>error</code> out</span>
       </div>
       <div class="link">
         <b>LiveKit</b>
@@ -168,21 +168,21 @@
       </div>
       <div class="box green">
         <strong>/table socket</strong>
-        <p>The door that stays open. Phones send bets here and receive a new snapshot whenever the hand changes.</p>
+        <p>The door that stays open. Phones send every game move here as one <code>move</code> event, <code>{ type, ... }</code>, and receive a new snapshot whenever the table changes.</p>
       </div>
       <div class="box blue">
         <strong>Table</strong>
-        <p>The room behind both doors. Seats, secrets, admin, phase. It checks the secret, calls the game pod, then saves Redis and publishes. It does not know the deck or the board.</p>
+        <p>The room behind both doors. Seats, secrets, admin, pause, idle closing. It checks the secret, hands the move to that game's module in <code>table/src/games/&lt;kind&gt;</code>, which calls its engine pod, then saves the record and publishes. Shared code never names a game.</p>
       </div>
       <div class="col-title" style="margin-top:16px">Game pods</div>
       <div class="row2">
         <div class="box purple">
           <strong>Poker pod</strong>
-          <p>Its own service. Holds the deck and the hand in memory. <code>apply</code>, <code>view</code>, <code>save</code>, <code>load</code>.</p>
+          <p>Its own service, with no memory of its own. The table sends the stored hand with each call and keeps the hand it returns. It deals and checks every betting action.</p>
         </div>
         <div class="box purple">
           <strong>Backgammon pod</strong>
-          <p>Its own service. Holds the board and the dice in memory. Same four calls. The table does not care which pod it is.</p>
+          <p>Its own service, also without memory. It rolls the dice and checks every move against the stored board.</p>
         </div>
       </div>
       <div class="box amber">
@@ -191,12 +191,12 @@
       </div>
       <div class="col-title" style="margin-top:16px">Shared</div>
       <div class="box blue">
-        <strong>Redis — saved state</strong>
-        <p>One record per table, written by the table pod: seats and secrets, plus the private blob returned by the game pod.</p>
+        <strong>Postgres — saved state</strong>
+        <p>One record per table, written by the table pod: <code>{ v: 2, players, admin, pause, idle…, game: { kind, … } }</code>. The game's state, such as the engine's hand or board and the turn deadline, lives under <code>game</code>. A revision number stops a late save from overwriting a newer one.</p>
       </div>
       <div class="box green">
-        <strong>Redis — pub/sub</strong>
-        <p>The table pod publishes "table changed" after each save. Other table pods push a snapshot to the phones they still hold. Pub/sub does not store the hand.</p>
+        <strong>Redis — lock and pub/sub</strong>
+        <p>A short lock keeps changes to one table in line. The table pod publishes "table changed" after each save, and every table pod pushes a snapshot to the phones it holds and arms the game's stored deadline. Redis does not store the table.</p>
       </div>
     </div>
   </div>
@@ -216,11 +216,11 @@
   <ol class="steps">
     <li><b>1</b>Player taps Raise</li>
     <span class="arrow">→</span>
-    <li><b>2</b><code>/table</code> checks the secret</li>
+    <li><b>2</b>The phone sends <code>move</code> <code>{ type: "act", action: "raise", amount }</code></li>
     <span class="arrow">→</span>
-    <li><b>3</b>Table pod calls the poker pod, which applies the bet</li>
+    <li><b>3</b>The poker module checks it and calls the poker pod, which applies the bet</li>
     <span class="arrow">→</span>
-    <li><b>4</b>Write the table record to Redis</li>
+    <li><b>4</b>Write the table record to Postgres</li>
     <span class="arrow">→</span>
     <li><b>5</b>Publish "table changed"</li>
     <span class="arrow">→</span>
@@ -230,14 +230,14 @@
 
   <h2>When a Node process dies</h2>
   <ol class="steps">
-    <li><b>1</b>A table pod or a poker pod dies. Phones reconnect to another table pod.</li>
+    <li><b>1</b>A table pod or an engine pod dies. Phones reconnect to another table pod.</li>
     <span class="arrow">→</span>
-    <li><b>2</b>That table pod loads the Redis record and calls <code>load</code> on a new poker pod with the private blob.</li>
+    <li><b>2</b>That table pod reads the record from Postgres and sends the stored hand or board with the next engine call.</li>
     <span class="arrow">→</span>
-    <li><b>3</b>The hand continues. In-flight pub/sub messages are gone. The saved record is not.</li>
+    <li><b>3</b>The game continues. A turn clock or auto-deal that was due fires from the idle sweep, since its deadline is in the record.</li>
   </ol>
   <div class="note" style="margin-top:12px">
-    <p>The poker pod keeps the deck in its own memory. The table pod never reads that blob. It only stores it and hands it back on <code>load</code>. A backgammon pod uses the same <code>load</code> with a board blob instead of a deck blob.</p>
+    <p>The engines remember nothing between calls. Only the game's own folder on the table side reads inside the hand or board it stores; shared code sees only the shared <code>status</code>.</p>
   </div>
 </body>
 </html>

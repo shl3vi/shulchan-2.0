@@ -1,6 +1,6 @@
 # Shulchan 2.0
 
-Poker table. The table service owns seats, sockets, and the hand. The poker engine only returns the next hand. Redis stores the live table.
+Video game tables: poker and backgammon. The table service owns seats, sockets, admin, pause and idle closing, and keeps each table in Postgres. Each game's rules run in its own engine service, which the table calls over HTTP. Redis carries the lock, sign-ins and "table changed" messages between table processes.
 
 ```bash
 npm run dev
@@ -18,9 +18,26 @@ Docker and `cloudflared` need to be installed. `brew install cloudflared` if the
 
 LiveKit runs in Docker on this Mac. Phones must be on the same Wi-Fi so the video can reach it. Expo Go cannot load the camera SDK, so use the dev build from `npx expo run:android`.
 
+## Games
+
+Each game lives in two folders, one on each side, and nothing shared names a game:
+
+- `table/src/games/<kind>/`: the server side. It implements `GameModule` in `table/src/games/types.ts`: opening a table, seats, its part of the snapshot (`view`), its moves, its stored deadline (turn clock, auto-deal), its app config section, its engine health and its debug page.
+- `client/src/games/<kind>/`: the app side. It implements `GameEntry` in `client/src/games/types.ts`: the table screen, the lobby card and the opening form.
+- One line in each list of games: `table/src/games/index.ts` and `client/src/games/registry.ts`.
+- Its engine service, `<kind>-engine/`, started from `scripts/dev.mjs` and deployed as its own Railway service.
+
+The snapshot every phone gets is the shared part (players, you, pause, idle), a shared `status` (phase, whose move, turn deadline), and the game's own part under `game`. Every game move is one `move` socket event, `{ type, ...input }`. A refused move comes back as `error` with a `code` the app translates. The stored table is `{ v: 2, ...shared, game: { kind, ... } }`.
+
+To remove a game, delete its two folders and its engine, and its line in each list and in `scripts/dev.mjs`. Typecheck and tests then pass with nothing else changed. A test on each side (`games/boundaries.test.ts`) fails if shared code imports a game folder or one game imports another.
+
+`docs/game-separation.html` shows both sides as diagrams.
+
+Tests: `npm test --prefix table` and `npm test --prefix client`. Typecheck: `npm run typecheck` in either.
+
 ## Cloud
 
-Railway hosts Redis, Postgres, the table service (`shulchan-server`), and separate poker and backgammon engine services. The engines have no public domain. The table reaches them on Railway's private network and sends `ENGINE_TOKEN`, the same value set on all three services. The poker engine checks each betting action, and the backgammon engine rolls the dice and checks every move. A phone only sends what the player wants to do. The table stores the result. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
+Railway hosts Redis, Postgres, the table service (`shulchan-server`), and one engine service per game. The engines have no public domain. The table reaches them on Railway's private network and sends `ENGINE_TOKEN`, the same value set on every service. The poker engine checks each betting action, and the backgammon engine rolls the dice and checks every move. `/health` fails only when Redis or Postgres is down; each engine is reported on its own. A phone only sends what the player wants to do. The table stores the result. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
 
 An installable APK, from `client/`:
 
