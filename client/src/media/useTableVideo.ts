@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { VideoTrack } from "livekit-client";
-import { remoteConfig } from "@/game/remoteConfig";
+import { videoFor } from "@/game/remoteConfig";
 import type { GameKind } from "@/games/registry";
 import type { Credentials } from "@/game/types";
 import { allowCapture } from "@/media/capturePermission";
@@ -96,7 +96,7 @@ export function useTableVideo(credentials: Credentials | null, suspended: boolea
       const session = mod.startTableVideo(current, setTracks, setMicOn, () => {
         handle.current = null;
         reset();
-      }, desired.current, remoteConfig().video[kindRef.current], (denied) => {
+      }, desired.current, videoFor(kindRef.current), (denied) => {
         desired.current[denied === "camera" ? "camera" : "mic"] = false;
         if (denied === "camera") setCameraOn(false);
         else setMicOn(false);

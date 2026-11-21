@@ -125,10 +125,10 @@ export function shareTable(gameId: string, password?: string) {
   Share.share({ message: t("shareMessage", { link }) });
 }
 
-/** Server messages every table can show, in the player's language. Anything else is shown as sent. */
-export function tableError(message: string) {
-  if (message === "Table is paused") return t("tablePaused");
-  if (message === "Table is closing") return t("tableClosing");
+/** Refusals every table can show, in the player's language, by the server's code. Anything else is shown as sent. */
+export function tableError(message: string, code: string | null) {
+  if (code === "paused") return t("tablePaused");
+  if (code === "closing") return t("tableClosing");
   return message;
 }
 

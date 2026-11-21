@@ -1,59 +1,32 @@
-export type Card = { rank: string; suit: string };
-
 export type PublicPlayer = {
   id: string;
   name: string;
   seat: number;
-  stack: number;
-  betSize: number;
-  inHand: boolean;
-  sittingOut: boolean;
-  bought: number;
   blocked?: boolean;
   /** Playing in the browser. The server never makes a browser player admin. */
   web?: boolean;
 };
 
-export type RebuyRule = "any" | "busted" | "off";
+/** Where the table's game stands, in terms every screen understands without knowing the game. */
+export type TableStatus = {
+  phase: "waiting" | "playing" | "over";
+  /** Player ids whose move it is. */
+  toAct: string[];
+  /** Server epoch ms when the server moves for them. Absent when nobody is on a clock. */
+  turnDeadline?: number;
+};
 
 export type TableSnapshot = {
   id: string;
-  status: "waiting" | "playing";
-  smallBlind: number;
-  bigBlind: number;
-  buyIn: number;
-  kind?: "poker" | "backgammon";
-  autoDeal?: boolean;
-  /** Poker only. Seconds each player has to act. */
-  turnSeconds?: number;
-  /** Poker only. New small blind that starts with the next hand. */
-  nextSmallBlind?: number;
-  /** Poker only. Who may buy more chips: anyone, only a player with no chips left, or nobody. */
-  rebuy?: RebuyRule;
-  backgammon?: unknown;
-  backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
-  /** Which player holds each backgammon colour. A player keeps their colour when the other leaves. */
-  backgammonColors?: { white: string | null; black: string | null };
-  communityCards: Card[];
-  pots: { size: number; eligiblePlayers: number[] }[];
-  round: "preflop" | "flop" | "turn" | "river" | null;
-  playerToActId: string | null;
   players: PublicPlayer[];
-  you: {
-    id: string;
-    holeCards: Card[];
-    legalActions: ("fold" | "check" | "call" | "bet" | "raise")[];
-    chipRange: { min: number; max: number } | null;
-    isAdmin: boolean;
-  } | null;
-  lastWinners: { seat: number; name: string; amount: number }[];
-  shownCards: { seat: number; cards: Card[] }[];
+  you: { id: string; isAdmin: boolean } | null;
   password?: string;
   paused?: boolean;
   idleCloseAt?: number;
-  /** Server epoch ms when the player to act runs out of time. */
-  turnDeadline?: number;
   serverNow?: number;
+  status: TableStatus;
+  /** The game's own part. Each game's folder reads it with its own type. */
+  game: { kind: string };
 };
 
 export type Credentials = {

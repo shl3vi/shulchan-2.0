@@ -8,6 +8,7 @@ import { Server } from "socket.io";
 import { APP_SCHEME, assertSafeAuthConfig, authRouter } from "./auth.js";
 import { debugConfigs, debugRouter, ensureDebugTable } from "./debug.js";
 import { pool } from "./db.js";
+import { engineToken } from "./engines.js";
 import { allGames } from "./games/index.js";
 import { allowedOrigins, cors, rateLimit } from "./http.js";
 import { router } from "./routes.js";
@@ -21,6 +22,7 @@ import { allNameTerms, publicConfigFor, regionOf } from "./publicConfig.js";
 import { connectRedis, flushTables, redis, stopStore, subscriber } from "./store.js";
 
 try {
+  engineToken();
   assertSafeAuthConfig();
 } catch (error) {
   console.error((error as Error).message);

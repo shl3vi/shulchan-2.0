@@ -5,7 +5,7 @@ import type { GameDebug } from "../types.js";
 import { dropRemovedPlayers } from "./departures.js";
 import { actPoker, addChips, openHand, readPoker, startPoker, type ActionName } from "./engine.js";
 import { blindsProblem, chipAmount, MAX_CHIPS, type PokerSettings } from "./schema.js";
-import { snapshot } from "./snapshot.js";
+import { pokerView } from "./view.js";
 import { pokerOf } from "./state.js";
 
 const rebuyBody = z.object({ playerId: z.string().min(1), amount: chipAmount }).strict();
@@ -38,26 +38,29 @@ async function repairPokerHand(tableId: string) {
 
 async function state(table: TableRecord) {
   const view = await readPoker(table);
-  const snap = snapshot(table, view);
+  const { status, game } = pokerView(table, view);
   const holes = new Map(view.holeCards.map((entry) => [entry.seat, entry.cards]));
   return {
     id: table.id,
     password: table.password,
-    smallBlind: snap.smallBlind,
-    bigBlind: snap.bigBlind,
-    buyIn: snap.buyIn,
-    status: snap.status,
-    round: snap.round,
-    communityCards: snap.communityCards,
-    pots: snap.pots,
+    smallBlind: game.smallBlind,
+    bigBlind: game.bigBlind,
+    buyIn: game.buyIn,
+    status: status.phase,
+    round: game.round,
+    communityCards: game.communityCards,
+    pots: game.pots,
     legalActions: view.legalActions,
     chipRange: view.chipRange,
-    playerToActId: snap.playerToActId,
-    lastWinners: snap.lastWinners,
-    players: snap.players.map((player) => ({
-      ...player,
+    playerToActId: status.toAct[0] ?? null,
+    lastWinners: game.lastWinners,
+    players: table.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      seat: player.seat,
+      ...game.seats[player.id],
       isAdmin: player.id === table.adminId,
-      holeCards: holes.get(player.seat) ?? snap.shownCards.find((shown) => shown.seat === player.seat)?.cards ?? [],
+      holeCards: holes.get(player.seat) ?? game.shownCards.find((shown) => shown.seat === player.seat)?.cards ?? [],
     })),
   };
 }

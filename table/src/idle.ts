@@ -1,4 +1,4 @@
-import { TableRefused } from "./errors.js";
+import { REFUSAL, TableRefused } from "./errors.js";
 
 /** Idle fuse. Five quiet minutes, then five minutes to play or actively pause, then the table closes. */
 
@@ -30,8 +30,8 @@ export function noteActivity(table: IdleTable, now: number) {
 }
 
 export function assertPlaying(table: IdleTable) {
-  if (table.closing) throw new TableRefused("invalid", "Table is closing");
-  if (table.paused) throw new TableRefused("invalid", "Table is paused");
+  if (table.closing) throw new TableRefused("invalid", "Table is closing", REFUSAL.closing);
+  if (table.paused) throw new TableRefused("invalid", "Table is paused", REFUSAL.paused);
 }
 
 /**
@@ -39,12 +39,12 @@ export function assertPlaying(table: IdleTable) {
  * so pause and resume cannot buy another five minutes.
  */
 export function setPaused(table: IdleTable, paused: boolean, now: number) {
-  if (table.closing) throw new TableRefused("invalid", "Table is closing");
+  if (table.closing) throw new TableRefused("invalid", "Table is closing", REFUSAL.closing);
   if (paused) {
     if (table.paused) return;
     const activity = finite(table.lastActivityAt) ?? now;
     const spent = Math.max(0, now - (activity > now ? now : activity));
-    if (spent >= IDLE_CLOSE_MS) throw new TableRefused("invalid", "Table is closing");
+    if (spent >= IDLE_CLOSE_MS) throw new TableRefused("invalid", "Table is closing", REFUSAL.closing);
     table.paused = true;
     table.idleCarry = spent;
     delete table.idleCloseAt;

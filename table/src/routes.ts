@@ -4,6 +4,7 @@ import { liveKitToken, mediaRoom, VideoUnavailable } from "./livekit.js";
 import { readHost } from "./auth.js";
 import { nameProblem, playerName } from "./name.js";
 import { avoidSeats, blockPerson, blockedSeatIds, storeReport, unblockPerson } from "./safety.js";
+import { tableSnapshot } from "./view.js";
 import { blockBody, joinBody, liveKitBody, readSchema, reportBody } from "./schema.js";
 import { openTable, noteJoin, noteJoinRefused, notePlayers, noteVideo } from "./events/ledger.js";
 import { reportError, reportCaught } from "./events/report.js";
@@ -63,7 +64,7 @@ router.post("/", async (req, res) => {
     gameId: table.id,
     adminSecret: table.adminSecret,
     password: table.password,
-    state: await game.snapshot(table),
+    state: await tableSnapshot(table),
   });
 });
 
@@ -308,5 +309,5 @@ router.get("/:id", async (req, res) => {
     return;
   }
   const blocked = await blockedSeatIds(viewer?.personKey, table.players).catch(() => new Set<string>());
-  res.json(await gameOf(table).snapshot(table, viewer?.id, blocked));
+  res.json(await tableSnapshot(table, viewer?.id, blocked));
 });

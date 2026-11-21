@@ -1,4 +1,5 @@
 import { defineGame, type GameModule } from "../types.js";
+import { readPokerConfig } from "./config.js";
 import { pokerDeadline, pokerOnDeadline, pokerResume } from "./deadline.js";
 import { pokerDebug } from "./debug.js";
 import { dropRemovedPlayers, foldDeparted } from "./departures.js";
@@ -6,8 +7,8 @@ import { openHand, pokerEngineAnswers, readPoker, seatPoker, unseatPoker } from 
 import { pokerMoves } from "./moves.js";
 import { readOpenSettings, type PokerSettings } from "./schema.js";
 import { chooseSeat, SEATS } from "./seats.js";
-import { snapshot } from "./snapshot.js";
 import { pokerOf, type PokerState } from "./state.js";
+import { pokerView } from "./view.js";
 
 export const poker: GameModule<PokerSettings> = defineGame<PokerSettings>({
   seats: { max: SEATS },
@@ -38,13 +39,14 @@ export const poker: GameModule<PokerSettings> = defineGame<PokerSettings>({
     await foldDeparted(table);
     await dropRemovedPlayers(table);
   },
-  async snapshot(table, viewerId, blockedIds) {
-    return snapshot(table, await readPoker(table), viewerId, blockedIds);
+  async view(table, viewerId) {
+    return pokerView(table, await readPoker(table), viewerId);
   },
   moves: pokerMoves,
   deadline: pokerDeadline,
   onDeadline: pokerOnDeadline,
   resume: pokerResume,
+  config: readPokerConfig,
   health: pokerEngineAnswers,
   debug: pokerDebug,
 });

@@ -1,6 +1,7 @@
 import type { Router } from "express";
 import type { ZodType } from "zod";
 import type { GameState, SeatPlayer, TableRecord } from "../store.js";
+import type { TableStatus } from "../view.js";
 
 /**
  * What every game gives the shared table code. Shared code reaches a game only through
@@ -24,11 +25,10 @@ export type AfterContext = {
 };
 
 export type GameMove<Input = any, Result = any> = {
+  /** The input without `type`. A body that does not parse is answered with "Invalid request". */
   schema: ZodType<Input>;
-  /** Sent back when the body does not parse. "Invalid request" when left out. */
-  invalidMessage?: string;
-  /** A check the schema cannot express. Returns the message to send back, or null. */
-  check?(input: Input): string | null;
+  /** A check the schema cannot express. Returns the refusal to send back, or null. */
+  check?(input: Input): { message: string; code?: string } | null;
   /** Sent back when `run` throws something without a message. */
   failure: string;
   run(context: MoveContext, input: Input): Promise<Result>;
@@ -78,9 +78,9 @@ export type GameModule<Settings extends OpenSettings = OpenSettings> = {
   unseat(table: TableRecord, player: SeatPlayer): Promise<void>;
   /** Removes leaving players the game no longer needs. */
   dropDeparted(table: TableRecord): Promise<void>;
-  /** What one viewer, or nobody, sees of the table. */
-  snapshot(table: TableRecord, viewerId?: string, blockedIds?: Set<string>): Promise<unknown>;
-  /** Socket events this game accepts, by event name. */
+  /** What one viewer, or nobody, sees: the shared status, and the game's own part of the snapshot. */
+  view(table: TableRecord, viewerId?: string): Promise<{ status: TableStatus; game: { kind: string } }>;
+  /** The game's moves, by type. The app sends each as a `move` event, `{ type, ...input }`. */
   moves: Record<string, GameMove>;
   /**
    * When the game next acts on its own (a turn clock, the next deal), as server epoch ms, or null.
@@ -91,6 +91,8 @@ export type GameModule<Settings extends OpenSettings = OpenSettings> = {
   onDeadline?(tableId: string): Promise<void>;
   /** The admin resumed a paused table. */
   resume?(table: TableRecord, now: number): void;
+  /** Reads the game's own part of the app config, `games.<kind>`, minus `video`. Missing or wrong values get defaults. */
+  config?(raw: Record<string, unknown> | null): object;
   /** True when this game's engine service answers. */
   health(): Promise<boolean>;
   debug?: GameDebug<Settings>;

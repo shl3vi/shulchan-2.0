@@ -11,10 +11,7 @@ import { fileURLToPath } from "node:url";
  * Each entry below is a known exception, written "from -> to". The test also fails when an
  * entry is no longer needed, so the list can only shrink.
  */
-const ALLOWED = new Set<string>([
-  // The app config still has a poker section with turn-time bounds.
-  "publicConfig.ts -> games/poker/turn.ts",
-]);
+const ALLOWED = new Set<string>([]);
 
 const src = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -84,7 +81,7 @@ test("every game in the list loads and fills the contract", async () => {
   assert.ok(games.length > 0);
   for (const [kind, game] of games) {
     assert.ok(game.seats.max > 0, `${kind} has seats`);
-    for (const hook of ["settings", "open", "chooseSeat", "seat", "unseat", "dropDeparted", "snapshot", "health"] as const) {
+    for (const hook of ["settings", "open", "chooseSeat", "seat", "unseat", "dropDeparted", "view", "health"] as const) {
       assert.equal(typeof game[hook], "function", `${kind}.${hook}`);
     }
     assert.ok(Object.keys(game.moves).length > 0, `${kind} has moves`);

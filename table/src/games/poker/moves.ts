@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EngineRefused } from "../../engines.js";
 import { TableRefused } from "../../errors.js";
 import { notePlayers } from "../../events/ledger.js";
 import { assertPlaying, noteActivity } from "../../idle.js";
@@ -64,13 +65,19 @@ const tableSettings: GameMove<z.infer<typeof tableSettingsBody>> = {
   },
 };
 
-const startHand: GameMove<unknown, HandMark> = {
-  schema: z.unknown(),
+const startHand: GameMove<object, HandMark> = {
+  schema: z.object({}).strict(),
   failure: "Cannot start",
   async run({ table, requireAdmin }) {
     requireAdmin();
     assertPlaying(table);
-    const view = await startPoker(table);
+    const view = await startPoker(table).catch((error: unknown) => {
+      // The engine's reason, given a code so the app can say it in the player's language.
+      if (error instanceof EngineRefused && error.message === "At least two players need chips to deal.") {
+        throw new TableRefused("invalid", error.message, "poker.need-two-with-chips");
+      }
+      throw error;
+    });
     noteActivity(table, Date.now());
     await dropRemovedPlayers(table);
     return { round: view.round, seated: seatedCount(table) };
@@ -100,12 +107,11 @@ const rebuy: GameMove<z.infer<typeof rebuyBody>> = {
 
 const act: GameMove<z.infer<typeof actBody>, HandMark> = {
   schema: actBody,
-  invalidMessage: "Unknown action",
   check(input) {
     if (input.action !== "bet" && input.action !== "raise") return null;
     const amount = input.amount;
     const fits = amount != null && Number.isInteger(amount) && amount >= 1 && amount <= MAX_CHIPS;
-    return fits ? null : "Bet size is outside the allowed range";
+    return fits ? null : { message: "Bet size is outside the allowed range", code: "poker.bet-range" };
   },
   failure: "Action failed",
   async run({ table, seat }, input) {
@@ -120,11 +126,12 @@ const act: GameMove<z.infer<typeof actBody>, HandMark> = {
   after: noteHand,
 };
 
+/** By move type. The app sends `{ type: "act", action, amount }` and so on. */
 export const pokerMoves: Record<string, GameMove> = {
-  "auto-deal": autoDeal,
-  "turn-time": turnTime,
-  "table-settings": tableSettings,
-  "start-hand": startHand,
-  rebuy,
   act,
+  deal: startHand,
+  rebuy,
+  autoDeal,
+  turnTime,
+  settings: tableSettings,
 };

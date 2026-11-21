@@ -3,7 +3,7 @@ import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from "reac
 import Svg, { Defs, LinearGradient, Path, Stop } from "react-native-svg";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { betAnchor, FELT, RAIL, SEAT_CENTERS, SEAT_H, SEAT_TOP, SEAT_W, STAGE_H, STAGE_W } from "@/games/poker/tableStage";
-import type { Card } from "@/game/types";
+import type { Card, PokerAction } from "@/games/poker/types";
 import { ownChipJustPlayed, playOwnChip, playSfx, type Sfx } from "@/game/sfx";
 import { t } from "@/i18n";
 import { RoomLight } from "@/table/TableControls";
@@ -28,7 +28,7 @@ export type SeatSlot = {
   cameraOn?: boolean;
 };
 
-export type PokerAction = "fold" | "check" | "call" | "bet" | "raise";
+export type { PokerAction };
 
 const CHIP = 22;
 

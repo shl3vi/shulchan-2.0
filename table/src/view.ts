@@ -1,11 +1,21 @@
+import { gameOf } from "./games/index.js";
 import type { TableRecord } from "./store.js";
 
-/** What every viewer sees of a table, whatever its game. Each game adds its own part. */
+/** Where the table's game stands, in terms every screen understands without knowing the game. */
+export type TableStatus = {
+  /** waiting: nothing to play yet. playing: a hand or game is under way. over: finished, waiting for a restart. */
+  phase: "waiting" | "playing" | "over";
+  /** Player ids whose move it is. */
+  toAct: string[];
+  /** Server epoch ms when the server moves for them. Absent when nobody is on a clock. */
+  turnDeadline?: number;
+};
+
+/** What every viewer sees of a table, whatever its game. */
 export function sharedView(table: TableRecord, viewerId?: string, blockedIds?: Set<string>) {
   const viewer = viewerId ? table.players.find((player) => player.id === viewerId) : undefined;
   return {
     id: table.id,
-    kind: table.game.kind,
     players: table.players.map((player) => ({
       id: player.id,
       name: player.name,
@@ -23,4 +33,8 @@ export function sharedView(table: TableRecord, viewerId?: string, blockedIds?: S
   };
 }
 
-export type SharedView = ReturnType<typeof sharedView>;
+/** The whole snapshot: shared fields, the shared status, and the game's own part under `game`. */
+export async function tableSnapshot(table: TableRecord, viewerId?: string, blockedIds?: Set<string>) {
+  const { status, game } = await gameOf(table).view(table, viewerId);
+  return { ...sharedView(table, viewerId, blockedIds), status, game };
+}

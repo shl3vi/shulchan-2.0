@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
@@ -10,7 +9,8 @@ import { useGameSession } from "@/game/GameSession";
 import { SeatSafety } from "@/game/SeatSafety";
 import { TableHold } from "@/game/TableHold";
 import { playSfx } from "@/game/sfx";
-import type { Card, Credentials, RebuyRule, TableSnapshot } from "@/game/types";
+import type { Credentials } from "@/game/types";
+import { pokerView, type Card, type PokerView, type RebuyRule } from "@/games/poker/types";
 import { ActionDock, heroDealDelays, PokerTableLayout, SPOTLIGHT_DELAY_MS, type SeatSlot } from "@/games/poker/PokerTableLayout";
 import { usePokerMoves } from "@/games/poker/usePokerMoves";
 import { t } from "@/i18n";
@@ -21,15 +21,12 @@ import { CopyField, ErrorBanner, HomeButton, shareTable, TableFooter, tableError
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
 
-/** Poker's own server messages, then the ones every table shares. */
-function pokerError(message: string, range?: { min: number; max: number } | null) {
-  if (message === "Bet size is outside the allowed range" && range) return t("betOutOfRange", { min: range.min, max: range.max });
-  if (message === "At least two players need chips to deal.") return t("needTwoWithMoney");
-  return tableError(message);
+/** Poker's own refusals, by the server's code, then the ones every table shares. */
+function pokerError(message: string, code: string | null, range?: { min: number; max: number } | null) {
+  if (code === "poker.bet-range" && range) return t("betOutOfRange", { min: range.min, max: range.max });
+  if (code === "poker.need-two-with-chips") return t("needTwoWithMoney");
+  return tableError(message, code);
 }
-
-/** Your phone ticks for this many seconds before your turn runs out. */
-const TICK_SECONDS = 5;
 
 /** The turn lengths the admin steps through, one tap at a time. */
 const TURN_SECONDS_CHOICES = [15, 20, 30, 45, 60, 90, 120];
@@ -50,11 +47,11 @@ const REBUY_RULES: RebuyRule[] = ["any", "busted", "off"];
 const REBUY_LABEL = { any: "rebuyAny", busted: "rebuyBusted", off: "rebuyOff" } as const;
 
 /** Whether this player may buy more chips now under the table's rule. */
-function mayRebuy(state: TableSnapshot | null) {
-  const rule = state?.rebuy ?? "any";
+function mayRebuy(game: PokerView | null, youId: string | undefined) {
+  const rule = game?.rebuy ?? "any";
   if (rule === "any") return true;
   if (rule === "off") return false;
-  const me = state?.players.find((player) => player.id === state.you?.id);
+  const me = youId ? game?.seats[youId] : undefined;
   return me != null && me.stack === 0 && !me.inHand;
 }
 
@@ -81,7 +78,10 @@ function Stepper({ value, onMinus, onPlus, minusOff, plusOff }: {
 export function PokerScreen({ credentials }: { credentials: Credentials }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { state, error, dismissError, setPaused, leave, removePlayer, transferAdmin } = useGameSession();
+  const { state, error, errorCode, dismissError, setPaused, leave, removePlayer, transferAdmin } = useGameSession();
+  const game = pokerView(state);
+  const hand = game?.hand ?? null;
+  const toActId = state?.status.toAct[0] ?? null;
   const { startHand, setAutoDeal, setTurnSeconds, setTableSettings, act, rebuy } = usePokerMoves();
   const video = useTableVideo(credentials, state?.paused === true, "poker");
   const showAd = useTableAdAllowed(state);
@@ -93,11 +93,11 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
   const hold = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdStart = useRef<ReturnType<typeof setTimeout> | null>(null);
   const you = state?.you;
-  const pot = state?.pots.reduce((sum, entry) => sum + entry.size, 0) ?? 0;
-  const buyStep = Math.max(1, state?.bigBlind ?? 1);
+  const pot = game?.pots.reduce((sum, entry) => sum + entry.size, 0) ?? 0;
+  const buyStep = Math.max(1, game?.bigBlind ?? 1);
   // Time left as the server saw it, so a wrong phone clock does not matter.
-  const turnLeftMs =
-    state?.turnDeadline != null && state.serverNow != null ? Math.max(0, state.turnDeadline - state.serverNow) : undefined;
+  const turnDeadline = state?.status.turnDeadline;
+  const turnLeftMs = turnDeadline != null && state?.serverNow != null ? Math.max(0, turnDeadline - state.serverNow) : undefined;
 
   // A different player at this phone starts with no seat open.
   const [seatFor, setSeatFor] = useState(credentials?.playerId);
@@ -108,52 +108,21 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
 
   useBlockedVideo(video.holdOff, state?.players);
 
-  // Your turn, on this phone only: a chime when the action reaches you, and a soft tick for each
-  // of the last 5 seconds. A new betting round counts as a new turn, even for the same player.
-  const yourTurn = you != null && state?.playerToActId === you.id && turnLeftMs != null;
-  const yourTurnKey = yourTurn ? `${state?.round}` : null;
-  const lastTurnKey = useRef<string | null>(null);
-  useEffect(() => {
-    const before = lastTurnKey.current;
-    lastTurnKey.current = yourTurnKey;
-    if (yourTurnKey != null && yourTurnKey !== before) playSfx("turnChime");
-  }, [yourTurnKey]);
-  useEffect(() => {
-    if (!yourTurn || turnLeftMs == null) return;
-    const endsAt = Date.now() + turnLeftMs;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    for (let second = TICK_SECONDS; second >= 1; second -= 1) {
-      const wait = endsAt - second * 1000 - Date.now();
-      if (wait >= 0) timers.push(setTimeout(() => playSfx("turnTick"), wait));
-    }
-    return () => timers.forEach(clearTimeout);
-  }, [yourTurn, turnLeftMs, state?.serverNow]);
-
   // Applause for everyone at the table when a poker hand ends, as the winner's seat grows.
   // Not on the first snapshot.
   const lastRound = useRef<string | null | undefined>(undefined);
   const applause = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!state) return;
+    if (!game) return;
     const before = lastRound.current;
-    lastRound.current = state.round;
-    if (before == null || state.round != null || state.lastWinners.length === 0) return;
+    lastRound.current = game.round;
+    if (before == null || game.round != null || game.lastWinners.length === 0) return;
     if (applause.current) clearTimeout(applause.current);
     applause.current = setTimeout(() => playSfx("applause"), SPOTLIGHT_DELAY_MS);
-  }, [state]);
+  }, [game]);
   useEffect(() => () => {
     if (applause.current) clearTimeout(applause.current);
   }, []);
-
-  useEffect(() => {
-    const live = state?.round != null && state?.paused !== true;
-    if (!live) return;
-    // A browser can refuse to keep the screen on (no permission, page in the background). The game goes on.
-    void activateKeepAwakeAsync("poker").catch(() => undefined);
-    return () => {
-      void Promise.resolve().then(() => deactivateKeepAwake("poker")).catch(() => undefined);
-    };
-  }, [state?.paused, state?.round]);
 
   function stopBuy() {
     if (holdStart.current) clearTimeout(holdStart.current);
@@ -164,14 +133,14 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
 
   function startBuy(direction: -1 | 1) {
     stopBuy();
-    const cap = state?.buyIn ?? buyStep;
+    const cap = game?.buyIn ?? buyStep;
     setBuyChips((value) => Math.min(cap, Math.max(1, value + direction * buyStep)));
     holdStart.current = setTimeout(() => {
       hold.current = setInterval(() => setBuyChips((value) => Math.min(cap, Math.max(1, value + direction * buyStep))), 70);
     }, 320);
   }
 
-  const winnerSeats = new Set(state?.round == null ? (state?.lastWinners ?? []).map((winner) => winner.seat) : []);
+  const winnerSeats = new Set(game?.round == null ? (game?.lastWinners ?? []).map((winner) => winner.seat) : []);
   const seats: (SeatSlot | undefined)[] = [];
   for (const player of state?.players ?? []) {
     const isYou = player.id === you?.id;
@@ -179,14 +148,14 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
     seats[player.seat] = {
       id: player.id,
       name: player.name,
-      stack: player.stack,
-      bet: player.betSize,
-      toAct: state?.playerToActId === player.id,
-      ...(state?.playerToActId === player.id && turnLeftMs != null
-        ? { turnLeftMs, turnTotalMs: (state.turnSeconds ?? 30) * 1000, turnStamp: state.serverNow }
+      stack: game?.seats[player.id]?.stack ?? 0,
+      bet: game?.seats[player.id]?.betSize ?? 0,
+      toAct: toActId === player.id,
+      ...(toActId === player.id && turnLeftMs != null
+        ? { turnLeftMs, turnTotalMs: (game?.turnSeconds ?? 30) * 1000, turnStamp: state?.serverNow }
         : {}),
       isYou,
-      inHand: player.inHand,
+      inHand: game?.seats[player.id]?.inHand ?? false,
       winner: winnerSeats.has(player.seat),
       video: track ? <SeatVideo track={track} /> : undefined,
       cameraOn: isYou ? video.cameraOn : track != null,
@@ -197,7 +166,7 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
     shareTable(credentials.gameId, state?.password);
   }
 
-  if (!state) {
+  if (!state || !game) {
     return (
       <View style={styles.screen}>
         <StatusBar style="light" />
@@ -212,15 +181,15 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
       <View style={styles.stage}>
         <PokerTableLayout
           seats={seats}
-          shown={(state?.shownCards ?? []).reduce<Card[][]>((cards, shown) => {
+          shown={(game?.shownCards ?? []).reduce<Card[][]>((cards, shown) => {
             cards[shown.seat] = shown.cards;
             return cards;
           }, [])}
-          community={state?.communityCards ?? []}
+          community={game?.communityCards ?? []}
           pot={pot}
-          round={state?.round ?? null}
-          winners={state?.round == null ? (state?.lastWinners ?? []) : []}
-          onDeal={state?.you?.isAdmin && state.round == null && !state.paused ? startHand : undefined}
+          round={game?.round ?? null}
+          winners={game?.round == null ? (game?.lastWinners ?? []) : []}
+          onDeal={state?.you?.isAdmin && game.round == null && !state.paused ? startHand : undefined}
           onSeat={(index) => {
             const player = state?.players.find((seat) => seat.seat === index);
             if (!player || player.id === you?.id) return;
@@ -244,8 +213,8 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
                     {(state?.players ?? []).map((player) => (
                       <View key={player.id} style={styles.statsRow}>
                         <Text style={styles.statsCell} numberOfLines={1}>{player.name}</Text>
-                        <Text style={[styles.statsCell, styles.statsNum]}>{player.stack}</Text>
-                        <Text style={[styles.statsCell, styles.statsNum]}>{player.bought ?? 0}</Text>
+                        <Text style={[styles.statsCell, styles.statsNum]}>{game.seats[player.id]?.stack ?? 0}</Text>
+                        <Text style={[styles.statsCell, styles.statsNum]}>{game.seats[player.id]?.bought ?? 0}</Text>
                       </View>
                     ))}
                     <Text style={styles.statsLine}>{t("pot", { n: pot })}</Text>
@@ -256,29 +225,29 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
                   <Pressable style={styles.statsRow} onPress={() => { setPaused(state?.paused !== true); setSheet(null); }}>
                     <Text style={styles.statsLine}>{state?.paused ? t("resumeTable") : t("pauseTable")}</Text>
                   </Pressable>
-                  <Pressable style={styles.statsRow} onPress={() => setAutoDeal(state?.autoDeal !== true)}>
+                  <Pressable style={styles.statsRow} onPress={() => setAutoDeal(game?.autoDeal !== true)}>
                     <Text style={styles.statsLine}>{t("autoDeal")}</Text>
-                    <Text style={styles.makeAdmin}>{state?.autoDeal ? t("autoDealOn") : t("autoDealOff")}</Text>
+                    <Text style={styles.makeAdmin}>{game?.autoDeal ? t("autoDealOn") : t("autoDealOff")}</Text>
                   </Pressable>
                   <Pressable
                     style={styles.statsRow}
-                    onPress={() => setTurnSeconds(nextTurnSeconds(state?.turnSeconds ?? 30))}
+                    onPress={() => setTurnSeconds(nextTurnSeconds(game?.turnSeconds ?? 30))}
                     accessibilityRole="button"
                     accessibilityHint={t("turnTimeHint")}
                   >
                     <Text style={styles.statsLine}>{t("turnTime")}</Text>
-                    <Text style={styles.makeAdmin}>{t("turnTimeValue", { seconds: state?.turnSeconds ?? 30 })}</Text>
+                    <Text style={styles.makeAdmin}>{t("turnTimeValue", { seconds: game?.turnSeconds ?? 30 })}</Text>
                   </Pressable>
                   {(() => {
                     // The blinds the next hand uses: a pending change, or the current blinds.
-                    const plannedSmall = state.nextSmallBlind ?? state.smallBlind;
+                    const plannedSmall = game.nextSmallBlind ?? game.smallBlind;
                     const buyInStep = plannedSmall * 2 * 10;
                     return (
                       <>
                         <View style={styles.statsRow}>
                           <View style={styles.settingCopy}>
                             <Text style={styles.statsLine}>{t("blinds")}</Text>
-                            {state.nextSmallBlind != null ? (
+                            {game.nextSmallBlind != null ? (
                               <Text style={styles.settingHint}>{t("blindsNextHand")}</Text>
                             ) : null}
                           </View>
@@ -287,28 +256,28 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
                             onMinus={() => setTableSettings({ smallBlind: stepBlind(plannedSmall, -1) })}
                             onPlus={() => setTableSettings({ smallBlind: stepBlind(plannedSmall, 1) })}
                             minusOff={stepBlind(plannedSmall, -1) === plannedSmall}
-                            plusOff={stepBlind(plannedSmall, 1) === plannedSmall || stepBlind(plannedSmall, 1) * 2 > state.buyIn}
+                            plusOff={stepBlind(plannedSmall, 1) === plannedSmall || stepBlind(plannedSmall, 1) * 2 > game.buyIn}
                           />
                         </View>
                         <View style={styles.statsRow}>
                           <Text style={styles.statsLine}>{t("buyIn")}</Text>
                           <Stepper
-                            value={String(state.buyIn)}
-                            onMinus={() => setTableSettings({ buyIn: Math.max(plannedSmall * 2, state.buyIn - buyInStep) })}
-                            onPlus={() => setTableSettings({ buyIn: state.buyIn + buyInStep })}
-                            minusOff={state.buyIn <= plannedSmall * 2}
+                            value={String(game.buyIn)}
+                            onMinus={() => setTableSettings({ buyIn: Math.max(plannedSmall * 2, game.buyIn - buyInStep) })}
+                            onPlus={() => setTableSettings({ buyIn: game.buyIn + buyInStep })}
+                            minusOff={game.buyIn <= plannedSmall * 2}
                           />
                         </View>
                         <Pressable
                           style={styles.statsRow}
                           onPress={() => {
-                            const rule = state.rebuy ?? "any";
+                            const rule = game.rebuy ?? "any";
                             setTableSettings({ rebuy: REBUY_RULES[(REBUY_RULES.indexOf(rule) + 1) % REBUY_RULES.length] });
                           }}
                           accessibilityRole="button"
                         >
                           <Text style={styles.statsLine}>{t("rebuys")}</Text>
-                          <Text style={styles.makeAdmin}>{t(REBUY_LABEL[state.rebuy ?? "any"])}</Text>
+                          <Text style={styles.makeAdmin}>{t(REBUY_LABEL[game.rebuy ?? "any"])}</Text>
                         </Pressable>
                       </>
                     );
@@ -347,7 +316,7 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
               {state?.password ? <CopyField label={t("password")} value={state.password} /> : null}
               {state ? (
                 <Text style={styles.statsLine}>
-                  {t("blindsAndBuyIn", { small: state.smallBlind, big: state.bigBlind, buyIn: state.buyIn })}
+                  {t("blindsAndBuyIn", { small: game.smallBlind, big: game.bigBlind, buyIn: game.buyIn })}
                 </Text>
               ) : null}
               <Pressable style={styles.cancel} onPress={share}>
@@ -390,7 +359,7 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
           onPause={setPaused}
         />
         {video.videoNotice ? <VideoNotice message={video.videoNotice} onClose={video.dismissVideoNotice} /> : null}
-        {error ? <ErrorBanner message={pokerError(error, you?.chipRange)} onClose={dismissError} /> : null}
+        {error ? <ErrorBanner message={pokerError(error, errorCode, hand?.chipRange)} onClose={dismissError} /> : null}
         <HomeButton />
         <View style={[styles.menu, { top: insets.top + 8 }]}>
           <TableMenu
@@ -398,12 +367,12 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
               { label: t("shareTable"), icon: "share" as const, onPress: share },
               { label: t("tableInfo"), icon: "info", onPress: () => setInfo(true) },
               { label: t("statistics"), icon: "stats", onPress: () => setSheet("stats") },
-              ...(mayRebuy(state)
+              ...(mayRebuy(game, you?.id)
                 ? [{
                     label: t("buyMore"),
                     icon: "buy" as const,
                     onPress: () => {
-                      setBuyChips(state?.buyIn ?? state?.bigBlind ?? 1);
+                      setBuyChips(game?.buyIn ?? game?.bigBlind ?? 1);
                       setBuying(true);
                     },
                   }]
@@ -464,13 +433,13 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
         </Modal>
       </View>
       <ActionDock
-        yourTurn={(you?.legalActions.length ?? 0) > 0 && state?.paused !== true}
-        actions={you?.legalActions ?? []}
-        chipRange={you?.chipRange ?? null}
-        step={state?.bigBlind ?? 1}
-        cards={you?.holeCards ?? []}
-        dealDelays={heroDealDelays((state?.players ?? []).filter((player) => player.inHand).length)}
-        idleText={state?.paused || state?.round == null ? null : t("waitingTurn")}
+        yourTurn={(hand?.legalActions.length ?? 0) > 0 && state?.paused !== true}
+        actions={hand?.legalActions ?? []}
+        chipRange={hand?.chipRange ?? null}
+        step={game?.bigBlind ?? 1}
+        cards={hand?.holeCards ?? []}
+        dealDelays={heroDealDelays(Object.values(game.seats).filter((seat) => seat.inHand).length)}
+        idleText={state?.paused || game?.round == null ? null : t("waitingTurn")}
         onAction={(action, chips) => act(action, chips)}
       />
       <TableFooter showAd={showAd} />

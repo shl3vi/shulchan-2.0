@@ -1,4 +1,4 @@
-import { sharedView } from "../../view.js";
+import type { TableStatus } from "../../view.js";
 import { defineGame, type GameModule } from "../types.js";
 import { backgammonDebug } from "./debug.js";
 import { backgammonEngineAnswers, openingBackgammon } from "./engine.js";
@@ -23,28 +23,28 @@ export const backgammon: GameModule<BackgammonSettings> = defineGame<BackgammonS
   async dropDeparted(table) {
     table.players = table.players.filter((player) => !player.pendingRemoval);
   },
-  async snapshot(table, viewerId, blockedIds) {
-    const shared = sharedView(table, viewerId, blockedIds);
+  async view(table) {
     const state = backgammonOf(table);
     const colors = settledColors(table);
-    // The poker-shaped fields stay, empty, until the app reads the new snapshot.
+    const board = state.board as { phase?: string; turn?: "white" | "black" } | undefined;
+    const bothSeated = colors.white != null && colors.black != null;
+    const over = board?.phase === "over";
+    // During a double offer the other player answers.
+    const actorColor = !board || over ? null : board.phase === "offer" ? (board.turn === "white" ? "black" : "white") : board.turn;
+    const actor = actorColor && bothSeated ? colors[actorColor] : undefined;
+    const status: TableStatus = {
+      phase: over ? "over" : bothSeated ? "playing" : "waiting",
+      toAct: actor ? [actor] : [],
+    };
     return {
-      ...shared,
-      status: "waiting" as const,
-      smallBlind: 0,
-      bigBlind: 0,
-      buyIn: 0,
-      communityCards: [],
-      pots: [],
-      round: null,
-      playerToActId: null,
-      players: shared.players.map((player) => ({ ...player, stack: 0, betSize: 0, inHand: false, sittingOut: false, bought: 0 })),
-      you: shared.you ? { ...shared.you, holeCards: [], legalActions: [], chipRange: null } : null,
-      shownCards: [],
-      lastWinners: [],
-      backgammon: state.board,
-      backgammonLog: state.log,
-      backgammonColors: { white: colors.white ?? null, black: colors.black ?? null },
+      status,
+      game: {
+        kind: "backgammon" as const,
+        board: state.board,
+        log: state.log,
+        /** Which player holds each colour. A player keeps their colour when the other leaves. */
+        colors: { white: colors.white ?? null, black: colors.black ?? null },
+      },
     };
   },
   moves: backgammonMoves,

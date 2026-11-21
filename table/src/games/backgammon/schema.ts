@@ -2,17 +2,26 @@ import { z } from "zod";
 
 const point = z.number().int().min(1).max(24);
 
-export const backgammonBody = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("roll") }).strict(),
-  z.object({
-    type: z.literal("move"),
+/** Each move's input, without its `type`. */
+export const moveInputs = {
+  roll: z.object({}).strict(),
+  move: z.object({
     from: z.union([point, z.literal("bar")]),
     to: z.union([point, z.literal("off")]),
     die: z.number().int().min(1).max(6),
   }).strict(),
-  z.object({ type: z.literal("double") }).strict(),
-  z.object({ type: z.literal("answer"), accept: z.boolean() }).strict(),
-  z.object({ type: z.literal("restart") }).strict(),
+  double: z.object({}).strict(),
+  answer: z.object({ accept: z.boolean() }).strict(),
+  restart: z.object({}).strict(),
+};
+
+/** A whole action, with its type, as the engine and the debug page take it. */
+export const backgammonBody = z.discriminatedUnion("type", [
+  moveInputs.roll.extend({ type: z.literal("roll") }),
+  moveInputs.move.extend({ type: z.literal("move") }),
+  moveInputs.double.extend({ type: z.literal("double") }),
+  moveInputs.answer.extend({ type: z.literal("answer") }),
+  moveInputs.restart.extend({ type: z.literal("restart") }),
 ]);
 
 export type BackgammonAction = z.infer<typeof backgammonBody>;

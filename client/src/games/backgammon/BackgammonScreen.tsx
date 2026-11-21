@@ -1,6 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { activateKeepAwakeAsync, deactivateKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,7 +8,8 @@ import { useGameSession } from "@/game/GameSession";
 import { SeatSafety } from "@/game/SeatSafety";
 import { TableHold } from "@/game/TableHold";
 import { playSfx } from "@/game/sfx";
-import type { Credentials, TableSnapshot } from "@/game/types";
+import type { Credentials } from "@/game/types";
+import { backgammonView, type BackgammonView } from "@/games/backgammon/view";
 import { BackgammonBoard, DiceCup } from "@/games/backgammon/BackgammonBoard";
 import { checkerPlace } from "@/games/backgammon/diceSound";
 import { move as playMove, newGame, opponent, seenMove, type BackgammonAction, type Color, type Game, type Move } from "@/games/backgammon/rules";
@@ -49,6 +49,7 @@ function BackgammonTable({
   serverNow,
   onPause,
   error,
+  errorCode,
   onDismissError,
   myColor,
   serverGame,
@@ -81,10 +82,11 @@ function BackgammonTable({
   serverNow?: number;
   onPause: (paused: boolean) => void;
   error: string | null;
+  errorCode: string | null;
   onDismissError: () => void;
   myColor: Color | null;
   serverGame?: unknown;
-  wins?: TableSnapshot["backgammonLog"];
+  wins?: BackgammonView["log"];
   emit: (event: string, body: unknown) => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -105,15 +107,6 @@ function BackgammonTable({
   gameRef.current = game;
   const seenGame = useRef("");
 
-  useEffect(() => {
-    const live = !paused && !waiting && game.phase !== "over";
-    if (!live) return;
-    // A browser can refuse to keep the screen on (no permission, page in the background). The game goes on.
-    void activateKeepAwakeAsync("backgammon").catch(() => undefined);
-    return () => {
-      void Promise.resolve().then(() => deactivateKeepAwake("backgammon")).catch(() => undefined);
-    };
-  }, [paused, waiting, game.phase]);
   const iPlay = !paused && !waiting && myColor != null && actor === myColor;
   const winnerName = game.winner == null ? "" : game.winner === myColor ? youName : otherName;
   const won = game.phase === "over" && game.winner != null;
@@ -177,7 +170,7 @@ function BackgammonTable({
 
   function send(action: BackgammonAction) {
     if (paused) return;
-    emit("bg", action);
+    emit("move", action);
   }
 
   // A new board from the server is adopted with the latest local state (selection, pending roll),
@@ -376,7 +369,7 @@ function BackgammonTable({
           }}
         />
         <TableHold top={insets.top + 56} paused={paused} idleCloseAt={idleCloseAt} serverNow={serverNow} isAdmin={isAdmin} onPause={onPause} />
-        {error ? <ErrorBanner message={tableError(error)} onClose={onDismissError} /> : null}
+        {error ? <ErrorBanner message={tableError(error, errorCode)} onClose={onDismissError} /> : null}
         {videoNotice ? <VideoNotice message={videoNotice} onClose={onDismissVideo} /> : null}
         <CameraButton on={cameraOn} held={paused} onToggle={setCamera} />
         <TalkButton on={micOn} onTalk={setMic} />
@@ -388,20 +381,20 @@ function BackgammonTable({
 
 export function BackgammonScreen({ credentials }: { credentials: Credentials }) {
   const router = useRouter();
-  const { state, error, dismissError, setPaused, leave, emit } = useGameSession();
+  const { state, error, errorCode, dismissError, setPaused, leave, emit } = useGameSession();
+  const view = backgammonView(state);
   const video = useTableVideo(credentials, state?.paused === true, "backgammon");
   useBlockedVideo(video.holdOff, state?.players);
   const you = state?.you;
   const youId = you?.id;
-  const other = state?.players.find((player) => player.id !== youId);
+  const colors = view?.colors;
+  // The opponent is whoever holds the other colour. Someone watching sees white on top.
+  const otherId = colors?.white === youId ? colors?.black : colors?.black === youId ? colors?.white : colors?.white;
+  const other = state?.players.find((player) => player.id === otherId && player.id !== youId);
   const topTrack = other ? video.tracks.get(other.id) : undefined;
   const bottomTrack = youId ? video.tracks.get(youId) : undefined;
   const ordered = [...(state?.players ?? [])].sort((a, b) => a.seat - b.seat);
-  const colors = state?.backgammonColors;
-  const mineIndex = ordered.findIndex((player) => player.id === youId);
-  const myColor: Color | null = colors
-    ? colors.white != null && colors.white === youId ? "white" : colors.black != null && colors.black === youId ? "black" : null
-    : mineIndex === 0 ? "white" : mineIndex === 1 ? "black" : null;
+  const myColor: Color | null = youId == null ? null : colors?.white === youId ? "white" : colors?.black === youId ? "black" : null;
   return (
     <BackgammonTable
       topVideo={topTrack ? <SeatVideo track={topTrack} /> : undefined}
@@ -410,8 +403,8 @@ export function BackgammonScreen({ credentials }: { credentials: Credentials }) 
       otherName={other?.name ?? ""}
       otherId={other?.id}
       myColor={myColor}
-      serverGame={state?.backgammon}
-      wins={state?.backgammonLog}
+      serverGame={view?.board}
+      wins={view?.log}
       emit={emit}
       micOn={video.micOn}
       cameraOn={video.cameraOn}
@@ -435,6 +428,7 @@ export function BackgammonScreen({ credentials }: { credentials: Credentials }) 
       serverNow={state?.serverNow}
       onPause={setPaused}
       error={error}
+      errorCode={errorCode}
       onDismissError={dismissError}
       videoNotice={video.videoNotice}
       onDismissVideo={video.dismissVideoNotice}

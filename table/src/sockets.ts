@@ -1,10 +1,9 @@
 import type { Server, Socket } from "socket.io";
 import { armDeadline } from "./deadlines.js";
-import { TableRefused } from "./errors.js";
+import { REFUSAL, TableRefused } from "./errors.js";
 import { notePlayers } from "./events/ledger.js";
 import { reportCaught, reportError } from "./events/report.js";
 import { gameFor, gameOf, kindOf } from "./games/index.js";
-import type { GameMove } from "./games/types.js";
 import { assignAdmin, releaseSeat, sameSecret, seatedCount, tablePassword } from "./players.js";
 import { isDebugTable } from "./debug.js";
 import { allowSocketEvent } from "./http.js";
@@ -12,6 +11,7 @@ import { endRoom, mediaRoom, mediaRooms, removeFromRoom } from "./livekit.js";
 import { setPaused } from "./idle.js";
 import { pauseBody, playerBody, readSchema } from "./schema.js";
 import { blockedSeatIds } from "./safety.js";
+import { tableSnapshot } from "./view.js";
 import { publishTable, readTable, subscriber, TABLE_UNCHANGED, withTable, type SeatPlayer, type TableRecord } from "./store.js";
 
 class LeftTable extends Error {
@@ -23,7 +23,7 @@ class LeftTable extends Error {
 async function personal(table: TableRecord, viewerId: string) {
   const viewer = table.players.find((player) => player.id === viewerId);
   const blocked = await blockedSeatIds(viewer?.personKey, table.players).catch(() => new Set<string>());
-  return gameOf(table).snapshot(table, viewerId, blocked);
+  return tableSnapshot(table, viewerId, blocked);
 }
 
 async function broadcast(io: Server, tableId: string) {
@@ -75,7 +75,7 @@ export function attachSockets(io: Server) {
     socket.join(tableId);
     socket.emit("state", await personal(table, playerId));
 
-    async function change<T>(fallback: string, run: (current: TableRecord, seat: SeatPlayer) => Promise<T>) {
+    async function change<T>(fallback: string, route: string, run: (current: TableRecord, seat: SeatPlayer) => Promise<T>) {
       try {
         const result = await withTable(tableId, async (current) => {
           const seat = current.players.find((entry) => entry.id === connected.id && !entry.pendingRemoval);
@@ -91,8 +91,11 @@ export function attachSockets(io: Server) {
           socket.disconnect(true);
           return undefined;
         }
-        reportCaught(tableId, error, "socket", kind);
-        socket.emit("error", { message: error instanceof Error ? error.message : fallback });
+        reportCaught(tableId, error, route, kind);
+        socket.emit("error", {
+          message: error instanceof Error ? error.message : fallback,
+          ...(error instanceof TableRefused && error.code ? { code: error.code } : {}),
+        });
         return undefined;
       }
     }
@@ -103,20 +106,20 @@ export function attachSockets(io: Server) {
     }
 
     function requireAdmin(current: TableRecord) {
-      if (connected.id !== current.adminId) throw new TableRefused("forbidden", "Not the table admin");
+      if (connected.id !== current.adminId) throw new TableRefused("forbidden", "Not the table admin", REFUSAL.notAdmin);
     }
 
     const onEvent = (event: string, handler: (body: unknown) => void) => {
       socket.on(event, (body: unknown) => {
         void allowSocketEvent(connected.id).then((allowed) => {
           if (!allowed) {
-            socket.emit("error", { message: "Too many requests" });
+            socket.emit("error", { message: "Too many requests", code: REFUSAL.tooMany });
             return;
           }
           handler(body);
         }).catch((error) => {
           reportCaught(tableId, error, event, kind);
-          socket.emit("error", { message: "Too many requests" });
+          socket.emit("error", { message: "Too many requests", code: REFUSAL.tooMany });
         });
       });
     };
@@ -125,10 +128,10 @@ export function attachSockets(io: Server) {
       const parsed = readSchema(pauseBody, body);
       if (!parsed) {
         reportError({ area: "validation", route: "pause", tableId, kind });
-        socket.emit("error", { message: "Invalid request" });
+        socket.emit("error", { message: "Invalid request", code: REFUSAL.invalid });
         return;
       }
-      return change("Cannot pause the table", async (current) => {
+      return change("Cannot pause the table", "pause", async (current) => {
         requireAdmin(current);
         if (Boolean(current.paused) === parsed.paused) return TABLE_UNCHANGED;
         if (!parsed.paused) {
@@ -149,7 +152,7 @@ export function attachSockets(io: Server) {
     });
 
     onEvent("leave", () => {
-      void change("Cannot leave", async (current) => {
+      void change("Cannot leave", "leave", async (current) => {
         await releaseSeat(current, connected.id);
         return seatedCount(current);
       }).then(async (seated) => {
@@ -162,10 +165,10 @@ export function attachSockets(io: Server) {
       const parsed = readSchema(playerBody, body);
       if (!parsed) {
         reportError({ area: "validation", route: "transfer-admin", tableId, kind });
-        socket.emit("error", { message: "Invalid request" });
+        socket.emit("error", { message: "Invalid request", code: REFUSAL.invalid });
         return;
       }
-      return change("Cannot transfer admin", async (current) => {
+      return change("Cannot transfer admin", "transfer-admin", async (current) => {
         requireAdmin(current);
         const next = current.players.find((seat) => seat.id === parsed.playerId && !seat.pendingRemoval);
         if (!next || next.id === connected.id) throw new Error("Player not found");
@@ -178,10 +181,10 @@ export function attachSockets(io: Server) {
       const parsed = readSchema(playerBody, body);
       if (!parsed) {
         reportError({ area: "validation", route: "remove-player", tableId, kind });
-        socket.emit("error", { message: "Invalid request" });
+        socket.emit("error", { message: "Invalid request", code: REFUSAL.invalid });
         return;
       }
-      return change("Cannot remove player", async (current) => {
+      return change("Cannot remove player", "remove-player", async (current) => {
         requireAdmin(current);
         await releaseSeat(current, parsed.playerId);
         // The removed player still knows the old password, so it must not let them back in.
@@ -200,30 +203,33 @@ export function attachSockets(io: Server) {
       });
     });
 
-    function onMove(event: string, move: GameMove) {
-      onEvent(event, (body: unknown) => {
-        const parsed = move.schema.safeParse(body);
-        const problem = parsed.success ? (move.check?.(parsed.data) ?? null) : (move.invalidMessage ?? "Invalid request");
-        if (!parsed.success || problem) {
-          reportError({ area: "validation", route: event, tableId, kind });
-          socket.emit("error", { message: problem });
-          return;
-        }
-        void change(move.failure, async (current, seat) => {
-          if (kindOf(current) !== kind) throw new TableRefused("forbidden", `This table is not ${kind}`);
-          return move.run({
-            table: current,
-            seat,
-            requireAdmin: () => requireAdmin(current),
-          }, parsed.data);
-        }).then(async (result) => {
-          await move.after?.({ tableId, resync }, result);
-        }).catch((error) => {
-          reportCaught(tableId, error, event, kind);
-        });
-      });
+    function refuse(route: string, message: string, code: string) {
+      reportError({ area: "validation", route, tableId, kind });
+      socket.emit("error", { message, code });
     }
 
-    for (const [event, move] of Object.entries(game.moves)) onMove(event, move);
+    // Every game move is one event, `{ type, ...input }`. The type picks the game's move.
+    onEvent("move", (body: unknown) => {
+      const { type, ...input } = (typeof body === "object" && body !== null ? body : {}) as { type?: unknown };
+      const move = typeof type === "string" && Object.hasOwn(game.moves, type) ? game.moves[type]! : null;
+      const route = `${kind}.${typeof type === "string" ? type : "?"}`;
+      if (!move) return refuse(route, "Unknown move", REFUSAL.invalid);
+      const parsed = move.schema.safeParse(input);
+      if (!parsed.success) return refuse(route, "Invalid request", REFUSAL.invalid);
+      const problem = move.check?.(parsed.data);
+      if (problem) return refuse(route, problem.message, problem.code ?? REFUSAL.invalid);
+      void change(move.failure, route, async (current, seat) => {
+        if (kindOf(current) !== kind) throw new TableRefused("forbidden", `This table is not ${kind}`, REFUSAL.invalid);
+        return move.run({
+          table: current,
+          seat,
+          requireAdmin: () => requireAdmin(current),
+        }, parsed.data);
+      }).then(async (result) => {
+        await move.after?.({ tableId, resync }, result);
+      }).catch((error) => {
+        reportCaught(tableId, error, route, kind);
+      });
+    });
   });
 }

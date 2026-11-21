@@ -10,6 +10,8 @@ type GameSessionValue = {
   credentials: Credentials | null;
   state: TableSnapshot | null;
   error: string | null;
+  /** The server's code for the error, when it sent one. Screens translate by code. */
+  errorCode: string | null;
   dismissError: () => void;
   /** Opens a table of this game with the settings its opening form chose, and sits down as admin. */
   createAndSit: (name: string, hostToken: string, kind: GameKind, settings: object) => Promise<void>;
@@ -29,7 +31,12 @@ const GameSessionContext = createContext<GameSessionValue | null>(null);
 export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [state, setState] = useState<TableSnapshot | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setErrorText] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  function setError(message: string | null, code: string | null = null) {
+    setErrorText(message);
+    setErrorCode(code);
+  }
   const [socket, setSocket] = useState<Socket | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -85,14 +92,14 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       setState(null);
       setError(payload?.reason === "idle" ? t("tableClosedIdle") : t("leftTable"));
     });
-    next.on("error", (payload: { message?: string }) => {
+    next.on("error", (payload: { message?: string; code?: string }) => {
       if (payload.message === "Invalid connection") {
         remember(null);
         setState(null);
         setError(null);
         return;
       }
-      setError(payload.message ?? "Table error");
+      setError(payload.message ?? "Table error", payload.code ?? null);
     });
     // The socket is an outside connection made here, and the session hands it out once it exists.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -108,6 +115,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       credentials,
       state,
       error,
+      errorCode,
       dismissError() {
         setError(null);
       },
@@ -161,7 +169,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         };
       },
     }),
-    [credentials, error, ready, socket, state],
+    [credentials, error, errorCode, ready, socket, state],
   );
 
   return <GameSessionContext.Provider value={value}>{children}</GameSessionContext.Provider>;

@@ -1,4 +1,4 @@
-import { DEFAULT_TURN_SECONDS, MAX_TURN_SECONDS, MIN_TURN_SECONDS } from "./games/poker/turn.js";
+import { allGames, type GameKind } from "./games/index.js";
 
 export type AdsMode = "off" | "test" | "live";
 
@@ -8,9 +8,8 @@ export type VideoQuality = { width: number; height: number; frameRate: number; m
 export type PublicConfig = {
   /** off: no banner. test: Google's sample banner. live: this app's own ad units. */
   ads: { mode: AdsMode; androidUnitId: string; iosUnitId: string; testDevices: string[] };
-  /** turnSecondsDefault: how long each player has to act at a new poker table. */
-  poker: { autoDealDefault: boolean; turnSecondsDefault: number };
-  video: { poker: VideoQuality; backgammon: VideoQuality };
+  /** Each game's own settings, plus the camera quality at its tables. */
+  games: Record<GameKind, { video: VideoQuality } & Record<string, unknown>>;
   update: { minVersion: string; force: boolean; iosUrl: string; androidUrl: string };
   announcement: string;
   names: { embedded: string[]; words: string[] };
@@ -22,21 +21,16 @@ export type PublicConfigSet = {
   regions: Record<string, PublicConfig>;
 };
 
+const DEFAULT_VIDEO: VideoQuality = { width: 320, height: 240, frameRate: 15, maxKbps: 150 };
+
 /** What the phone gets from GET /api/config when PUBLIC_CONFIG leaves a field out. */
-export const defaultPublicConfig: PublicConfig = {
-  ads: { mode: "test", androidUnitId: "", iosUnitId: "", testDevices: [] },
-  poker: { autoDealDefault: true, turnSecondsDefault: DEFAULT_TURN_SECONDS },
-  video: {
-    poker: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
-    backgammon: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
-  },
-  update: { minVersion: "", force: false, iosUrl: "", androidUrl: "" },
-  announcement: "",
-  names: { embedded: [], words: [] },
-};
+export function defaultPublicConfig(): PublicConfig {
+  return readOneConfig({});
+}
 
 const REGION = /^[A-Z]{2}$/;
-const CONFIG_KEYS = ["ads", "poker", "video", "update", "announcement", "names"];
+// "poker" and "video" are the shape from before each game had its own section. Both are still read.
+const CONFIG_KEYS = ["ads", "games", "poker", "video", "update", "announcement", "names"];
 
 function object(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -95,7 +89,7 @@ function adsMode(ads: Record<string, unknown> | null): AdsMode {
   if (mode === "off" || mode === "test" || mode === "live") return mode;
   // The older shape only had an on/off switch.
   if (ads?.enabled === false) return "off";
-  return defaultPublicConfig.ads.mode;
+  return "test";
 }
 
 function testDevices(value: unknown) {
@@ -125,13 +119,12 @@ function terms(value: unknown) {
 
 /** One complete config. A field it leaves out takes the built-in value, never another region's. */
 export function readOneConfig(value: unknown): PublicConfig {
-  const body = object(value);
-  if (!body) return defaultPublicConfig;
+  const body = object(value) ?? {};
   const ads = object(body.ads);
-  const poker = object(body.poker);
   const update = object(body.update);
   const names = object(body.names);
-  const video = object(body.video);
+  const sections = object(body.games);
+  const legacyVideo = object(body.video);
   return {
     ads: {
       mode: adsMode(ads),
@@ -139,14 +132,12 @@ export function readOneConfig(value: unknown): PublicConfig {
       iosUnitId: unitId(ads?.iosUnitId),
       testDevices: testDevices(ads?.testDevices),
     },
-    poker: {
-      autoDealDefault: bool(poker?.autoDealDefault, defaultPublicConfig.poker.autoDealDefault),
-      turnSecondsDefault: int(poker?.turnSecondsDefault, MIN_TURN_SECONDS, MAX_TURN_SECONDS, defaultPublicConfig.poker.turnSecondsDefault),
-    },
-    video: {
-      poker: videoQuality(video?.poker, defaultPublicConfig.video.poker),
-      backgammon: videoQuality(video?.backgammon, defaultPublicConfig.video.backgammon),
-    },
+    games: Object.fromEntries(allGames().map(([kind, game]) => {
+      // `games.<kind>`, or the older top-level `<kind>` section and `video.<kind>`.
+      const raw = object(sections?.[kind]) ?? object(body[kind]);
+      const video = sections && object(sections[kind]) ? raw?.video : legacyVideo?.[kind];
+      return [kind, { ...(game.config?.(raw) ?? {}), video: videoQuality(video, DEFAULT_VIDEO) }];
+    })) as PublicConfig["games"],
     update: {
       minVersion: version(update?.minVersion),
       force: bool(update?.force, false),
@@ -166,7 +157,7 @@ export function readOneConfig(value: unknown): PublicConfig {
  * A body with config fields at the top is the older single-config shape and becomes the default.
  */
 export function readPublicConfig(raw: string | undefined): PublicConfigSet {
-  const empty: PublicConfigSet = { default: defaultPublicConfig, regions: {} };
+  const empty: PublicConfigSet = { default: defaultPublicConfig(), regions: {} };
   if (!raw?.trim()) return empty;
   let parsed: unknown;
   try {

@@ -1,6 +1,9 @@
-const engineToken = process.env.ENGINE_TOKEN;
-if (!engineToken) throw new Error("ENGINE_TOKEN is required");
-const engineHeaders = { "x-engine-token": engineToken };
+/** The server refuses to start without the token. Checked at startup, not when this file loads, so tests can load it. */
+export function engineToken() {
+  const token = process.env.ENGINE_TOKEN;
+  if (!token) throw new Error("ENGINE_TOKEN is required");
+  return token;
+}
 
 /**
  * Well under the 5 second table lock. The engines answer in milliseconds, so a call
@@ -30,7 +33,7 @@ export async function enginePost<T>(base: string, path: string, body?: unknown):
     // The signal also covers reading the body, so a response that stalls halfway still ends.
     const response = await fetch(`${base}${path}`, {
       method: "POST",
-      headers: { ...engineHeaders, "content-type": "application/json" },
+      headers: { "x-engine-token": engineToken(), "content-type": "application/json" },
       body: JSON.stringify(body ?? {}),
       signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
     });

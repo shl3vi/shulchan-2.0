@@ -10,6 +10,7 @@ import { games, isGameKind, kindOf } from "@/games/registry";
 import { t } from "@/i18n";
 import { HomeButton } from "@/table/TableParts";
 import { tableStyles as styles } from "@/table/tableStyles";
+import { useTableAttention } from "@/table/useTableAttention";
 
 /**
  * The table: sign-in, loading and forced updates, then the game's own screen.
@@ -19,6 +20,7 @@ export default function TableScreen() {
   const { kind } = useLocalSearchParams<{ kind?: string }>();
   const { credentials, state, error } = useGameSession();
   const mode = updateMode();
+  useTableAttention(state);
 
   useEffect(() => {
     preloadSfx();
@@ -44,7 +46,7 @@ export default function TableScreen() {
     );
   }
 
-  const resolved = state ? kindOf(state.kind) : isGameKind(kind) ? kind : null;
+  const resolved = state ? kindOf(state.game.kind) : isGameKind(kind) ? kind : null;
   if (resolved == null) {
     return (
       <View style={styles.screen}>

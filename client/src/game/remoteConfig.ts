@@ -14,9 +14,8 @@ export type VideoQuality = { width: number; height: number; frameRate: number; m
 export type RemoteConfig = {
   /** off: no banner. test: Google's sample banner. live: this app's own ad units. */
   ads: { mode: AdsMode; androidUnitId: string; iosUnitId: string; testDevices: string[] };
-  /** turnSecondsDefault: how long each player has to act at a table this phone opens. */
-  poker: { autoDealDefault: boolean; turnSecondsDefault: number };
-  video: Record<GameKind, VideoQuality>;
+  /** Each game's own settings, as the server sent them, plus the camera quality at its tables. The game reads its own keys. */
+  games: Partial<Record<GameKind, { video: VideoQuality } & Record<string, unknown>>>;
   update: { minVersion: string; force: boolean; iosUrl: string; androidUrl: string };
   announcement: string;
   names: { embedded: string[]; words: string[] };
@@ -29,17 +28,20 @@ function modeOf(value: unknown): AdsMode | null {
 const fallback: RemoteConfig = {
   // Nothing is shown until the server answers, so a build cannot serve ads its config did not ask for.
   ads: { mode: modeOf(process.env.EXPO_PUBLIC_ADS_MODE) ?? "off", androidUnitId: "", iosUnitId: "", testDevices: [] },
-  poker: { autoDealDefault: true, turnSecondsDefault: 30 },
-  video: {
-    poker: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
-    backgammon: { width: 320, height: 240, frameRate: 15, maxKbps: 150 },
-  },
+  games: {},
   update: { minVersion: "", force: false, iosUrl: "", androidUrl: "" },
   announcement: "",
   names: { embedded: [], words: [] },
 };
 
 let current = fallback;
+
+const DEFAULT_VIDEO: VideoQuality = { width: 320, height: 240, frameRate: 15, maxKbps: 150 };
+
+/** The camera quality for a game's tables. */
+export function videoFor(kind: GameKind) {
+  return current.games[kind]?.video ?? DEFAULT_VIDEO;
+}
 const listeners = new Set<() => void>();
 
 export function remoteConfig() {
@@ -128,10 +130,9 @@ function apply(body: unknown): RemoteConfig {
   const record = object(body);
   if (!record) return current;
   const ads = object(record.ads);
-  const poker = object(record.poker);
   const update = object(record.update);
   const names = object(record.names);
-  const video = object(record.video);
+  const games = object(record.games) ?? {};
   const minVersion = text(update?.minVersion, 20);
   return {
     ads: {
@@ -140,14 +141,10 @@ function apply(body: unknown): RemoteConfig {
       iosUnitId: unitId(ads?.iosUnitId),
       testDevices: testDevices(ads?.testDevices),
     },
-    poker: {
-      autoDealDefault: bool(poker?.autoDealDefault, current.poker.autoDealDefault),
-      turnSecondsDefault: int(poker?.turnSecondsDefault, 10, 300, current.poker.turnSecondsDefault),
-    },
-    video: {
-      poker: videoQuality(video?.poker, fallback.video.poker),
-      backgammon: videoQuality(video?.backgammon, fallback.video.backgammon),
-    },
+    games: Object.fromEntries(Object.entries(games).flatMap(([kind, raw]) => {
+      const section = object(raw);
+      return section ? [[kind, { ...section, video: videoQuality(section.video, DEFAULT_VIDEO) }]] : [];
+    })),
     update: {
       minVersion: /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(minVersion) ? minVersion : "",
       force: bool(update?.force, false),

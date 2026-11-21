@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { publicConfigSet } from "../../publicConfig.js";
+import type { PokerConfig } from "./config.js";
 import { MAX_TURN_SECONDS, MIN_TURN_SECONDS } from "./turn.js";
 
 const turnSeconds = z.number().int().min(MIN_TURN_SECONDS).max(MAX_TURN_SECONDS);
@@ -42,7 +43,7 @@ export function readOpenSettings(body: unknown): { settings: PokerSettings } | {
       buyIn: parsed.data.buyIn,
       ...(parsed.data.autoDeal ? { autoDeal: true } : {}),
       // The app sends its region's default. An older app sends none and gets the default region's.
-      turnSeconds: parsed.data.turnSeconds ?? publicConfigSet().default.poker.turnSecondsDefault,
+      turnSeconds: parsed.data.turnSeconds ?? (publicConfigSet().default.games.poker as unknown as PokerConfig).turnSecondsDefault,
     },
   };
 }

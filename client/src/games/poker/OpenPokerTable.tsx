@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRemoteConfig } from "@/game/UpdateNotice";
+import { pokerConfig } from "@/games/poker/types";
 import { isRtl, t } from "@/i18n";
 
 const BLINDS = [1, 2, 5, 10];
@@ -96,9 +97,9 @@ export function OpenPokerTable({ onChange }: { onChange: (settings: object | nul
   const [autoDeal, setAutoDeal] = useState(true);
   const autoDealTouched = useRef(false);
   useEffect(() => {
-    if (!autoDealTouched.current) setAutoDeal(config.poker.autoDealDefault);
+    if (!autoDealTouched.current) setAutoDeal(pokerConfig(config.games.poker).autoDealDefault);
   }, [config]);
-  const turnSeconds = config.poker.turnSecondsDefault;
+  const turnSeconds = pokerConfig(config.games.poker).turnSecondsDefault;
   useEffect(() => {
     onChange(blindOk && buyInOk ? { smallBlind, buyIn, autoDeal, turnSeconds } : null);
   }, [onChange, smallBlind, buyIn, blindOk, buyInOk, autoDeal, turnSeconds]);

@@ -1,32 +1,32 @@
 import { useGameSession } from "@/game/GameSession";
-import type { RebuyRule } from "@/game/types";
+import type { RebuyRule } from "@/games/poker/types";
 
-/** Poker's moves. Each one is a socket event; the admin-only ones are not sent by anyone else. */
+/** Poker's moves, each sent as a `move` event. The admin-only ones are not sent by anyone else. */
 export function usePokerMoves() {
   const { state, emit } = useGameSession();
   const isAdmin = state?.you?.isAdmin === true;
   return {
     startHand() {
       if (!isAdmin) return;
-      emit("start-hand");
+      emit("move", { type: "deal" });
     },
     setAutoDeal(enabled: boolean) {
       if (!isAdmin) return;
-      emit("auto-deal", { enabled });
+      emit("move", { type: "autoDeal", enabled });
     },
     setTurnSeconds(seconds: number) {
       if (!isAdmin) return;
-      emit("turn-time", { seconds });
+      emit("move", { type: "turnTime", seconds });
     },
     setTableSettings(settings: { smallBlind?: number; buyIn?: number; rebuy?: RebuyRule }) {
       if (!isAdmin) return;
-      emit("table-settings", settings);
+      emit("move", { type: "settings", ...settings });
     },
     act(action: string, amount?: number) {
-      emit("act", { action, amount });
+      emit("move", { type: "act", action, ...(amount != null ? { amount } : {}) });
     },
     rebuy(amount: number) {
-      emit("rebuy", { amount });
+      emit("move", { type: "rebuy", amount });
     },
   };
 }
