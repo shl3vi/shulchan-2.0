@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Game Separation</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #fff;
+      --line: #d5dbe3;
+      --text: #1c2430;
+      --muted: #5c6b7e;
+      --arrow: #8a97a8;
+      --blue: #1d4f91;
+      --blue-bg: #e8f1fb;
+      --blue-line: #b9d3f0;
+      --green: #1b6b45;
+      --green-bg: #e7f6ee;
+      --green-line: #b7e0c8;
+      --purple: #5b3d8a;
+      --purple-bg: #f3ecfb;
+      --purple-line: #d9c6f0;
+      --amber: #8a5a12;
+      --amber-bg: #fff4e0;
+      --amber-line: #f0d7a8;
+      --red: #9b2c2c;
+      --red-bg: #fdecec;
+      --red-line: #f1c4c4;
+      --font: "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+      --mono: "SF Mono", ui-monospace, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #12161c;
+        --card: #1b2129;
+        --line: #2f3945;
+        --text: #e4e9ef;
+        --muted: #98a5b5;
+        --arrow: #6c7a8c;
+        --blue: #8fb8ee;
+        --blue-bg: #17263a;
+        --blue-line: #2a4466;
+        --green: #7fd1a6;
+        --green-bg: #142a20;
+        --green-line: #24513b;
+        --purple: #c4a8ec;
+        --purple-bg: #241b33;
+        --purple-line: #44335f;
+        --amber: #efc27a;
+        --amber-bg: #2e2412;
+        --amber-line: #5a4520;
+        --red: #f0a0a0;
+        --red-bg: #321a1a;
+        --red-line: #5e2f2f;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #12161c;
+      --card: #1b2129;
+      --line: #2f3945;
+      --text: #e4e9ef;
+      --muted: #98a5b5;
+      --arrow: #6c7a8c;
+      --blue: #8fb8ee;
+      --blue-bg: #17263a;
+      --blue-line: #2a4466;
+      --green: #7fd1a6;
+      --green-bg: #142a20;
+      --green-line: #24513b;
+      --purple: #c4a8ec;
+      --purple-bg: #241b33;
+      --purple-line: #44335f;
+      --amber: #efc27a;
+      --amber-bg: #2e2412;
+      --amber-line: #5a4520;
+      --red: #f0a0a0;
+      --red-bg: #321a1a;
+      --red-line: #5e2f2f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      padding: 28px 24px 56px;
+      line-height: 1.4;
+    }
+    main { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    .lead { color: var(--muted); margin: 0 0 18px; max-width: 760px; }
+    h2 { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 40px 0 6px; }
+    .sub { color: var(--muted); font-size: 14px; margin: 0 0 14px; max-width: 760px; }
+    code { font-family: var(--mono); font-size: 12px; }
+
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 0 0 8px; }
+    .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; border: 1px solid; }
+
+    .diagram {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+    }
+    .band-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+    .box {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      min-width: 0;
+    }
+    .box strong { display: block; font-size: 14px; margin-bottom: 2px; }
+    .box p { margin: 0; color: var(--muted); font-size: 12.5px; }
+    .box ul { margin: 4px 0 0; padding-left: 16px; color: var(--muted); font-size: 12.5px; }
+    .box li { margin: 1px 0; }
+    .box .path { font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: block; margin-bottom: 4px; }
+
+    .blue { background: var(--blue-bg); border-color: var(--blue-line); }
+    .blue > strong { color: var(--blue); }
+    .green { background: var(--green-bg); border-color: var(--green-line); }
+    .green > strong { color: var(--green); }
+    .purple { background: var(--purple-bg); border-color: var(--purple-line); }
+    .purple > strong { color: var(--purple); }
+    .amber { background: var(--amber-bg); border-color: var(--amber-line); }
+    .amber > strong { color: var(--amber); }
+
+    .group {
+      border: 1.5px solid;
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .group.blue { border-style: solid; }
+    .group.purple { border-style: dashed; }
+    .group > .band-label { margin-bottom: 10px; }
+    .group.blue > .band-label { color: var(--blue); }
+    .group.purple > .band-label { color: var(--purple); }
+    .group.green > .band-label { color: var(--green); }
+    .group.amber > .band-label { color: var(--amber); }
+    .group .box { background: var(--card); }
+
+    .grid { display: grid; gap: 10px; }
+    .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .g5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .hub { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+
+    .flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 6px 0;
+    }
+    .flow .stem {
+      width: 2px;
+      height: 22px;
+      background: var(--arrow);
+      position: relative;
+      flex: none;
+    }
+    .flow .stem::after {
+      content: "";
+      position: absolute;
+      left: -5px;
+      bottom: -6px;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 7px solid var(--arrow);
+    }
+    .flow.split { justify-content: space-around; }
+    .flow.split > div { display: flex; align-items: center; gap: 10px; }
+
+    .rules { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .rule {
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+    }
+    .rule b { display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 3px; }
+    .rule.ok b { color: var(--green); }
+    .rule.no b { color: var(--red); }
+    .rule.no { background: var(--red-bg); border-color: var(--red-line); }
+
+    .remove {
+      margin-top: 40px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+    .remove h3 { margin: 0 0 8px; font-size: 16px; }
+    .remove ol { margin: 0; padding-left: 20px; font-size: 14px; }
+    .remove li { margin: 4px 0; }
+    .remove p { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+
+    .phases { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .phase {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: 12px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .phase .num {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 15px;
+      background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-line);
+    }
+    .phase h3 { margin: 0 0 2px; font-size: 15px; }
+    .phase .meta { font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+    .phase ul { margin: 0; padding-left: 18px; font-size: 13.5px; }
+    .phase li { margin: 3px 0; }
+    .phase .done { margin-top: 8px; font-size: 12.5px; color: var(--green); }
+    .tag {
+      display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+      padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 1px;
+      border: 1px solid var(--line); color: var(--muted); background: var(--bg);
+    }
+    .tag.server { color: var(--green); border-color: var(--green-line); background: var(--green-bg); }
+    .tag.app { color: var(--purple); border-color: var(--purple-line); background: var(--purple-bg); }
+    .tag.both { color: var(--amber); border-color: var(--amber-line); background: var(--amber-bg); }
+    .left-out { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .left-out .box p { font-size: 13px; }
+
+    @media (max-width: 860px) {
+      .left-out { grid-template-columns: minmax(0, 1fr); }
+      body { padding: 20px 16px 40px; }
+      .g3, .g4, .g5, .hub, .rules { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+      .g2, .g3, .g4, .g5, .hub, .rules { grid-template-columns: minmax(0, 1fr); }
+      .diagram { padding: 12px; }
+      .flow.split { flex-direction: column; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Game separation</h1>
+  <p class="lead">Where the server and the app end up, and the four phases to get there. Shared code never names a game. Each game is one folder on the server and one in the app, plus one line in a list of games on each side. To remove a game, delete its two folders and its two lines.</p>
+
+  <div class="legend">
+    <span><i class="sw" style="background:var(--blue-bg);border-color:var(--blue)"></i>Shared code (no game names)</span>
+    <span><i class="sw" style="background:var(--amber-bg);border-color:var(--amber)"></i>Contract and list of games</span>
+    <span><i class="sw" style="background:var(--purple-bg);border-color:var(--purple)"></i>One game's folder</span>
+    <span><i class="sw" style="background:var(--green-bg);border-color:var(--green)"></i>Engine service and storage</span>
+  </div>
+
+  <!-- ───────────────────────── SERVER ───────────────────────── -->
+  <h2>1 · Server (<code>table/src</code>)</h2>
+  <p class="sub">The table service holds the shared parts of a table: seats, admin, pause, idle, video and the one stored deadline. It sends everything specific to a game to that game's module, and only the module talks to its engine.</p>
+
+  <div class="diagram">
+    <div class="grid g2">
+      <div class="box">
+        <strong>Phone app</strong>
+        <p>HTTP: open a table, join, get a LiveKit token, report or block a player. On the <code>/table</code> socket, game moves go in one <code>move</code> event, <code>{ type, … }</code>. Shared table actions (pause, leave, admin) keep their own events.</p>
+      </div>
+      <div class="box">
+        <strong>Debug pages</strong>
+        <p><code>/dev/&lt;kind&gt;</code>: a plain router inside each game folder. The list of games mounts it, so it isn't part of the contract.</p>
+      </div>
+    </div>
+
+    <div class="flow"><span class="stem"></span><span>HTTP · socket <code>/table</code></span></div>
+
+    <div class="group blue">
+      <div class="band-label">Shared table core: never imports a game folder</div>
+      <div class="grid g5">
+        <div class="box"><strong>routes.ts</strong><p>Open a table (the game checks its own settings), join (seat limits come from the game), LiveKit, report, block.</p></div>
+        <div class="box"><strong>sockets.ts</strong><p>Runs a <code>move</code> under the lock with helpers: <code>requireAdmin</code>, <code>assertPlaying</code>, <code>noteActivity</code>, <code>resync</code>. Pause, leave, admin.</p></div>
+        <div class="box"><strong>store.ts</strong><p>Lock, revision check, <code>v: 2</code> records only. Old rows are deleted through the normal expiry path.</p></div>
+        <div class="box"><strong>players.ts · seats.ts</strong><p>Who sits where and the admin. A departing player is dropped once the game's <code>unseat</code> says the seat is free.</p></div>
+        <div class="box"><strong>sweep · idle · livekit · events</strong><p>Every replica arms the stored deadline on each broadcast; the sweep is the backstop. Idle closing, video, error codes, stats.</p></div>
+      </div>
+    </div>
+
+    <div class="flow"><span class="stem"></span><span><code>gameOf(table)</code>: the game's module, found by <code>table.game.kind</code></span></div>
+
+    <div class="grid hub">
+      <div class="group amber">
+        <div class="band-label">Contract · <code>games/types.ts</code></div>
+        <div class="box">
+          <strong style="color:var(--amber)">GameModule</strong>
+          <ul>
+            <li><code>seats</code>: { min, max } players; anyone beyond max watches</li>
+            <li><code>open(settings)</code>: the game's state for a new table</li>
+            <li><code>seat(state, player)</code> · <code>unseat(state, player) → { state, freeNow }</code></li>
+            <li><code>status(state) → { phase, toAct, turnDeadline }</code>: read by shared code</li>
+            <li><code>view(state, viewer)</code>: the game's part of the snapshot</li>
+            <li><code>moves[type] = { schema, run(ctx) }</code>: <code>run</code> only changes the table it's given and returns a result for after the save</li>
+            <li><code>deadline?(state) → ms | null</code> · <code>onDeadline?(ctx)</code>: turn clock, auto-deal</li>
+            <li><code>tally(before, after) → { games, rounds }</code></li>
+            <li><code>engineHealthy()</code>: reported, never gates <code>/health</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="group amber">
+        <div class="band-label">List of games · <code>games/index.ts</code></div>
+        <div class="box">
+          <strong style="color:var(--amber)">One line per game</strong>
+          <p><code>export const games = { poker, backgammon }</code></p>
+          <p style="margin-top:6px">The only file that imports the game folders. The kind type is <code>keyof typeof games</code>, so the list of game names lives only here.</p>
+          <p style="margin-top:6px">Errors are a shared <code>GameError</code> with a code. Shared code reads the code, never the message text.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow"><span class="stem"></span><span>each game folder implements <code>GameModule</code> and has one line in the list</span></div>
+
+    <div class="grid g2">
+      <div class="group purple">
+        <div class="band-label">games/poker/</div>
+        <div class="grid g2">
+          <div class="box"><strong>engine.ts</strong><p>HTTP client for poker-engine.</p></div>
+          <div class="box"><strong>moves.ts</strong><p>act, start, rebuy, blinds, auto-deal, turn time, settings. Each says whether it's admin-only, blocked while paused, and counts as activity.</p></div>
+          <div class="box"><strong>deadline.ts</strong><p>The earlier of the turn clock and the next auto-deal. On time out: check or fold, or deal. Survives a restart.</p></div>
+          <div class="box"><strong>seating.ts</strong><p>Buy-in, chips bought, folding a player who left.</p></div>
+          <div class="box"><strong>view.ts · tally.ts</strong><p>Cards, pots, stacks; hands and betting rounds.</p></div>
+          <div class="box"><strong>debug.ts</strong><p>Poker debug router and page.</p></div>
+        </div>
+      </div>
+      <div class="group purple">
+        <div class="band-label">games/backgammon/</div>
+        <div class="grid g2">
+          <div class="box"><strong>engine.ts</strong><p>HTTP client for backgammon-engine.</p></div>
+          <div class="box"><strong>moves.ts</strong><p>roll, move, double, answer, restart. A refused move sends the board back.</p></div>
+          <div class="box"><strong>colors.ts</strong><p>White and black player ids, stored when a game starts. Never worked out again from seat order.</p></div>
+          <div class="box"><strong>log.ts</strong><p>The win log.</p></div>
+          <div class="box"><strong>view.ts · tally.ts</strong><p>The board; turns and games.</p></div>
+          <div class="box"><strong>debug.ts</strong><p>Backgammon debug router and page.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow split">
+      <div><span class="stem"></span><span><code>x-engine-token</code>, private network</span></div>
+      <div><span class="stem"></span><span><code>x-engine-token</code>, private network</span></div>
+    </div>
+
+    <div class="grid g3">
+      <div class="box green"><strong>poker-engine</strong><p>Its own service. Deals and checks every betting action.</p></div>
+      <div class="box green"><strong>Postgres · <code>tables.record</code></strong><p><code>{ v: 2, players, adminId, paused, idle…, deadline?, game: { kind, … } }</code>. The <code>kind</code> column follows <code>game.kind</code>.</p></div>
+      <div class="box green"><strong>backgammon-engine</strong><p>Its own service. Rolls the dice and checks every move. No more hidden poker hand on backgammon tables.</p></div>
+    </div>
+
+    <div class="rules">
+      <div class="rule ok"><b>Allowed</b>A game folder imports shared helpers: <code>store</code>, <code>idle</code>, <code>events</code>, <code>GameError</code>.</div>
+      <div class="rule no"><b>Not allowed</b>Shared code imports a game folder. Only <code>games/index.ts</code> does. An import-graph test checks this.</div>
+      <div class="rule no"><b>Not allowed</b>One game folder imports another, for example backgammon using the poker engine.</div>
+    </div>
+  </div>
+
+  <!-- ───────────────────────── APP ───────────────────────── -->
+  <h2>2 · App (<code>client/src</code>)</h2>
+  <p class="sub">The app screens handle signing in, loading and forced updates, then show the game's own screen. Shared parts (ads, keep-awake, the turn chime) read the shared <code>status</code>, never a game's fields.</p>
+
+  <div class="diagram">
+    <div class="group blue">
+      <div class="band-label">Screens · <code>app/</code></div>
+      <div class="grid g4">
+        <div class="box"><strong>index.tsx · lobby</strong><p>Shows a card and an opening form for each game in the list.</p></div>
+        <div class="box"><strong>table.tsx</strong><p>Signing in, loading, forced update, then <code>&lt;Screen /&gt;</code> for <code>state.game.kind</code>.</p></div>
+        <div class="box"><strong>join.tsx</strong><p>Code and password. Works the same for every game.</p></div>
+        <div class="box"><strong>profile · legal · support · auth</strong><p>No game code.</p></div>
+      </div>
+    </div>
+
+    <div class="flow"><span class="stem"></span><span>looks up the game in the list</span></div>
+
+    <div class="grid hub">
+      <div class="group amber">
+        <div class="band-label">List of games · <code>games/registry.ts</code></div>
+        <div class="box">
+          <strong style="color:var(--amber)">One entry per game</strong>
+          <ul>
+            <li><code>Screen</code>: the game's table screen</li>
+            <li><code>LobbyCard</code> and <code>CreateForm</code></li>
+            <li><code>AdminSettings?</code> and <code>Stats?</code>: the game's parts of the admin and stats sheets</li>
+            <li><code>video</code>: which video quality setting to use</li>
+          </ul>
+        </div>
+      </div>
+      <div class="group blue">
+        <div class="band-label">Shared session and services</div>
+        <div class="grid g2">
+          <div class="box"><strong>GameSession</strong><p>Credentials, socket, state, <code>emit("move")</code>, leave, pause, admin. Errors shown by code.</p></div>
+          <div class="box"><strong>Shared behaviour</strong><p>Ads, keep-awake and the turn chime use <code>status.phase</code>, <code>toAct</code> and <code>turnDeadline</code>.</p></div>
+          <div class="box"><strong>api.ts · media/</strong><p>Open a table with the game's settings, join; LiveKit video.</p></div>
+          <div class="box"><strong>i18n · sfx · ads</strong><p>One string file, one sound list. Game keys carry a prefix (<code>pk*</code>, <code>bg*</code>).</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow"><span class="stem"></span><span>the list points to each game's folder · games read <code>state</code> and send moves with <code>emit</code></span></div>
+
+    <div class="grid g2">
+      <div class="group purple">
+        <div class="band-label">games/poker/</div>
+        <div class="grid g2">
+          <div class="box"><strong>PokerScreen.tsx</strong><p>Seats, applause, the buy-more-chips sheet.</p></div>
+          <div class="box"><strong>PokerTableLayout.tsx</strong><p>Felt, cards, chips, dealing, spotlight.</p></div>
+          <div class="box"><strong>ActionDock.tsx</strong><p>Fold, check, call, bet, raise.</p></div>
+          <div class="box"><strong>CreatePokerForm · PokerAdmin</strong><p>Blinds, buy-in, auto-deal, turn time, rebuy rule.</p></div>
+          <div class="box"><strong>usePokerMoves.ts</strong><p>act, start, rebuy, settings, all through <code>emit</code>.</p></div>
+          <div class="box"><strong>types.ts</strong><p>The poker part of the snapshot.</p></div>
+        </div>
+      </div>
+      <div class="group purple">
+        <div class="band-label">games/backgammon/</div>
+        <div class="grid g2">
+          <div class="box"><strong>BackgammonScreen.tsx</strong><p>Two video seats, board, win log.</p></div>
+          <div class="box"><strong>BackgammonBoard.tsx</strong><p>Points, checkers, dice cup.</p></div>
+          <div class="box"><strong>rules.ts</strong><p>Moves shown on this phone before the server confirms.</p></div>
+          <div class="box"><strong>diceSound.ts</strong><p>Dice and checker sounds.</p></div>
+          <div class="box"><strong>useBackgammonMoves.ts</strong><p>roll, move, double, restart, all through <code>emit</code>.</p></div>
+          <div class="box"><strong>types.ts</strong><p>The backgammon part of the snapshot.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow split">
+      <div><span class="stem"></span><span>built from</span></div>
+      <div><span class="stem"></span><span>built from</span></div>
+    </div>
+
+    <div class="group blue">
+      <div class="band-label">Shared table parts · <code>table/</code> (moved out of PokerTableLayout.tsx and table.tsx)</div>
+      <div class="grid g5">
+        <div class="box"><strong>TableMenu</strong><p>Info, share, stats, admin, leave. Games add their own items.</p></div>
+        <div class="box"><strong>Camera · Talk buttons</strong><p>One look for every game.</p></div>
+        <div class="box"><strong>PlayerCircle · SeatVideo</strong><p>A seated player's video and name.</p></div>
+        <div class="box"><strong>CopyField · VideoNotice</strong><p>Table code, password, video notice.</p></div>
+        <div class="box"><strong>RoomLight · TableHold · SeatSafety</strong><p>Lighting, pause cover, report or block a player.</p></div>
+      </div>
+    </div>
+
+    <div class="rules">
+      <div class="rule ok"><b>Allowed</b>A game folder imports <code>table/</code>, <code>GameSession</code>, <code>media/</code>, <code>i18n</code>, <code>sfx</code>.</div>
+      <div class="rule no"><b>Not allowed</b>Shared code imports a game folder, except <code>games/registry.ts</code>.</div>
+      <div class="rule no"><b>Not allowed</b>One game imports another, as backgammon imports from <code>PokerTableLayout</code> today.</div>
+    </div>
+  </div>
+
+  <!-- ───────────────────────── PLAN ───────────────────────── -->
+  <h2>3 · Phases</h2>
+  <p class="sub">Each phase is one push to main. Before every push: typecheck, lint and tests, then a check on the live server.</p>
+
+  <ol class="phases">
+    <li class="phase">
+      <span class="num">1</span>
+      <div>
+        <h3>Move the server code<span class="tag server">server</span></h3>
+        <p class="meta">No behaviour change. Snapshot, socket events and stored records stay as they are.</p>
+        <ul>
+          <li>Create <code>games/types.ts</code>, <code>games/index.ts</code>, <code>games/poker/</code> and <code>games/backgammon/</code>, and move each game's code into its folder.</li>
+          <li>Replace the "is it backgammon?" checks with calls to the game's module.</li>
+          <li>Add a test script to <code>table/</code> and an import-graph test, starting with an allowlist of today's exceptions.</li>
+        </ul>
+        <p class="done">Done when: the import test passes with only the allowlisted exceptions, and poker and backgammon play as before on the live server.</p>
+      </div>
+    </li>
+    <li class="phase">
+      <span class="num">2</span>
+      <div>
+        <h3>Move the app code<span class="tag app">app</span></h3>
+        <p class="meta">Still on today's snapshot and socket events.</p>
+        <ul>
+          <li>Move the shared table parts out of <code>PokerTableLayout.tsx</code> and <code>table.tsx</code> into <code>client/src/table/</code>.</li>
+          <li>Create <code>games/poker/</code>, <code>games/backgammon/</code> and <code>games/registry.ts</code>; <code>table.tsx</code> becomes a thin screen.</li>
+          <li>Add the same import-graph test with an allowlist.</li>
+        </ul>
+        <p class="done">Done when: the lobby, both tables, the admin and stats sheets and video look and work as before on a dev build.</p>
+      </div>
+    </li>
+    <li class="phase">
+      <span class="num">3a</span>
+      <div>
+        <h3>Fix the server internals<span class="tag server">server</span></h3>
+        <p class="meta">The record changes, but the server still builds today's snapshot from it, so the current app keeps working.</p>
+        <ul>
+          <li>The <code>v: 2</code> record with <code>game: { kind, … }</code>. At boot, delete older rows through the expiry path (stats summaries still sent) and recreate the debug tables.</li>
+          <li>Backgammon tables stop running a hidden poker hand. Colours are stored when a game starts.</li>
+          <li><code>unseat → freeNow</code> replaces reading poker's seats for every game.</li>
+          <li>One stored deadline per table: the turn clock and auto-deal, which now survives a restart.</li>
+          <li><code>GameError</code> with codes; stats from <code>tally</code>; <code>/health</code> gated only by Redis and Postgres.</li>
+          <li>Remove the old Redis migration code and the <code>poker:*</code> keys.</li>
+        </ul>
+        <p class="done">Done when: open, join, play, leave mid-game, pause and idle closing all work for both games on the live server, and auto-deal resumes after a restart.</p>
+      </div>
+    </li>
+    <li class="phase">
+      <span class="num">3b</span>
+      <div>
+        <h3>Switch the contract<span class="tag both">server + app, one push</span></h3>
+        <p class="meta">The app isn't published, so there's no old version to keep working.</p>
+        <ul>
+          <li>Snapshot becomes <code>{ ...shared, status, game: { kind, … } }</code>; ads, keep-awake and the turn chime read <code>status</code>.</li>
+          <li>One <code>move</code> event per game move. Errors are reported per <code>kind.type</code> so analytics keep their detail.</li>
+          <li>The app shows error text by code.</li>
+          <li><code>PUBLIC_CONFIG</code> gets per-game sections; the Railway variable is updated in the same deploy (with your OK).</li>
+        </ul>
+        <p class="done">Done when: both games play end to end on a dev build against the live server.</p>
+      </div>
+    </li>
+    <li class="phase">
+      <span class="num">4</span>
+      <div>
+        <h3>Lock it in<span class="tag both">server + app</span></h3>
+        <ul>
+          <li>Empty both import-graph allowlists.</li>
+          <li>Removal test: on a scratch branch, delete backgammon's two folders and two list lines, then check that typecheck and tests pass. The branch isn't committed.</li>
+          <li>Update the README and the architecture docs.</li>
+        </ul>
+      </div>
+    </li>
+  </ol>
+
+  <h2>Considered and left out</h2>
+  <div class="left-out">
+    <div class="box"><strong>A general scheduler</strong><p>Two timers don't need one. A single stored deadline per table, checked by the existing sweep, fixes the restart bug. Revisit when a game needs a third kind of timer.</p></div>
+    <div class="box"><strong>Moves as rule flags plus an "effects" system</strong><p>Moves call helpers (<code>requireAdmin</code>, <code>assertPlaying</code>, <code>noteActivity</code>) and return a result for after the save, as today. Simpler to read than a block of flags.</p></div>
+    <div class="box"><strong>Per-game string and sound files</strong><p>Prefixed keys in the shared files are enough for two games. Leftover keys don't stop a game from being removed.</p></div>
+    <div class="box"><strong>A "no game names" text check</strong><p>It would trip on legal text, the website and comments. The import-graph test catches the coupling that matters.</p></div>
+    <div class="box"><strong>Forcing a minimum app version</strong><p>Not needed: the app isn't published.</p></div>
+    <div class="box"><strong>Fewer engine calls per move</strong><p>A move can make several engine calls under the 5-second lock. A real risk, but it exists today and isn't about separation. Its own task.</p></div>
+  </div>
+
+  <div class="remove">
+    <h3>Removing a game, for example backgammon</h3>
+    <ol>
+      <li>Delete <code>table/src/games/backgammon/</code> and its line in <code>games/index.ts</code>.</li>
+      <li>Delete <code>client/src/games/backgammon/</code> and its entry in <code>games/registry.ts</code>.</li>
+      <li>Delete <code>backgammon-engine/</code>, its line in <code>scripts/dev.mjs</code>, and the Railway service.</li>
+      <li>Remove its <code>bg*</code> strings, its <code>PUBLIC_CONFIG</code> section and its pages on the website.</li>
+    </ol>
+    <p>Typecheck and the import-graph test then pass with no other change. Phase 4 checks exactly this on a scratch branch.</p>
+  </div>
+</main>
+</body>
+</html>
