@@ -1,4 +1,5 @@
-import { EngineTimeout } from "../engine.js";
+import { ENGINE_FAILED, EngineTimeout } from "../engines.js";
+import type { GameKind } from "../games/index.js";
 import { TableNotFound } from "../store.js";
 import { publish, type ErrorArea } from "./bus.js";
 import { noteError } from "./ledger.js";
@@ -6,7 +7,7 @@ import { noteError } from "./ledger.js";
 export function reportError(input: {
   area: ErrorArea;
   tableId?: string;
-  kind?: "poker" | "backgammon";
+  kind?: GameKind;
   route?: string;
   op?: string;
   listener?: string;
@@ -25,10 +26,10 @@ function logError(tableId: string | undefined, route: string, error: unknown) {
   console.error(`error at ${where}:`, error instanceof Error ? (error.stack ?? error.message) : error);
 }
 
-export function reportCaught(tableId: string | undefined, error: unknown, route: string, kind?: "poker" | "backgammon") {
+export function reportCaught(tableId: string | undefined, error: unknown, route: string, kind?: GameKind) {
   if (error instanceof TableNotFound) return;
   const message = error instanceof Error ? error.message : "";
-  if (message === "Not the table admin" || message === "This table is not backgammon" || message === "This table is not poker") {
+  if (message === "Not the table admin" || message.startsWith("This table is not ")) {
     reportError({ area: "forbidden", tableId, route, kind });
     return;
   }
@@ -47,7 +48,7 @@ export function reportCaught(tableId: string | undefined, error: unknown, route:
     reportError({ area: "store", tableId, op: "lock", kind });
     return;
   }
-  if (error instanceof EngineTimeout || message === "Poker engine failed" || /fetch failed|ECONNREFUSED|EAI_AGAIN/i.test(message)) {
+  if (error instanceof EngineTimeout || message === ENGINE_FAILED || /fetch failed|ECONNREFUSED|EAI_AGAIN/i.test(message)) {
     logError(tableId, route, error);
     reportError({ area: "store", tableId, op: "engine", kind });
     return;

@@ -1,8 +1,9 @@
 import type { EngineView } from "./engine.js";
-import type { TableRecord } from "./store.js";
+import type { TableRecord } from "../../store.js";
 import { turnMs } from "./turn.js";
 
-export type TableSnapshot = {
+/** Every table's snapshot today: the poker hand's view, which backgammon tables also carry. */
+export type BaseSnapshot = {
   id: string;
   status: "waiting" | "playing";
   smallBlind: number;
@@ -30,34 +31,35 @@ export type TableSnapshot = {
     isAdmin: boolean;
   } | null;
   buyIn: number;
-  kind?: "poker" | "backgammon";
-  autoDeal?: boolean;
-  backgammon?: unknown;
-  backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
+  kind?: string;
   password?: string;
   paused?: boolean;
   /** Server epoch ms. Present only while the idle warning is up. */
   idleCloseAt?: number;
-  /** Server epoch ms when the player to act runs out of time. Absent while paused or between hands. */
-  turnDeadline?: number;
-  /** Poker only. Seconds each player has to act. */
-  turnSeconds?: number;
-  /** Poker only. New small blind that starts with the next hand. */
-  nextSmallBlind?: number;
-  /** Poker only. Who may buy more chips. */
-  rebuy?: "any" | "busted" | "off";
   /** Server epoch ms when this snapshot was built. */
   serverNow: number;
   lastWinners: { seat: number; name: string; amount: number }[];
   shownCards: { seat: number; cards: EngineView["communityCards"] }[];
 };
 
-export function snapshot(
+export type TableSnapshot = BaseSnapshot & {
+  autoDeal?: boolean;
+  /** Server epoch ms when the player to act runs out of time. Absent while paused or between hands. */
+  turnDeadline?: number;
+  /** Seconds each player has to act. */
+  turnSeconds?: number;
+  /** New small blind that starts with the next hand. */
+  nextSmallBlind?: number;
+  /** Who may buy more chips. */
+  rebuy?: "any" | "busted" | "off";
+};
+
+export function baseSnapshot(
   table: TableRecord,
   view: EngineView,
   viewerId?: string,
   blockedIds?: Set<string>,
-): TableSnapshot {
+): BaseSnapshot {
   const bySeat = new Map(table.players.map((player) => [player.seat, player]));
   const actor = view.playerToActSeat == null ? null : bySeat.get(view.playerToActSeat);
   const viewer = viewerId ? table.players.find((player) => player.id === viewerId) : undefined;
@@ -97,25 +99,34 @@ export function snapshot(
       : null,
     buyIn: table.buyIn,
     kind: table.kind ?? "poker",
-    ...(table.kind === "backgammon"
-      ? { backgammon: table.backgammon, backgammonLog: table.backgammonLog ?? [] }
-      : {
-          autoDeal: table.autoDeal === true,
-          turnSeconds: turnMs(table) / 1000,
-          rebuy: table.rebuy ?? "any",
-          ...(view.nextSmallBlind != null ? { nextSmallBlind: view.nextSmallBlind } : {}),
-        }),
     ...(viewer && viewer.id === table.adminId ? { password: table.password } : {}),
     paused: table.paused === true,
     serverNow: Date.now(),
     ...(table.idleCloseAt != null && table.paused !== true ? { idleCloseAt: table.idleCloseAt } : {}),
-    ...(table.turn && actor && table.paused !== true && table.closing !== true && table.kind !== "backgammon"
-      ? { turnDeadline: table.turn.deadline }
-      : {}),
     shownCards: view.shownCards ?? [],
     lastWinners: view.lastWinners.flatMap((winner) => {
       const player = bySeat.get(winner.seat);
       return player ? [{ seat: winner.seat, name: player.name, amount: winner.amount }] : [];
     }),
+  };
+}
+
+export function snapshot(
+  table: TableRecord,
+  view: EngineView,
+  viewerId?: string,
+  blockedIds?: Set<string>,
+): TableSnapshot {
+  const base = baseSnapshot(table, view, viewerId, blockedIds);
+  const actor = view.playerToActSeat == null ? null : table.players.find((player) => player.seat === view.playerToActSeat);
+  return {
+    ...base,
+    autoDeal: table.autoDeal === true,
+    turnSeconds: turnMs(table) / 1000,
+    rebuy: table.rebuy ?? "any",
+    ...(view.nextSmallBlind != null ? { nextSmallBlind: view.nextSmallBlind } : {}),
+    ...(table.turn && actor && table.paused !== true && table.closing !== true
+      ? { turnDeadline: table.turn.deadline }
+      : {}),
   };
 }

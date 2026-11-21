@@ -1,19 +1,15 @@
 import type { Server, Socket } from "socket.io";
-import { considerAutoDeal } from "./autodeal.js";
-import { actPoker, addChips, readPoker, setPokerBlinds, startPoker } from "./engine.js";
-import { snapshot } from "./snapshot.js";
-import { noteBackgammon, notePlayers, notePoker } from "./events/ledger.js";
+import { notePlayers } from "./events/ledger.js";
 import { reportCaught, reportError } from "./events/report.js";
-import { assignAdmin, dropRemovedPlayers, foldDeparted, releaseSeat, sameSecret, seatedCount, tablePassword } from "./players.js";
-import { noteBackgammonWin, playBackgammon } from "./backgammon.js";
+import { gameFor, gameOf, kindOf } from "./games/index.js";
+import type { GameMove } from "./games/types.js";
+import { assignAdmin, releaseSeat, sameSecret, seatedCount, tablePassword } from "./players.js";
 import { isDebugTable } from "./debug.js";
 import { allowSocketEvent } from "./http.js";
 import { endRoom, mediaRoom, mediaRooms, removeFromRoom } from "./livekit.js";
-import { assertPlaying, noteActivity, setPaused } from "./idle.js";
-import { actBody, autoDealBody, backgammonBody, MAX_CHIPS, pauseBody, playerBody, readSchema, rebuyBody, tableSettingsBody, turnTimeBody } from "./schema.js";
+import { setPaused } from "./idle.js";
+import { pauseBody, playerBody, readSchema } from "./schema.js";
 import { blockedSeatIds } from "./safety.js";
-import { restartTurn } from "./turn.js";
-import { armTurn } from "./turnWatch.js";
 import { publishTable, readTable, subscriber, TABLE_UNCHANGED, withTable, type SeatPlayer, type TableRecord } from "./store.js";
 
 class LeftTable extends Error {
@@ -23,16 +19,15 @@ class LeftTable extends Error {
 }
 
 async function personal(table: TableRecord, viewerId: string) {
-  const view = await readPoker(table);
   const viewer = table.players.find((player) => player.id === viewerId);
   const blocked = await blockedSeatIds(viewer?.personKey, table.players).catch(() => new Set<string>());
-  return snapshot(table, view, viewerId, blocked);
+  return gameOf(table).snapshot(table, viewerId, blocked);
 }
 
 async function broadcast(io: Server, tableId: string) {
   const table = await readTable(tableId);
   if (!table) return;
-  armTurn(table);
+  gameOf(table).arm?.(table);
   const room = io.of("/table").adapter.rooms.get(tableId);
   if (!room) return;
   for (const socketId of room) {
@@ -65,14 +60,15 @@ export function attachSockets(io: Server) {
       reportError({
         area: "auth",
         route: "socket",
-        ...(table ? { tableId, kind: table.kind ?? "poker" } : {}),
+        ...(table ? { tableId, kind: kindOf(table) } : {}),
       });
       socket.emit("error", { message: "Invalid connection" });
       socket.disconnect(true);
       return;
     }
     const connected = player;
-    const kind = table.kind ?? "poker";
+    const kind = kindOf(table);
+    const game = gameFor(kind);
 
     socket.join(tableId);
     socket.emit("state", await personal(table, playerId));
@@ -86,7 +82,7 @@ export function attachSockets(io: Server) {
         });
         if (result === TABLE_UNCHANGED) return undefined;
         await publishTable(tableId);
-        void considerAutoDeal(tableId);
+        game.changed?.(tableId);
         return result;
       } catch (error) {
         if (error instanceof LeftTable) {
@@ -124,65 +120,6 @@ export function attachSockets(io: Server) {
       });
     };
 
-    function betAmount(action: string, amount: number | undefined) {
-      if (action !== "bet" && action !== "raise") return true;
-      return amount != null && Number.isInteger(amount) && amount >= 1 && amount <= MAX_CHIPS;
-    }
-
-    onEvent("auto-deal", (body: unknown) => {
-      const parsed = readSchema(autoDealBody, body);
-      if (!parsed) {
-        reportError({ area: "validation", route: "auto-deal", tableId, kind });
-        socket.emit("error", { message: "Invalid request" });
-        return;
-      }
-      return change("Cannot change automatic dealing", async (current) => {
-        requireAdmin(current);
-        if ((current.kind ?? "poker") === "backgammon") throw new Error("This table is not poker");
-        current.autoDeal = parsed.enabled;
-      });
-    });
-
-    onEvent("turn-time", (body: unknown) => {
-      const parsed = readSchema(turnTimeBody, body);
-      if (!parsed) {
-        reportError({ area: "validation", route: "turn-time", tableId, kind });
-        socket.emit("error", { message: "Invalid request" });
-        return;
-      }
-      return change("Cannot change the turn time", async (current) => {
-        requireAdmin(current);
-        if ((current.kind ?? "poker") === "backgammon") throw new Error("This table is not poker");
-        if (current.turnSeconds === parsed.seconds) return TABLE_UNCHANGED;
-        current.turnSeconds = parsed.seconds;
-        // The player acting now gets the new length in full, so the change shows at once.
-        if (current.paused !== true) restartTurn(current, Date.now());
-      });
-    });
-
-    onEvent("table-settings", (body: unknown) => {
-      const parsed = readSchema(tableSettingsBody, body);
-      if (!parsed) {
-        reportError({ area: "validation", route: "table-settings", tableId, kind });
-        socket.emit("error", { message: "Invalid request" });
-        return;
-      }
-      return change("Cannot change the table settings", async (current) => {
-        requireAdmin(current);
-        if ((current.kind ?? "poker") === "backgammon") throw new Error("This table is not poker");
-        const view = await readPoker(current);
-        const blinds = parsed.smallBlind ?? view.nextSmallBlind ?? current.smallBlind;
-        const buyIn = parsed.buyIn ?? current.buyIn;
-        // Same rule as opening a table, checked against the blinds the next hand will use.
-        if (buyIn < blinds * 2) throw new Error("Buy-in must be at least one big blind");
-        if (parsed.smallBlind != null && parsed.smallBlind !== (view.nextSmallBlind ?? current.smallBlind)) {
-          await setPokerBlinds(current, parsed.smallBlind);
-        }
-        if (parsed.buyIn != null) current.buyIn = parsed.buyIn;
-        if (parsed.rebuy != null) current.rebuy = parsed.rebuy;
-      });
-    });
-
     onEvent("pause", (body: unknown) => {
       const parsed = readSchema(pauseBody, body);
       if (!parsed) {
@@ -195,7 +132,7 @@ export function attachSockets(io: Server) {
         if (Boolean(current.paused) === parsed.paused) return TABLE_UNCHANGED;
         if (!parsed.paused) {
           setPaused(current, false, Date.now());
-          restartTurn(current, Date.now());
+          gameOf(current).resume?.(current, Date.now());
           return null;
         }
         setPaused(current, true, Date.now());
@@ -207,21 +144,6 @@ export function attachSockets(io: Server) {
         await endRoom(mediaRoom(tableId, previous)).catch((error: unknown) => {
           reportCaught(tableId, error, "livekit-silence", kind);
         });
-      });
-    });
-
-    onEvent("start-hand", () => {
-      void change("Cannot start", async (current) => {
-        requireAdmin(current);
-        assertPlaying(current);
-        const view = await startPoker(current);
-        noteActivity(current, Date.now());
-        await dropRemovedPlayers(current);
-        return { round: view.round, seated: seatedCount(current) };
-      }).then(async (mark) => {
-        if (!mark) return;
-        await notePoker(tableId, mark.round);
-        await notePlayers(tableId, mark.seated);
       });
     });
 
@@ -277,79 +199,30 @@ export function attachSockets(io: Server) {
       });
     });
 
-    onEvent("rebuy", (body: unknown) => {
-      const parsed = readSchema(rebuyBody, body);
-      if (!parsed) {
-        reportError({ area: "validation", route: "rebuy", tableId, kind });
-        socket.emit("error", { message: "Invalid request" });
-        return;
-      }
-      const amount = parsed.amount;
-      return change("Buy-in failed", async (current, seat) => {
-        if (!Number.isInteger(amount) || amount < 1 || amount > current.buyIn) {
-          throw new Error("Buy-in must be a whole number up to the table buy-in");
-        }
-        const rule = current.rebuy ?? "any";
-        if (rule === "off") throw new Error("Rebuys are off at this table");
-        if (rule === "busted") {
-          const entry = (await readPoker(current)).seats.find((item) => item.seat === seat.seat);
-          if ((entry?.stack ?? 0) > 0 || entry?.inHand) throw new Error("You can buy more chips once you have none left");
-        }
-        await addChips(current, seat.seat, amount);
-        seat.bought = (seat.bought ?? current.buyIn) + amount;
-      });
-    });
-
-    onEvent("bg", (body: unknown) => {
-      const action = readSchema(backgammonBody, body);
-      if (!action) {
-        reportError({ area: "validation", route: "bg", tableId, kind });
-        socket.emit("error", { message: "Invalid backgammon move" });
-        return;
-      }
-      return change("Backgammon move failed", async (current) => {
-        if (current.kind !== "backgammon") throw new Error("This table is not backgammon");
-        assertPlaying(current);
-        if (seatedCount(current) < 2) {
-          throw new Error("Waiting for a second player");
-        }
-        const previous = current.backgammon as { phase?: unknown; turn?: unknown } | undefined;
-        const before = current.backgammonLog?.length ?? 0;
-        const game = (await playBackgammon(current, connected.id, action)) as { phase?: unknown; turn?: unknown };
-        noteBackgammonWin(current, game);
-        current.backgammon = game;
-        noteActivity(current, Date.now());
-        return { previous: previous ?? null, game, games: (current.backgammonLog?.length ?? 0) - before };
-      }).then(async (mark) => {
-        // A refused move leaves this phone showing its own guess, so send it the real board.
-        if (!mark) {
-          await resync();
+    function onMove(event: string, move: GameMove) {
+      onEvent(event, (body: unknown) => {
+        const parsed = move.schema.safeParse(body);
+        const problem = parsed.success ? (move.check?.(parsed.data) ?? null) : (move.invalidMessage ?? "Invalid request");
+        if (!parsed.success || problem) {
+          reportError({ area: "validation", route: event, tableId, kind });
+          socket.emit("error", { message: problem });
           return;
         }
-        await noteBackgammon(tableId, mark.previous, mark.game, mark.games);
+        void change(move.failure, async (current, seat) => {
+          if (kindOf(current) !== kind) throw new Error(`This table is not ${kind}`);
+          return move.run({
+            table: current,
+            seat,
+            requireAdmin: () => requireAdmin(current),
+          }, parsed.data);
+        }).then(async (result) => {
+          await move.after?.({ tableId, resync }, result);
+        }).catch((error) => {
+          reportCaught(tableId, error, event, kind);
+        });
       });
-    });
+    }
 
-    onEvent("act", (body: unknown) => {
-      const parsed = readSchema(actBody, body);
-      if (!parsed || !betAmount(parsed.action, parsed.amount)) {
-        reportError({ area: "validation", route: "act", tableId, kind });
-        socket.emit("error", { message: parsed ? "Bet size is outside the allowed range" : "Unknown action" });
-        return;
-      }
-      return change("Action failed", async (current, seat) => {
-        assertPlaying(current);
-        await actPoker(current, seat.seat, parsed.action, parsed.amount);
-        noteActivity(current, Date.now());
-        await foldDeparted(current);
-        await dropRemovedPlayers(current);
-        const view = await readPoker(current);
-        return { round: view.round, seated: seatedCount(current) };
-      }).then(async (mark) => {
-        if (!mark) return;
-        await notePoker(tableId, mark.round);
-        await notePlayers(tableId, mark.seated);
-      });
-    });
+    for (const [event, move] of Object.entries(game.moves)) onMove(event, move);
   });
 }

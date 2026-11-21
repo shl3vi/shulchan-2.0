@@ -6,9 +6,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
 import { APP_SCHEME, assertSafeAuthConfig, authRouter } from "./auth.js";
-import { backgammonDebugConfig, debugConfig, debugRouter, ensureDebugTable } from "./debug.js";
+import { debugConfigs, debugRouter, ensureDebugTable } from "./debug.js";
 import { pool } from "./db.js";
-import { enginesReady } from "./engine.js";
+import { allGames } from "./games/index.js";
 import { allowedOrigins, cors, rateLimit } from "./http.js";
 import { router } from "./routes.js";
 import { attachCluster } from "./cluster.js";
@@ -100,13 +100,19 @@ app.get("/privacy", page("privacy.html"));
 app.get("/terms", page("terms.html"));
 app.get("/account", page("account.html"));
 app.get("/support", page("support.html"));
+/** Each game's engine, by game. */
+async function enginesReady() {
+  const entries = await Promise.all(allGames().map(async ([kind, game]) => [kind, await game.health()] as const));
+  return Object.fromEntries(entries) as Record<string, boolean>;
+}
+
 app.get("/health", async (_req, res) => {
   const [redisOk, postgresOk, engines] = await Promise.all([
     answers(() => redis.ping()),
     answers(() => pool.query("SELECT 1")),
     enginesReady(),
   ]);
-  const ok = redisOk && postgresOk && engines.poker && engines.backgammon;
+  const ok = redisOk && postgresOk && Object.values(engines).every(Boolean);
   res.status(ok ? 200 : 503).json({ ok, redis: redisOk, postgres: postgresOk, ...engines });
 });
 /** This server's own address as the browser sees it, behind Railway's proxy. */
@@ -203,15 +209,9 @@ app.get("/api/config", (req, res) => {
 });
 app.use("/api/games", router);
 
-const debug = debugConfig();
-if (debug) {
-  app.use("/dev/dashboard", debugRouter(debug));
+for (const debug of debugConfigs()) {
+  app.use(`/dev/${debug.debug.path}`, debugRouter(debug));
   await ensureDebugTable(debug);
-}
-const backgammonDebug = backgammonDebugConfig();
-if (backgammonDebug) {
-  app.use("/dev/backgammon", debugRouter(backgammonDebug));
-  await ensureDebugTable(backgammonDebug);
 }
 
 const httpServer = createServer(app);

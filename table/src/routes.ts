@@ -1,20 +1,15 @@
 import { Router } from "express";
-import { considerAutoDeal } from "./autodeal.js";
-import { createPokerTable, readPoker, seatPoker } from "./engine.js";
+import { gameFor, gameOf, kindOf, requestedKind } from "./games/index.js";
 import { liveKitToken, mediaRoom, VideoUnavailable } from "./livekit.js";
-import { publicConfigSet } from "./publicConfig.js";
-import { snapshot } from "./snapshot.js";
 import { readHost } from "./auth.js";
 import { nameProblem, playerName } from "./name.js";
-import { chooseSeat } from "./seats.js";
 import { avoidSeats, blockPerson, blockedSeatIds, storeReport, unblockPerson } from "./safety.js";
-import { openingBackgammon } from "./backgammon.js";
-import { blockBody, createBody, joinBody, liveKitBody, readSchema, reportBody } from "./schema.js";
+import { blockBody, joinBody, liveKitBody, readSchema, reportBody } from "./schema.js";
 import { openTable, noteJoin, noteJoinRefused, notePlayers, noteVideo } from "./events/ledger.js";
 import { reportError, reportCaught } from "./events/report.js";
 import { sameSecret, seatedCount, tablePassword } from "./players.js";
 import { clearPasswordFailures, noteWrongPassword, passwordRetryAfter } from "./password.js";
-import { HostTableLimit, insertHostTable, OPEN_TABLE_CAP, openTableCount, publishTable, readTable, TableNotFound, withTable, type TableRecord } from "./store.js";
+import { HostTableLimit, insertHostTable, OPEN_TABLE_CAP, openTableCount, publishTable, readTable, TableNotFound, withTable } from "./store.js";
 
 export const router = Router();
 // No 0/O or 1/I, so a code read aloud or copied by hand still matches.
@@ -31,49 +26,29 @@ router.post("/", async (req, res) => {
     res.status(401).json({ error: "Sign in to open a table" });
     return;
   }
-  const body = readSchema(createBody, req.body);
-  if (!body) {
+  const kind = requestedKind(req.body);
+  const game = kind ? gameFor(kind) : null;
+  const read = game?.settings(req.body) ?? { error: "Invalid request" };
+  if (!kind || !game || "error" in read) {
     reportError({ area: "validation", route: "create" });
-    res.status(400).json({ error: "Invalid request" });
-    return;
-  }
-  const smallBlind = body.smallBlind;
-  const buyIn = body.buyIn;
-  if (!Number.isInteger(smallBlind) || smallBlind < 1) {
-    reportError({ area: "validation", route: "create" });
-    res.status(400).json({ error: "smallBlind must be a positive integer" });
-    return;
-  }
-  if (!Number.isInteger(buyIn) || buyIn < smallBlind * 2) {
-    reportError({ area: "validation", route: "create" });
-    res.status(400).json({ error: "buyIn must be at least two big blinds" });
+    res.status(400).json({ error: "error" in read ? read.error : "Invalid request" });
     return;
   }
   if (await openTableCount(host.email) >= OPEN_TABLE_CAP) {
     res.status(429).json({ error: "You already have two tables open" });
     return;
   }
-  const table: TableRecord = {
+  const table = await game.open({
     id: tableCode(),
     adminSecret: crypto.randomUUID(),
-    smallBlind,
-    buyIn,
     password: tablePassword(),
     hostEmail: host.email,
-    kind: body.kind === "backgammon" ? "backgammon" : "poker",
     lastActivityAt: Date.now(),
-    ...(body.kind !== "backgammon" && body.autoDeal ? { autoDeal: true } : {}),
-    // The app sends its region's default. An older app sends none and gets the default region's.
-    ...(body.kind !== "backgammon"
-      ? { turnSeconds: body.turnSeconds ?? publicConfigSet().default.poker.turnSecondsDefault }
-      : {}),
     players: [],
-  };
-  const view = await createPokerTable(table, smallBlind);
-  if (body.kind === "backgammon") table.backgammon = await openingBackgammon();
+  }, read.settings);
   try {
     while (!(await insertHostTable(table))) table.id = tableCode();
-    await openTable(table.id, table.kind ?? "poker");
+    await openTable(table.id, kind);
   } catch (error) {
     if (error instanceof HostTableLimit) {
       res.status(429).json({ error: error.message });
@@ -86,7 +61,7 @@ router.post("/", async (req, res) => {
     gameId: table.id,
     adminSecret: table.adminSecret,
     password: table.password,
-    state: snapshot(table, view),
+    state: await game.snapshot(table),
   });
 });
 
@@ -125,10 +100,11 @@ router.post("/:id/join", async (req, res) => {
       if (!sameSecret(password, table.password)) throw new JoinRefused(403, "Wrong password");
       const taken = table.players.map((player) => player.seat);
       const avoid = await avoidSeats(personKey, table.players).catch(() => []);
-      const seat = chooseSeat(taken, avoid, table.kind === "backgammon" ? "backgammon" : "poker");
+      const game = gameOf(table);
+      const seat = game.chooseSeat(taken, avoid);
       if (seat === undefined) throw new JoinRefused(400, "Table is full");
-      const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), personKey, seat, bought: table.buyIn, ...(web ? { web: true } : {}) };
-      await seatPoker(table, seat, table.buyIn);
+      const player = { id: crypto.randomUUID(), name, secret: crypto.randomUUID(), personKey, seat, ...(web ? { web: true } : {}) };
+      await game.seat(table, player);
       table.players.push(player);
       // Only the app can be admin. The browser cannot open a table, so it never holds the admin secret.
       if (!web && table.adminSecret && sameSecret(adminSecret, table.adminSecret)) {
@@ -137,10 +113,10 @@ router.post("/:id/join", async (req, res) => {
       } else if (!web && !table.adminId) {
         table.adminId = player.id;
       }
-      return { player, seated: seatedCount(table) };
+      return { player, seated: seatedCount(table), kind: kindOf(table) };
     });
     await publishTable(id);
-    void considerAutoDeal(id);
+    gameFor(joined.kind).changed?.(id);
     await notePlayers(id, joined.seated);
     await noteJoin(id, web);
     await clearPasswordFailures(id, ip).catch(() => undefined);
@@ -171,7 +147,7 @@ router.post("/:id/livekit", async (req, res) => {
   }
   const body = readSchema(liveKitBody, req.body);
   if (!body) {
-    reportError({ area: "validation", route: "livekit", tableId: table.id, kind: table.kind ?? "poker" });
+    reportError({ area: "validation", route: "livekit", tableId: table.id, kind: kindOf(table) });
     res.status(400).json({ error: "Invalid request" });
     return;
   }
@@ -179,7 +155,7 @@ router.post("/:id/livekit", async (req, res) => {
   const secret = body.secret;
   const player = table.players.find((seat) => sameSecret(playerId, seat.id) && sameSecret(secret, seat.secret));
   if (!player) {
-    reportError({ area: "auth", route: "livekit", tableId: table.id, kind: table.kind ?? "poker" });
+    reportError({ area: "auth", route: "livekit", tableId: table.id, kind: kindOf(table) });
     res.status(401).json({ error: "Invalid player" });
     return;
   }
@@ -201,8 +177,8 @@ router.post("/:id/livekit", async (req, res) => {
     res.json(await liveKitToken(mediaRoom(fresh.id, fresh.mediaEpoch), still.id, still.name));
     await noteVideo(table.id);
   } catch (error) {
-    if (error instanceof VideoUnavailable) reportError({ area: "video", route: "livekit", tableId: table.id, kind: table.kind ?? "poker" });
-    else reportCaught(table.id, error, "livekit", table.kind ?? "poker");
+    if (error instanceof VideoUnavailable) reportError({ area: "video", route: "livekit", tableId: table.id, kind: kindOf(table) });
+    else reportCaught(table.id, error, "livekit", kindOf(table));
     const status = error instanceof VideoUnavailable ? 503 : 500;
     res.status(status).json({ error: "Video is not available" });
   }
@@ -239,7 +215,7 @@ router.post("/:id/report", async (req, res) => {
       reason: body.reason,
     });
   } catch (error) {
-    reportCaught(id, error, "report", seated.table.kind ?? "poker");
+    reportCaught(id, error, "report", kindOf(seated.table));
     res.status(500).json({ error: "Could not store the report" });
     return;
   }
@@ -262,7 +238,7 @@ router.post("/:id/block", async (req, res) => {
   try {
     await blockPerson(seated.player.personKey, target.personKey);
   } catch (error) {
-    reportCaught(id, error, "block", seated.table.kind ?? "poker");
+    reportCaught(id, error, "block", kindOf(seated.table));
     res.status(500).json({ error: "Could not update the block" });
     return;
   }
@@ -286,7 +262,7 @@ router.post("/:id/unblock", async (req, res) => {
   try {
     await unblockPerson(seated.player.personKey, target.personKey);
   } catch (error) {
-    reportCaught(id, error, "unblock", seated.table.kind ?? "poker");
+    reportCaught(id, error, "unblock", kindOf(seated.table));
     res.status(500).json({ error: "Could not update the block" });
     return;
   }
@@ -331,5 +307,5 @@ router.get("/:id", async (req, res) => {
     return;
   }
   const blocked = await blockedSeatIds(viewer?.personKey, table.players).catch(() => new Set<string>());
-  res.json(snapshot(table, await readPoker(table), viewer?.id, blocked));
+  res.json(await gameOf(table).snapshot(table, viewer?.id, blocked));
 });

@@ -1,8 +1,12 @@
-import { enginePost } from "./engine.js";
+import { engineAnswers, enginePost } from "../../engines.js";
+import type { TableRecord } from "../../store.js";
 import type { BackgammonAction } from "./schema.js";
-import type { TableRecord } from "./store.js";
 
 const backgammonUrl = process.env.BACKGAMMON_ENGINE_URL ?? "http://127.0.0.1:4002";
+
+export function backgammonEngineAnswers() {
+  return engineAnswers(backgammonUrl);
+}
 
 type Color = "white" | "black";
 

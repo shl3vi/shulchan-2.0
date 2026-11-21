@@ -1,8 +1,10 @@
-import { notePlayers, notePoker } from "./events/ledger.js";
-import { reportCaught } from "./events/report.js";
+import { notePlayers } from "../../events/ledger.js";
+import { reportCaught } from "../../events/report.js";
+import { seatedCount } from "../../players.js";
+import { publishTable, readTable, TableNotFound, withTable } from "../../store.js";
+import { dropRemovedPlayers } from "./departures.js";
 import { readPoker, startPoker } from "./engine.js";
-import { dropRemovedPlayers, seatedCount } from "./players.js";
-import { publishTable, readTable, TableNotFound, withTable } from "./store.js";
+import { notePoker } from "./tally.js";
 
 const AUTO_DEAL_DELAY_MS = 5_000;
 
@@ -29,7 +31,7 @@ function cancelAutoDeal(tableId: string) {
 export async function considerAutoDeal(tableId: string) {
   try {
     const table = await readTable(tableId);
-    if (!table || table.kind === "backgammon" || table.autoDeal !== true || table.paused || table.closing || table.idleCloseAt) {
+    if (!table || (table.kind ?? "poker") !== "poker" || table.autoDeal !== true || table.paused || table.closing || table.idleCloseAt) {
       cancelAutoDeal(tableId);
       return;
     }
@@ -47,7 +49,7 @@ export async function considerAutoDeal(tableId: string) {
 async function dealIfWaiting(tableId: string) {
   try {
     const mark = await withTable(tableId, async (current) => {
-      if (current.kind === "backgammon" || current.autoDeal !== true || current.paused || current.closing || current.idleCloseAt) return null;
+      if ((current.kind ?? "poker") !== "poker" || current.autoDeal !== true || current.paused || current.closing || current.idleCloseAt) return null;
       const view = await readPoker(current);
       if (view.round) return null;
       const started = await startPoker(current);

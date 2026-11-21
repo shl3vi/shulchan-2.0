@@ -1,10 +1,8 @@
-import type { TableRecord } from "./store.js";
+import { engineAnswers, enginePost } from "../../engines.js";
+import type { TableRecord } from "../../store.js";
 import { stampTurn } from "./turn.js";
 
 const engineUrl = process.env.POKER_ENGINE_URL ?? "http://127.0.0.1:4001";
-const engineToken = process.env.ENGINE_TOKEN;
-if (!engineToken) throw new Error("ENGINE_TOKEN is required");
-const engineHeaders = { "x-engine-token": engineToken };
 
 export type Card = { rank: string; suit: string };
 export type ActionName = "fold" | "check" | "call" | "bet" | "raise";
@@ -26,50 +24,8 @@ export type EngineView = {
   shownCards: { seat: number; cards: Card[] }[];
 };
 
-const backgammonUrl = process.env.BACKGAMMON_ENGINE_URL ?? "http://127.0.0.1:4002";
-
-async function probe(base: string) {
-  try {
-    const response = await fetch(`${base}/health`, { signal: AbortSignal.timeout(1500) });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-export async function enginesReady() {
-  const [poker, backgammon] = await Promise.all([probe(engineUrl), probe(backgammonUrl)]);
-  return { poker, backgammon };
-}
-
-/**
- * Well under the 5 second table lock. The engines answer in milliseconds, so a call
- * this slow is stuck, and waiting longer would only hold the table for everyone.
- */
-export const ENGINE_TIMEOUT_MS = 2000;
-
-export class EngineTimeout extends Error {
-  constructor() {
-    super("The game server is slow. Try again.");
-  }
-}
-
-export async function enginePost<T>(base: string, path: string, body?: unknown): Promise<T> {
-  try {
-    // The signal also covers reading the body, so a response that stalls halfway still ends.
-    const response = await fetch(`${base}${path}`, {
-      method: "POST",
-      headers: { ...engineHeaders, "content-type": "application/json" },
-      body: JSON.stringify(body ?? {}),
-      signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
-    });
-    const payload = (await response.json()) as T & { error?: string };
-    if (!response.ok) throw new Error(payload.error ?? "Poker engine failed");
-    return payload;
-  } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") throw new EngineTimeout();
-    throw error;
-  }
+export function pokerEngineAnswers() {
+  return engineAnswers(engineUrl);
 }
 
 type PokerPacket = { hand: unknown; view: EngineView };
@@ -138,5 +94,5 @@ export function actPoker(table: TableRecord, seat: number, action: ActionName, a
 
 export async function readPoker(table: TableRecord): Promise<EngineView> {
   if (table.poker && table.pokerView) return table.pokerView;
-  return (await post("/apply", { hand: await handOf(table), action: { type: "present" } })).view;
+  return (await post("/apply", { hand: handOf(table), action: { type: "present" } })).view;
 }

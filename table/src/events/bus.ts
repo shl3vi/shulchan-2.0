@@ -1,3 +1,5 @@
+import type { GameKind } from "../games/index.js";
+
 export type ErrorArea = "auth" | "validation" | "forbidden" | "action" | "store" | "video" | "subscriber";
 
 export type EventName = "session.summary" | "error" | "server.heartbeat";
@@ -7,7 +9,7 @@ export type AppEvent = {
   name: EventName;
   at: string;
   tableId?: string;
-  kind?: "poker" | "backgammon";
+  kind?: GameKind;
   data: Record<string, string | number | boolean>;
 };
 

@@ -1,7 +1,8 @@
 import { createClient, type RedisClientType } from "redis";
-import type { EngineView } from "./engine.js";
 import { connectPostgres, pool, TABLE_TTL_MS } from "./db.js";
-import type { TurnClock } from "./turn.js";
+import type { GameKind } from "./games/index.js";
+import type { EngineView } from "./games/poker/engine.js";
+import type { TurnClock } from "./games/poker/turn.js";
 
 export type SeatPlayer = {
   id: string;
@@ -10,7 +11,8 @@ export type SeatPlayer = {
   /** Stable across tables, so a block still applies the next time these two sit together. */
   personKey?: string;
   seat: number;
-  bought: number;
+  /** Poker only. Chips bought so far. */
+  bought?: number;
   pendingRemoval?: boolean;
   /** Joined from a browser. A browser player is a guest and is never made admin. */
   web?: boolean;
@@ -30,7 +32,7 @@ export type TableRecord = {
   hostEmail?: string;
   /** Poker only. The next hand starts on its own once the table is waiting. */
   autoDeal?: boolean;
-  kind?: "poker" | "backgammon";
+  kind?: GameKind;
   backgammon?: unknown;
   backgammonLog?: { whiteName: string; blackName: string; winner: "white" | "black"; points: number }[];
   poker?: unknown;
@@ -56,6 +58,9 @@ export type TableRecord = {
   turnSeconds?: number;
   players: SeatPlayer[];
 };
+
+/** A table about to be stored for the first time. Its game is always known. */
+export type KindedTable = TableRecord & { kind: GameKind };
 
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 
@@ -203,7 +208,7 @@ export class HostTableLimit extends Error {
 }
 
 /** One host cannot pass the cap twice at the same moment. The lock covers the count and the insert. */
-export async function insertHostTable(table: TableRecord) {
+export async function insertHostTable(table: KindedTable) {
   const email = table.hostEmail ?? "";
   const client = await pool.connect();
   try {
@@ -221,7 +226,7 @@ export async function insertHostTable(table: TableRecord) {
              updated_at = now()
          WHERE tables.expires_at <= now()
        RETURNING id`,
-      [table.id, table.kind ?? "poker", JSON.stringify(table), TABLE_TTL_MS / 1000],
+      [table.id, table.kind, JSON.stringify(table), TABLE_TTL_MS / 1000],
     );
     return saved.rowCount === 1;
   } finally {
@@ -230,7 +235,7 @@ export async function insertHostTable(table: TableRecord) {
   }
 }
 
-export async function insertTable(table: TableRecord) {
+export async function insertTable(table: KindedTable) {
   table.revision = 1;
   const saved = await pool.query(
     `INSERT INTO tables (id, kind, record, expires_at)
@@ -243,7 +248,7 @@ export async function insertTable(table: TableRecord) {
            updated_at = now()
        WHERE tables.expires_at <= now()
      RETURNING id`,
-    [table.id, table.kind ?? "poker", JSON.stringify(table), TABLE_TTL_MS / 1000],
+    [table.id, table.kind, JSON.stringify(table), TABLE_TTL_MS / 1000],
   );
   return saved.rowCount === 1;
 }

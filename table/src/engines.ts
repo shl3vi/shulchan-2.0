@@ -1,0 +1,47 @@
+const engineToken = process.env.ENGINE_TOKEN;
+if (!engineToken) throw new Error("ENGINE_TOKEN is required");
+const engineHeaders = { "x-engine-token": engineToken };
+
+/**
+ * Well under the 5 second table lock. The engines answer in milliseconds, so a call
+ * this slow is stuck, and waiting longer would only hold the table for everyone.
+ */
+export const ENGINE_TIMEOUT_MS = 2000;
+
+export class EngineTimeout extends Error {
+  constructor() {
+    super("The game server is slow. Try again.");
+  }
+}
+
+/** The text of an engine error that came without its own message. */
+export const ENGINE_FAILED = "Game engine failed";
+
+/** Calls one game engine service. Each game's folder knows its own engine's address and paths. */
+export async function enginePost<T>(base: string, path: string, body?: unknown): Promise<T> {
+  try {
+    // The signal also covers reading the body, so a response that stalls halfway still ends.
+    const response = await fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { ...engineHeaders, "content-type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(ENGINE_TIMEOUT_MS),
+    });
+    const payload = (await response.json()) as T & { error?: string };
+    if (!response.ok) throw new Error(payload.error ?? ENGINE_FAILED);
+    return payload;
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") throw new EngineTimeout();
+    throw error;
+  }
+}
+
+/** True when the engine answers its health check. */
+export async function engineAnswers(base: string) {
+  try {
+    const response = await fetch(`${base}/health`, { signal: AbortSignal.timeout(1500) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}

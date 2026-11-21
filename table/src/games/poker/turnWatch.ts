@@ -1,9 +1,11 @@
 import { considerAutoDeal } from "./autodeal.js";
 import { actPoker, readPoker } from "./engine.js";
-import { notePlayers, notePoker } from "./events/ledger.js";
-import { reportCaught } from "./events/report.js";
-import { dropRemovedPlayers, foldDeparted, seatedCount } from "./players.js";
-import { publishTable, TABLE_UNCHANGED, TableNotFound, withTable, type TableRecord } from "./store.js";
+import { notePlayers } from "../../events/ledger.js";
+import { reportCaught } from "../../events/report.js";
+import { seatedCount } from "../../players.js";
+import { publishTable, TABLE_UNCHANGED, TableNotFound, withTable, type TableRecord } from "../../store.js";
+import { dropRemovedPlayers, foldDeparted } from "./departures.js";
+import { notePoker } from "./tally.js";
 import { timeoutAction, turnExpired } from "./turn.js";
 
 /** Checked late rather than early, so a player who acts on the last second wins the race. */
@@ -13,7 +15,7 @@ const pending = new Map<string, NodeJS.Timeout>();
 
 // The debug table is not held: it shows the clock like any other table, so the clock must act there too.
 function holds(table: TableRecord) {
-  return table.kind === "backgammon" || table.paused === true || table.closing === true;
+  return (table.kind ?? "poker") !== "poker" || table.paused === true || table.closing === true;
 }
 
 /**

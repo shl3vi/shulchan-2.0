@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { actPoker, readPoker, unseatPoker } from "./engine.js";
+import { gameOf } from "./games/index.js";
 import type { TableRecord } from "./store.js";
 
 /** Equal length and content, without leaking where two secrets differ. */
@@ -18,27 +18,6 @@ export function seatedCount(table: TableRecord) {
   return table.players.filter((player) => !player.pendingRemoval).length;
 }
 
-const MAX_SEATS = 9;
-
-/** A departed player no longer has a socket that can act, so fold them when the hand is waiting on that seat. */
-export async function foldDeparted(table: TableRecord) {
-  if (table.kind === "backgammon") return;
-  for (let guard = 0; guard < MAX_SEATS; guard += 1) {
-    const view = await readPoker(table);
-    const seat = view.playerToActSeat;
-    if (seat == null || !view.legalActions.includes("fold")) return;
-    const actor = table.players.find((player) => player.seat === seat);
-    if (!actor?.pendingRemoval) return;
-    await actPoker(table, seat, "fold");
-  }
-}
-
-export async function dropRemovedPlayers(table: TableRecord) {
-  const view = await readPoker(table);
-  const live = new Set(view.seats.map((seat) => seat.seat));
-  table.players = table.players.filter((player) => !player.pendingRemoval || live.has(player.seat));
-}
-
 export function assignAdmin(table: TableRecord, playerId: string | null) {
   table.adminId = playerId ?? undefined;
 }
@@ -52,11 +31,10 @@ export async function releaseSeat(table: TableRecord, playerId: string) {
     const next = staying.length === 0 ? null : staying[Math.floor(Math.random() * staying.length)]!.id;
     assignAdmin(table, next);
   }
+  const game = gameOf(table);
   if (!player.pendingRemoval) {
-    await unseatPoker(table, player.seat);
+    await game.unseat(table, player);
     player.pendingRemoval = true;
   }
-  await dropRemovedPlayers(table);
-  await foldDeparted(table);
-  await dropRemovedPlayers(table);
+  await game.dropDeparted(table);
 }

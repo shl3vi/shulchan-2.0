@@ -1,27 +1,20 @@
-const SEATS = 9;
-
-/** Free chair farthest from anyone this player has blocked, or who has blocked them. */
-export function chooseSeat(taken: number[], avoid: number[], kind: "poker" | "backgammon"): number | undefined {
+/** Seat numbers 0 to size - 1 that nobody holds. */
+export function freeSeats(size: number, taken: number[]) {
   const used = new Set(taken);
-  const free = Array.from({ length: SEATS }, (_, index) => index).filter((index) => !used.has(index));
+  return Array.from({ length: size }, (_, index) => index).filter((index) => !used.has(index));
+}
+
+/** Free chair farthest round the table from anyone this player has blocked, or who has blocked them. */
+export function farthestSeat(size: number, taken: number[], avoid: number[]): number | undefined {
+  const free = freeSeats(size, taken);
   if (free.length === 0) return undefined;
   if (avoid.length === 0) return free[0];
-  if (kind === "backgammon") {
-    const seated = [...taken].sort((a, b) => a - b);
-    const playing = seated.slice(0, 2);
-    const blockedAtTable = playing.some((seat) => avoid.includes(seat));
-    if (blockedAtTable && seated.length >= 2) {
-      const above = free.filter((seat) => seat > (playing[1] ?? playing[0] ?? -1));
-      if (above.length > 0) return above[above.length - 1];
-    }
-    return free[0];
-  }
   let best = free[0] ?? 0;
   let bestDistance = -1;
   for (const seat of free) {
     const distance = Math.min(...avoid.map((other) => {
       const gap = Math.abs(seat - other);
-      return Math.min(gap, SEATS - gap);
+      return Math.min(gap, size - gap);
     }));
     if (distance > bestDistance) {
       bestDistance = distance;

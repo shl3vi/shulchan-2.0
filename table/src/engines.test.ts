@@ -3,9 +3,9 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import test, { after, before } from "node:test";
 
-// engine.ts refuses to load without a token.
+// engines.ts refuses to load without a token.
 process.env.ENGINE_TOKEN ??= "test-token";
-const { ENGINE_TIMEOUT_MS, EngineTimeout, enginePost } = await import("./engine.js");
+const { ENGINE_TIMEOUT_MS, EngineTimeout, enginePost } = await import("./engines.js");
 
 let server: Server;
 let base = "";

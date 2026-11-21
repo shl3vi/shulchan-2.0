@@ -1,4 +1,4 @@
-import { DEFAULT_TURN_SECONDS, MAX_TURN_SECONDS, MIN_TURN_SECONDS } from "./turn.js";
+import { DEFAULT_TURN_SECONDS, MAX_TURN_SECONDS, MIN_TURN_SECONDS } from "./games/poker/turn.js";
 
 export type AdsMode = "off" | "test" | "live";
 

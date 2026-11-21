@@ -1,21 +1,6 @@
 import { z } from "zod";
-import { MAX_TURN_SECONDS, MIN_TURN_SECONDS } from "./turn.js";
-
-const turnSeconds = z.number().int().min(MIN_TURN_SECONDS).max(MAX_TURN_SECONDS);
-
-export const createBody = z.object({
-  smallBlind: z.number().int().positive(),
-  buyIn: z.number().int().positive(),
-  kind: z.enum(["poker", "backgammon"]).optional(),
-  autoDeal: z.boolean().optional(),
-  turnSeconds: turnSeconds.optional(),
-}).strict();
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export const MAX_CHIPS = 1_000_000_000;
-
-export const chipAmount = z.number().int().positive().max(MAX_CHIPS);
 
 export const joinBody = z.object({
   name: z.string().min(1).max(24),
@@ -55,50 +40,9 @@ export const appleBody = z.object({
   name: z.string().trim().min(1).max(80).optional(),
 }).strict();
 
-const point = z.number().int().min(1).max(24);
-
-export const backgammonBody = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("roll") }).strict(),
-  z.object({
-    type: z.literal("move"),
-    from: z.union([point, z.literal("bar")]),
-    to: z.union([point, z.literal("off")]),
-    die: z.number().int().min(1).max(6),
-  }).strict(),
-  z.object({ type: z.literal("double") }).strict(),
-  z.object({ type: z.literal("answer"), accept: z.boolean() }).strict(),
-  z.object({ type: z.literal("restart") }).strict(),
-]);
-
-export type BackgammonAction = z.infer<typeof backgammonBody>;
-
-export const actBody = z.object({
-  action: z.enum(["fold", "check", "call", "bet", "raise"]),
-  amount: chipAmount.optional(),
-}).strict();
-
 export const playerBody = z.object({
   playerId: z.string().min(1),
 }).strict();
-
-export const rebuyBody = z.object({
-  amount: chipAmount,
-}).strict();
-
-export const autoDealBody = z.object({
-  enabled: z.boolean(),
-}).strict();
-
-export const turnTimeBody = z.object({
-  seconds: turnSeconds,
-}).strict();
-
-/** Admin table settings. Each field is optional; only the ones sent change. */
-export const tableSettingsBody = z.object({
-  smallBlind: z.number().int().positive().max(MAX_CHIPS / 2).optional(),
-  buyIn: chipAmount.optional(),
-  rebuy: z.enum(["any", "busted", "off"]).optional(),
-}).strict().refine((body) => body.smallBlind != null || body.buyIn != null || body.rebuy != null);
 
 export const pauseBody = z.object({
   paused: z.boolean(),

@@ -1,6 +1,7 @@
 import { publish } from "./bus.js";
 import { redis } from "../store.js";
-import { applyBackgammon, applyPlayers, applyPoker, freshTally, type PokerRound, type TableKind, type Tally } from "./tally.js";
+import type { GameKind } from "../games/index.js";
+import { applyPlayers, freshTally, type Tally } from "./tally.js";
 
 function key(id: string) {
   return `ledger:${id}`;
@@ -54,7 +55,7 @@ async function finish(id: string, tally: Tally, endReason: "closed" | "expired" 
   }
 }
 
-export async function openTable(id: string, kind: TableKind) {
+export async function openTable(id: string, kind: GameKind) {
   if (await load(id)) return;
   await save(id, freshTally(kind, Date.now()));
 }
@@ -70,22 +71,11 @@ export async function notePlayers(id: string, count: number) {
   await save(id, tally);
 }
 
-export async function notePoker(id: string, round: PokerRound) {
+/** Lets a game add its own counts to a table's stats. Tables of another kind are left alone. */
+export async function changeTally(id: string, kind: GameKind, apply: (tally: Tally) => void) {
   const tally = await load(id);
-  if (!tally || tally.kind === "backgammon") return;
-  applyPoker(tally, round);
-  await save(id, tally);
-}
-
-export async function noteBackgammon(
-  id: string,
-  previous: { phase?: unknown; turn?: unknown } | null,
-  next: { phase?: unknown; turn?: unknown },
-  gamesGained: number,
-) {
-  const tally = await load(id);
-  if (!tally || tally.kind !== "backgammon") return;
-  applyBackgammon(tally, previous, next, gamesGained);
+  if (!tally || tally.kind !== kind) return;
+  apply(tally);
   await save(id, tally);
 }
 
