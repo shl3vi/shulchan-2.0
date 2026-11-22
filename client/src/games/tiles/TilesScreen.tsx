@@ -15,56 +15,57 @@ import { arrange, checkDraft, FIRST_MELD, readSet, sortRack } from "@/games/tile
 import { tilesView, type TilesPlayView, type TilesView } from "@/games/tiles/view";
 import { t } from "@/i18n";
 import { SeatVideo } from "@/media/SeatVideo";
+
+type VideoTrackLike = Parameters<typeof SeatVideo>[0]["track"];
 import { useTableVideo } from "@/media/useTableVideo";
 import { CameraButton, RoomLight, TableMenu, TalkButton } from "@/table/TableControls";
 import { CopyField, ErrorBanner, HomeButton, shareTable, TableFooter, tableError, VideoNotice } from "@/table/TableParts";
+import { SeatStrip, stripSize, type StripSeat } from "@/table/SeatStrip";
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 const LOBBY_TILES = ["r7a", "b7a", "o7a", "k7a", "j1"];
+/** The video tiles never take more than this much height. */
+const STRIP_MAX = 132;
+const TOOLS_HEIGHT = 30;
+const INFO_HEIGHT = 26;
 
-/** A player along the top: their video or initial, with how many tiles they still hold. */
-function PlayerChip({
-  name,
-  initialOf,
-  video,
-  count,
-  active,
-  winner,
-  gone,
-  onLongPress,
+/** The video tiles along the top, with how many tiles each player still holds. */
+function tilesSeats({
+  lineup,
+  seated,
+  youId,
+  tracks,
+  started,
+  currentId,
+  winners,
+  onSeat,
 }: {
-  name: string;
-  initialOf: string;
-  video?: ReactNode;
-  count: number | null;
-  active: boolean;
-  winner: boolean;
-  gone: boolean;
-  onLongPress?: () => void;
-}) {
-  return (
-    <Pressable onLongPress={onLongPress} style={[styles.chip, gone ? styles.chipGone : null]} hitSlop={4}>
-      <View style={[styles.chipCircle, active ? styles.chipActive : null, winner ? styles.chipWinner : null]}>
-        <View style={styles.chipClip}>{video ?? <Text style={styles.chipInitial}>{initialOf.slice(0, 1).toUpperCase() || "+"}</Text>}</View>
-        {winner ? (
-          <View style={styles.crown}>
-            <Ionicons name="trophy" size={12} color="#1c1917" />
-          </View>
-        ) : null}
-        {count == null ? null : (
-          <View style={[styles.chipCount, active ? styles.chipCountOn : null]}>
-            <Ionicons name="square" size={8} color={active ? "#171b35" : "#c8ceff"} />
-            <Text style={[styles.chipCountText, active ? styles.chipCountTextOn : null]}>{count}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[styles.chipName, active ? styles.chipNameOn : null, count == null ? null : styles.chipNameBelow]} numberOfLines={1}>
-        {name}
-      </Text>
-    </Pressable>
-  );
+  lineup: { id: string; name: string; left: boolean; count: number }[];
+  seated: PublicPlayer[];
+  youId?: string;
+  tracks: Map<string, VideoTrackLike>;
+  started: boolean;
+  currentId?: string;
+  winners: string[];
+  onSeat: (player: PublicPlayer) => void;
+}): StripSeat[] {
+  return lineup.map((player) => {
+    const seat = seated.find((entry) => entry.id === player.id);
+    const track = tracks.get(player.id);
+    return {
+      id: player.id,
+      label: player.id === youId ? t("tlYou") : player.name,
+      initialOf: player.name,
+      video: track ? <SeatVideo track={track} /> : undefined,
+      badge: started ? String(player.count) : undefined,
+      active: currentId === player.id,
+      winner: winners.includes(player.id),
+      gone: player.left || (started && !seat),
+      onLongPress: seat && seat.id !== youId ? () => onSeat(seat) : undefined,
+    };
+  });
 }
 
 type Draft = { sets: string[][]; rack: string[] };
@@ -180,6 +181,7 @@ function TilesTable({
   const rackRows = Math.max(1, Math.ceil(rack.length / perRow));
   // A wrapping row reports one line when the column shares out its height, so the rack says how tall it is.
   const rackHeight = rackRows * Math.round(rackTile * 1.36) + (rackRows - 1) * 4 + 24;
+  const stripWidth = Math.min(width, 560) - 24;
 
   function send(type: string, body: object = {}) {
     if (paused) return;
@@ -252,7 +254,7 @@ function TilesTable({
   const lineup = play
     ? play.players
     : [...state.players].sort((a, b) => a.seat - b.seat).slice(0, 4).map((player) => ({ id: player.id, name: player.name, melded: false, left: false, count: 0 }));
-  const playerOf = (id: string) => state.players.find((player) => player.id === id);
+  const strip = stripSize(lineup.length, stripWidth, STRIP_MAX);
   const seated = state.players.some((player) => player.id === youId);
   const ranking = over && play ? [...play.players].sort((a, b) => (play.points[b.id] ?? 0) - (play.points[a.id] ?? 0)) : [];
 
@@ -305,25 +307,22 @@ function TilesTable({
       <View style={styles.stage}>
         <RoomLight />
         <View style={[styles.column, { paddingTop: insets.top + 54 }]}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip} style={styles.stripScroll}>
-            {lineup.map((player) => {
-              const seat = playerOf(player.id);
-              const track = video.tracks.get(player.id);
-              return (
-                <PlayerChip
-                  key={player.id}
-                  name={player.id === youId ? t("tlYou") : player.name}
-                  initialOf={player.name}
-                  video={track ? <SeatVideo track={track} /> : undefined}
-                  count={play ? player.count : null}
-                  active={current?.id === player.id}
-                  winner={over === true && play!.winners.includes(player.id)}
-                  gone={player.left || (play != null && !seat)}
-                  onLongPress={seat && seat.id !== youId ? () => setSeatSheet(seat) : undefined}
-                />
-              );
-            })}
-          </ScrollView>
+          <View style={{ height: strip.height }}>
+            <SeatStrip
+              width={stripWidth}
+              maxHeight={STRIP_MAX}
+              seats={tilesSeats({
+                lineup,
+                seated: state.players,
+                youId,
+                tracks: video.tracks,
+                started: play != null,
+                currentId: current?.id,
+                winners: over && play ? play.winners : [],
+                onSeat: setSeatSheet,
+              })}
+            />
+          </View>
 
           {play ? (
             // The felt fills a slot that may shrink: drawn absolutely, its contents never hold the slot open.
@@ -717,7 +716,7 @@ const styles = {
     podiumName: { color: "#f7f7fc", fontWeight: "800", flex: 1 },
     podiumPoints: { color: "#86e3c4", fontWeight: "900", fontVariant: ["tabular-nums"] },
     podiumMinus: { color: "#f19c9c" },
-    infoRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4, flexShrink: 0 },
+    infoRow: { height: INFO_HEIGHT, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4, flexShrink: 0 },
     pool: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: "rgba(200,206,255,0.10)" },
     poolText: { color: "#c8ceff", fontWeight: "900", fontVariant: ["tabular-nums"] },
     status: { color: "#a6a8c8", fontSize: 13, fontWeight: "700", flex: 1 },
@@ -726,7 +725,7 @@ const styles = {
     meterFill: { height: 6, borderRadius: 3, backgroundColor: "#f6d36b" },
     meterFull: { backgroundColor: "#86e3c4" },
     rackWrap: { gap: 6, flexShrink: 0 },
-    tools: { flexDirection: "row", gap: 8, paddingHorizontal: 2 },
+    tools: { height: TOOLS_HEIGHT, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 2 },
     tool: {
       flexDirection: "row",
       alignItems: "center",

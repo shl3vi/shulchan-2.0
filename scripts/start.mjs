@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
-// Production runs this process as the table only. The poker and backgammon engines are
-// their own services; POKER_ENGINE_URL, BACKGAMMON_ENGINE_URL, and ENGINE_TOKEN come from the environment.
+// Production runs this process as the table only. Each game's engine is its own service;
+// POKER_ENGINE_URL, BACKGAMMON_ENGINE_URL, DICE_ENGINE_URL, TILES_ENGINE_URL and ENGINE_TOKEN come from the environment.
 const child = spawn("npm", ["start", "--prefix", "table"], {
   env: process.env,
   stdio: "inherit",

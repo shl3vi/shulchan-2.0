@@ -16,9 +16,12 @@ import { isFiveKind, LOWER, ROLLS_PER_TURN, scoreFor, totalOf, type Category, ty
 import { diceView, type DiceView } from "@/games/dice/view";
 import { t, type MessageKey } from "@/i18n";
 import { SeatVideo } from "@/media/SeatVideo";
+
+type VideoTrackLike = Parameters<typeof SeatVideo>[0]["track"];
 import { useTableVideo } from "@/media/useTableVideo";
 import { CameraButton, RoomLight, TableMenu, TalkButton } from "@/table/TableControls";
 import { CopyField, ErrorBanner, HomeButton, shareTable, TableFooter, tableError, VideoNotice } from "@/table/TableParts";
+import { SeatStrip, type StripSeat } from "@/table/SeatStrip";
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
@@ -42,52 +45,47 @@ const BOX_LABEL: Record<Category, MessageKey> = {
 const NO_HOLD = [false, false, false, false, false];
 const STRIP_FACES = [6, 6, 6, 6, 6];
 
-/** A player in the strip along the top: their video or initial, their name and their total. */
-function PlayerChip({
-  name,
-  initialOf,
-  video,
-  total,
-  active,
-  viewing,
-  winner,
-  gone,
-  onPress,
-  onLongPress,
+/** The video tiles along the top, one per player in the game, or per seated player before it starts. */
+function diceSeats({
+  lineup,
+  seated,
+  youId,
+  tracks,
+  started,
+  currentId,
+  viewedId,
+  winners,
+  onPick,
+  onSeat,
 }: {
-  name: string;
-  /** The name the initial comes from, when `name` is a label such as "You". */
-  initialOf: string;
-  video?: ReactNode;
-  total: number | null;
-  active: boolean;
-  viewing: boolean;
-  winner: boolean;
-  gone: boolean;
-  onPress?: () => void;
-  onLongPress?: () => void;
-}) {
-  const initial = initialOf.slice(0, 1).toUpperCase() || "+";
-  return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} style={[styles.chip, gone ? styles.chipGone : null]} hitSlop={4}>
-      <View style={[styles.chipCircle, active ? styles.chipActive : null, winner ? styles.chipWinner : null]}>
-        <View style={styles.chipClip}>{video ?? <Text style={styles.chipInitial}>{initial}</Text>}</View>
-        {winner ? (
-          <View style={styles.crown}>
-            <Ionicons name="trophy" size={12} color="#1c1917" />
-          </View>
-        ) : null}
-        {total == null ? null : (
-          <View style={[styles.chipScore, viewing ? styles.chipScoreOn : null]}>
-            <Text style={[styles.chipScoreText, viewing ? styles.chipScoreTextOn : null]}>{total}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[styles.chipName, viewing ? styles.chipNameOn : null, total == null ? null : styles.chipNameBelowScore]} numberOfLines={1}>
-        {name}
-      </Text>
-    </Pressable>
-  );
+  lineup: DicePlayer[];
+  seated: PublicPlayer[];
+  youId?: string;
+  tracks: Map<string, VideoTrackLike>;
+  started: boolean;
+  currentId?: string;
+  viewedId?: string;
+  winners: string[];
+  onPick: (id: string) => void;
+  onSeat: (player: PublicPlayer) => void;
+}): StripSeat[] {
+  return lineup.map((player) => {
+    const seat = seated.find((entry) => entry.id === player.id);
+    const track = tracks.get(player.id);
+    return {
+      id: player.id,
+      label: player.id === youId ? t("dcYou") : player.name,
+      initialOf: player.name,
+      video: track ? <SeatVideo track={track} /> : undefined,
+      badge: started ? String(totalOf(player)) : undefined,
+      active: currentId === player.id,
+      chosen: viewedId === player.id,
+      winner: winners.includes(player.id),
+      gone: player.left === true || (started && !seat),
+      onPress: started ? () => onPick(player.id) : undefined,
+      onLongPress: seat && seat.id !== youId ? () => onSeat(seat) : undefined,
+    };
+  });
 }
 
 /** "Five dice!" bursting over the tray. */
@@ -269,8 +267,6 @@ function DiceTable({
     else send("start");
   }
 
-  const playerOf = (id: string) => state.players.find((player) => player.id === id);
-  const trackOf = (id: string) => video.tracks.get(id);
 
   let status = "";
   if (!game || over) status = "";
@@ -329,27 +325,22 @@ function DiceTable({
           contentContainerStyle={[styles.content, { paddingTop: insets.top + 54 }]}
           showsVerticalScrollIndicator={false}
         >
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
-            {lineup.map((player) => {
-              const seat = playerOf(player.id);
-              const track = trackOf(player.id);
-              return (
-                <PlayerChip
-                  key={player.id}
-                  name={player.id === youId ? t("dcYou") : player.name}
-                  initialOf={player.name}
-                  video={track ? <SeatVideo track={track} /> : undefined}
-                  total={game ? totalOf(player) : null}
-                  active={current?.id === player.id}
-                  viewing={game != null && viewed?.id === player.id}
-                  winner={over && game!.winners.includes(player.id)}
-                  gone={player.left === true || (game != null && !seat)}
-                  onPress={game ? () => setPinned({ id: player.id, turn: turnKey }) : undefined}
-                  onLongPress={seat && seat.id !== youId ? () => setSeatSheet(seat) : undefined}
-                />
-              );
+          <SeatStrip
+            width={Math.min(width, 520) - 32}
+            maxHeight={120}
+            seats={diceSeats({
+              lineup,
+              seated: state.players,
+              youId,
+              tracks: video.tracks,
+              started: game != null,
+              currentId: current?.id,
+              viewedId: game ? viewed?.id : undefined,
+              winners: over ? game!.winners : [],
+              onPick: (id) => setPinned({ id, turn: turnKey }),
+              onSeat: setSeatSheet,
             })}
-          </ScrollView>
+          />
           {watchers.length > 0 ? (
             <Text style={styles.watchers} numberOfLines={1}>
               {t("dcWatchers", { names: watchers.map((player) => player.name).join(", ") })}

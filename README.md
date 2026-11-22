@@ -1,12 +1,12 @@
 # Shulchan 2.0
 
-Video game tables: poker and backgammon. The table service owns seats, sockets, admin, pause and idle closing, and keeps each table in Postgres. Each game's rules run in its own engine service, which the table calls over HTTP. Redis carries the lock, sign-ins and "table changed" messages between table processes.
+Video game tables: poker, backgammon, dice (five dice, a 13-box scorecard) and tiles (tile rummy). The table service owns seats, sockets, admin, pause and idle closing, and keeps each table in Postgres. Each game's rules run in its own engine service, which the table calls over HTTP. Redis carries the lock, sign-ins and "table changed" messages between table processes.
 
 ```bash
 npm run dev
 ```
 
-That starts Redis, LiveKit, the poker engine, the backgammon engine, the table service, and a Cloudflare tunnel. Then, from `client/`:
+That starts Redis, LiveKit, the poker, backgammon, dice and tiles engines, the table service, and a Cloudflare tunnel. Then, from `client/`:
 
 ```bash
 npx expo run:android
@@ -33,11 +33,13 @@ To remove a game, delete its two folders and its engine, and its line in each li
 
 `docs/game-separation.html` shows both sides as diagrams.
 
+Every game has a permanent debug table, switched on by `DEBUG_<PREFIX>_TABLE_ID` and `DEBUG_<PREFIX>_DASHBOARD_ID` (at least 16 characters), with an optional six-digit `DEBUG_<PREFIX>_TABLE_PASSWORD`. Its page at `/dev/<kind>/<dashboard id>` adds players and plays for whoever is to act. The prefixes are `DEBUG` (poker), `DEBUG_BG`, `DEBUG_DICE` and `DEBUG_TILES`.
+
 Tests: `npm test --prefix table` and `npm test --prefix client`. Typecheck: `npm run typecheck` in either.
 
 ## Cloud
 
-Railway hosts Redis, Postgres, the table service (`shulchan-server`), and one engine service per game. The engines have no public domain. The table reaches them on Railway's private network and sends `ENGINE_TOKEN`, the same value set on every service. The poker engine checks each betting action, and the backgammon engine rolls the dice and checks every move. `/health` fails only when Redis or Postgres is down; each engine is reported on its own. A phone only sends what the player wants to do. The table stores the result. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
+Railway hosts Redis, Postgres, the table service (`shulchan-server`), and one engine service per game. The engines have no public domain. The table reaches them on Railway's private network and sends `ENGINE_TOKEN`, the same value set on every service. The poker engine checks each betting action, the backgammon engine rolls the dice and checks every move, the dice engine rolls and scores every box, and the tiles engine shuffles, deals and checks every set on the table. `/health` fails only when Redis or Postgres is down; each engine is reported on its own. A phone only sends what the player wants to do. The table stores the result. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
 
 An installable APK, from `client/`:
 
