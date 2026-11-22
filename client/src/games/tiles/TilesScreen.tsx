@@ -15,8 +15,6 @@ import { arrange, checkDraft, FIRST_MELD, readSet, sortRack } from "@/games/tile
 import { tilesView, type TilesPlayView, type TilesView } from "@/games/tiles/view";
 import { t } from "@/i18n";
 import { SeatVideo } from "@/media/SeatVideo";
-
-type VideoTrackLike = Parameters<typeof SeatVideo>[0]["track"];
 import { useTableVideo } from "@/media/useTableVideo";
 import { CameraButton, RoomLight, TableMenu, TalkButton } from "@/table/TableControls";
 import { CopyField, ErrorBanner, HomeButton, shareTable, TableFooter, tableError, VideoNotice } from "@/table/TableParts";
@@ -24,6 +22,8 @@ import { SeatStrip, stripSize, type StripSeat } from "@/table/SeatStrip";
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+
+type VideoTrackLike = Parameters<typeof SeatVideo>[0]["track"];
 
 const LOBBY_TILES = ["r7a", "b7a", "o7a", "k7a", "j1"];
 /** The video tiles never take more than this much height. */

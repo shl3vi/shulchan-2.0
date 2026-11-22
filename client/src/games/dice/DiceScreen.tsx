@@ -16,8 +16,6 @@ import { isFiveKind, LOWER, ROLLS_PER_TURN, scoreFor, totalOf, type Category, ty
 import { diceView, type DiceView } from "@/games/dice/view";
 import { t, type MessageKey } from "@/i18n";
 import { SeatVideo } from "@/media/SeatVideo";
-
-type VideoTrackLike = Parameters<typeof SeatVideo>[0]["track"];
 import { useTableVideo } from "@/media/useTableVideo";
 import { CameraButton, RoomLight, TableMenu, TalkButton } from "@/table/TableControls";
 import { CopyField, ErrorBanner, HomeButton, shareTable, TableFooter, tableError, VideoNotice } from "@/table/TableParts";
@@ -25,6 +23,8 @@ import { SeatStrip, type StripSeat } from "@/table/SeatStrip";
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+
+type VideoTrackLike = Parameters<typeof SeatVideo>[0]["track"];
 
 const BOX_LABEL: Record<Category, MessageKey> = {
   ones: "dcOnes",
