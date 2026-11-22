@@ -4,7 +4,8 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AdBanner } from "@/ads/AdBanner";
-import { API_URL } from "@/game/api";
+import { API_URL, isWeb } from "@/game/api";
+import { useGameSession } from "@/game/GameSession";
 import { GetTheApp } from "@/game/GetTheApp";
 import { t, type MessageKey } from "@/i18n";
 import { tableStyles } from "@/table/tableStyles";
@@ -143,12 +144,24 @@ export function ErrorBanner({ message, onClose }: { message: string; onClose: ()
   );
 }
 
-/** Back to the lobby, top left. The seat is kept. */
+/**
+ * Back to the lobby, top left. In the app the seat is kept.
+ * A browser has no lobby: its home is the join page, which sends a seated guest straight back
+ * to the table, so there home leaves the table.
+ */
 export function HomeButton() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const session = useGameSession();
+  function goHome() {
+    if (isWeb && session.credentials) {
+      void session.leave().then(() => router.replace("/join"));
+      return;
+    }
+    router.dismissTo("/");
+  }
   return (
-    <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={() => router.dismissTo("/")} hitSlop={8}>
+    <Pressable style={[styles.home, { top: insets.top + 8 }]} onPress={goHome} hitSlop={8}>
       <Ionicons name="home" size={20} color="#c8ceff" />
     </Pressable>
   );
