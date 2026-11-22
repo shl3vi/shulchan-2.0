@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
-import { Animated, Easing, Image, Pressable, StyleSheet, Text, View, type LayoutRectangle } from "react-native";
+import { Animated, Easing, Pressable, StyleSheet, Text, View, type LayoutRectangle } from "react-native";
 import Svg, { Defs, LinearGradient, Polygon, Stop } from "react-native-svg";
 import { stepDice } from "@/games/backgammon/diceSound";
 import {
@@ -11,6 +11,8 @@ import {
   type Move,
 } from "@/games/backgammon/rules";
 import { t, type MessageKey } from "@/i18n";
+import { Confetti } from "@/ui/Confetti";
+import { FELT, Texture, WOOD } from "@/ui/Texture";
 
 const STATUS: Record<string, MessageKey> = {
   roll: "bgMsgRoll",
@@ -39,22 +41,6 @@ const SLIDE_MS = 420;
 /** Samples along a flight, enough for the arc to read as a curve and not a corner. */
 const ARC_STEPS = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1];
 
-/** Light-and-shadow overlays drawn by scripts/make-textures.mjs; the colors under them stay in the styles.
- * The files on disk are @2x: Metro picks the scale from the name, so they are required without it. */
-const FELT = require("../../../assets/images/textures/felt.png");
-const WOOD = require("../../../assets/images/textures/wood.png");
-
-/** A tiled texture laid over its parent's background, under everything else in it. */
-function Texture({ source, radius, opacity = 1 }: { source: number; radius: number; opacity?: number }) {
-  return (
-    <Image
-      source={source}
-      resizeMode="repeat"
-      pointerEvents="none"
-      style={[StyleSheet.absoluteFill, { width: "100%", height: "100%", borderRadius: radius, opacity }]}
-    />
-  );
-}
 /** The board's border width; laid-out positions include it, absolute positions do not. */
 const BOARD_BORDER = 2;
 
@@ -334,73 +320,6 @@ export function DiceCup({
         </View>
       </Animated.View>
     </Pressable>
-  );
-}
-
-const CONFETTI_COLORS = ["#f6d36b", "#fff4d6", "#b23a48", "#86e3c4", "#a8b2ff", "#e8c070"];
-const CONFETTI_PIECES = 44;
-
-/** A burst of paper from the middle of the board that tumbles and falls past its edges. */
-function Confetti({ width, height }: { width: number; height: number }) {
-  const [pieces] = useState(() =>
-    Array.from({ length: CONFETTI_PIECES }, (_, index) => {
-      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
-      const speed = 0.55 + Math.random() * 0.6;
-      return {
-        color: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
-        w: 5 + Math.random() * 4,
-        h: 8 + Math.random() * 6,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        spin: (Math.random() < 0.5 ? -1 : 1) * (360 + Math.random() * 720),
-        flips: 2 + Math.floor(Math.random() * 4),
-        delay: Math.random() * 450,
-        duration: 1900 + Math.random() * 1100,
-        progress: new Animated.Value(0),
-      };
-    }),
-  );
-
-  useEffect(() => {
-    const burst = Animated.parallel(
-      pieces.map((piece) =>
-        Animated.timing(piece.progress, { toValue: 1, delay: piece.delay, duration: piece.duration, easing: Easing.linear, useNativeDriver: true })),
-    );
-    burst.start();
-    return () => burst.stop();
-  }, [pieces]);
-
-  const reach = Math.max(width, height);
-  const startX = width / 2;
-  const startY = height * 0.45;
-  const steps = [0, 0.1, 0.2, 0.3, 0.45, 0.6, 0.8, 1];
-  return (
-    <View pointerEvents="none" style={styles.confetti}>
-      {pieces.map((piece, index) => (
-        <Animated.View
-          key={index}
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            width: piece.w,
-            height: piece.h,
-            borderRadius: 1.5,
-            backgroundColor: piece.color,
-            opacity: piece.progress.interpolate({ inputRange: [0, 0.02, 0.75, 1], outputRange: [0, 1, 1, 0] }),
-            transform: [
-              { perspective: 400 },
-              // Thrown out fast, slowed by the air, then pulled down: x eases out, y follows a parabola.
-              { translateX: piece.progress.interpolate({ inputRange: steps, outputRange: steps.map((t) => startX + piece.vx * reach * (1 - Math.pow(1 - t, 2)) * 0.6) }) },
-              { translateY: piece.progress.interpolate({ inputRange: steps, outputRange: steps.map((t) => startY + piece.vy * reach * t * 1.2 + reach * 2.4 * t * t) }) },
-              { rotate: piece.progress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", `${piece.spin}deg`] }) },
-              // Turning over and over, so each piece flashes as it catches the light.
-              { rotateX: piece.progress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", `${piece.flips * 360}deg`] }) },
-            ],
-          }}
-        />
-      ))}
-    </View>
   );
 }
 
@@ -952,6 +871,5 @@ const styles = StyleSheet.create({
   flight: { position: "absolute", left: 0, top: 0, zIndex: 10, elevation: 10 },
   flightShadow: { zIndex: 9, elevation: 9, backgroundColor: "rgba(0,0,0,0.55)", boxShadow: "0 0 6px rgba(0,0,0,0.5)" },
   ripple: { borderWidth: 2, borderColor: "rgba(255,240,205,0.9)" },
-  confetti: { position: "absolute", left: 0, top: 0, right: 0, bottom: 0, zIndex: 20, elevation: 20 },
   cupDice: { position: "absolute", width: 52, height: 52, alignItems: "center", justifyContent: "center" },
 });

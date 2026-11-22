@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { DieFace } from "@/games/dice/Die";
 import {
@@ -72,6 +72,13 @@ function Box({
   const open = scored === undefined;
   const points = open && preview ? scoreFor(category, dice, player) : null;
   const glow = useFlash(flash);
+  // The number springs up as it lands in its box.
+  const [pop] = useState(() => new Animated.Value(1));
+  useEffect(() => {
+    if (!flash) return;
+    pop.setValue(1.6);
+    Animated.spring(pop, { toValue: 1, useNativeDriver: true, friction: 4, tension: 150 }).start();
+  }, [flash, pop]);
   const background = glow.interpolate({ inputRange: [0, 1], outputRange: ["rgba(246,211,107,0)", "rgba(246,211,107,0.42)"] });
   return (
     <Pressable
@@ -83,13 +90,14 @@ function Box({
     >
       <Animated.View style={[styles.rowGlow, { backgroundColor: background }]} pointerEvents="none" />
       <View style={styles.rowLabel}>{children}</View>
-      <View
+      <Animated.View
         style={[
           styles.cell,
           open ? styles.cellOpen : styles.cellDone,
           points != null ? styles.cellPreview : null,
           suggested && !selected ? styles.cellSuggested : null,
           selected ? styles.cellSelected : null,
+          { transform: [{ scale: pop }] },
         ]}
       >
         <Text
@@ -103,9 +111,23 @@ function Box({
         >
           {open ? (points == null ? "" : String(points)) : String(scored)}
         </Text>
-      </View>
+      </Animated.View>
     </Pressable>
   );
+}
+
+/** The card's total, which swells when points are added to it. */
+function TotalValue({ value }: { value: number }) {
+  const [bump] = useState(() => new Animated.Value(1));
+  const last = useRef(value);
+  useEffect(() => {
+    if (value > last.current) {
+      bump.setValue(1.45);
+      Animated.spring(bump, { toValue: 1, useNativeDriver: true, friction: 4, tension: 140 }).start();
+    }
+    last.current = value;
+  }, [value, bump]);
+  return <Animated.Text style={[styles.totalValue, { transform: [{ scale: bump }] }]}>{value}</Animated.Text>;
 }
 
 /**
@@ -186,7 +208,7 @@ export function Scorecard({
       </View>
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>{t("dcTotal")}</Text>
-        <Text style={styles.totalValue}>{totalOf(player)}</Text>
+        <TotalValue key={player.id} value={totalOf(player)} />
       </View>
     </View>
   );

@@ -21,7 +21,10 @@ import { CopyField, ErrorBanner, HomeButton, shareTable, TableFooter, tableError
 import { SeatStrip, stripSize, type StripSeat } from "@/table/SeatStrip";
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
+import { Breathe } from "@/ui/Breathe";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { Confetti } from "@/ui/Confetti";
+import { FELT, Texture, WOOD } from "@/ui/Texture";
 
 type VideoTrackLike = Parameters<typeof SeatVideo>[0]["track"];
 
@@ -93,7 +96,7 @@ function TilesTable({
   onLeave: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height: screenHeight } = useWindowDimensions();
   const showAd = useTableAdAllowed(null);
   const paused = state.paused === true;
   const isAdmin = state.you?.isAdmin === true;
@@ -114,6 +117,8 @@ function TilesTable({
   const [sent, setSent] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Counts finished games the table has just watched end, so each one gets its confetti.
+  const [celebrate, setCelebrate] = useState(0);
   const [menuSheet, setMenuSheet] = useState<"info" | "rules" | "log" | null>(null);
   const [seatSheet, setSeatSheet] = useState<PublicPlayer | null>(null);
   const [confirmRestart, setConfirmRestart] = useState(false);
@@ -143,7 +148,10 @@ function TilesTable({
       setSelected([]);
     }
     if (!previous) return;
-    if (previous.phase === "playing" && next.phase === "over") playSfx("applause");
+    if (previous.phase === "playing" && next.phase === "over") {
+      playSfx("applause");
+      setCelebrate((value) => value + 1);
+    }
     if (previous.turns === next.turns || !next.last) return;
     const who = next.players.find((player) => player.id === next.last!.playerId);
     const name = who?.id === youId ? t("tlYou") : who?.name ?? "";
@@ -291,16 +299,18 @@ function TilesTable({
     ) : null;
   } else if (myTurn) {
     action = changed ? (
-      <Pressable
-        style={({ pressed }) => [styles.primary, check.ok ? styles.doneButton : styles.primaryOff, pressed && check.ok ? styles.pressed : null]}
-        disabled={!check.ok || sent}
-        onPress={done}
-      >
-        <Ionicons name={check.ok ? "checkmark-circle" : "alert-circle"} size={20} color={check.ok ? "#0f2a22" : "#f19c9c"} />
-        <Text style={[styles.primaryText, !check.ok ? styles.primaryTextBad : null]} numberOfLines={1}>
-          {check.ok ? t("tlDone") : !check.allValid ? t("tlFixSets") : !check.untouched ? t("tlFirstOwn") : t("tlNeedPoints", { n: FIRST_MELD - check.meldPoints })}
-        </Text>
-      </Pressable>
+      <Breathe active={check.ok && !sent}>
+        <Pressable
+          style={({ pressed }) => [styles.primary, check.ok ? styles.doneButton : styles.primaryOff, pressed && check.ok ? styles.pressed : null]}
+          disabled={!check.ok || sent}
+          onPress={done}
+        >
+          <Ionicons name={check.ok ? "checkmark-circle" : "alert-circle"} size={20} color={check.ok ? "#0f2a22" : "#f19c9c"} />
+          <Text style={[styles.primaryText, !check.ok ? styles.primaryTextBad : null]} numberOfLines={1}>
+            {check.ok ? t("tlDone") : !check.allValid ? t("tlFixSets") : !check.untouched ? t("tlFirstOwn") : t("tlNeedPoints", { n: FIRST_MELD - check.meldPoints })}
+          </Text>
+        </Pressable>
+      </Breathe>
     ) : (
       <Pressable style={({ pressed }) => [styles.primary, sent ? styles.primaryOff : null, pressed ? styles.pressed : null]} disabled={sent} onPress={drawTile}>
         <Ionicons name="add-circle" size={20} color="#1c1917" />
@@ -335,7 +345,10 @@ function TilesTable({
           {play ? (
             // The felt fills a slot that may shrink: drawn absolutely, its contents never hold the slot open.
             <View style={feltHeight == null ? styles.feltSlot : { height: feltHeight }}>
+            <View style={styles.feltFrame}>
+            <Texture source={WOOD} radius={27} />
             <View style={styles.felt}>
+              <Texture source={FELT} radius={17} />
               <View style={styles.feltRim} pointerEvents="none" />
               {over ? (
                 <View style={styles.podium}>
@@ -391,6 +404,7 @@ function TilesTable({
                   ) : null}
                 </ScrollView>
               )}
+            </View>
             </View>
             </View>
           ) : (
@@ -457,6 +471,7 @@ function TilesTable({
                 ) : null}
               </View>
               <Pressable style={[styles.rack, { height: rackHeight }]} onPress={back} disabled={!myTurn || !selecting}>
+                <Texture source={WOOD} radius={15} />
                 {rack.map((tile) => (
                   <Tile
                     key={tile}
@@ -496,6 +511,8 @@ function TilesTable({
             <Text style={styles.toastText} numberOfLines={1}>{toast}</Text>
           </View>
         ) : null}
+
+        {celebrate > 0 ? <Confetti key={`win${celebrate}`} width={width} height={screenHeight} origin={{ x: 0.5, y: 0.3 }} /> : null}
 
         <HomeButton />
         <View style={[styles.menu, { top: insets.top + 8 }]}>
@@ -672,21 +689,32 @@ const styles = {
     chipNameOn: { color: "#f7f7fc" },
     chipNameBelow: { marginTop: 6 },
     feltSlot: { flex: 1, minHeight: 0 },
-    felt: {
+    // A walnut frame lit from above, with the felt sunk into it.
+    feltFrame: {
       position: "absolute",
       left: 0,
       right: 0,
       top: 0,
       bottom: 0,
-      borderRadius: 22,
+      borderRadius: 28,
+      padding: 8,
+      backgroundColor: "#4a2d1c",
+      backgroundImage: "linear-gradient(180deg, #6a4329 0%, #4a2d1c 40%, #2a170d 100%)",
+      borderWidth: 1,
+      borderColor: "rgba(0,0,0,0.6)",
+      boxShadow: "0 3px 4px rgba(0,0,0,0.6), 0 14px 26px rgba(0,0,0,0.5), inset 0 2px 2px rgba(255,222,180,0.25), inset 0 -3px 5px rgba(0,0,0,0.5)",
+    },
+    felt: {
+      flex: 1,
+      borderRadius: 20,
       backgroundColor: "#0f3a31",
-      backgroundImage: "radial-gradient(ellipse at 50% 20%, #1b6553 0%, #124638 55%, #0b2c25 100%)",
-      borderWidth: 3,
-      borderColor: "#6b4a26",
-      boxShadow: "inset 0 6px 18px rgba(0,0,0,0.55), 0 10px 24px rgba(0,0,0,0.45)",
+      backgroundImage: "radial-gradient(ellipse at 50% 25%, #1f7560 0%, #14503f 52%, #0a2b24 100%)",
+      borderWidth: 2,
+      borderColor: "rgba(0,0,0,0.5)",
+      boxShadow: "inset 0 6px 16px rgba(0,0,0,0.6), inset 0 0 4px rgba(0,0,0,0.6)",
       overflow: "hidden",
     },
-    feltRim: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: 19, borderWidth: 1, borderColor: "rgba(246,211,107,0.25)" },
+    feltRim: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: 18, borderWidth: 1, borderColor: "rgba(246,211,107,0.2)" },
     board: { flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: 8, padding: 10, paddingTop: 14 },
     emptyBoard: { color: "rgba(223,226,255,0.55)", fontSize: 14, fontWeight: "700", textAlign: "center", width: "100%", marginTop: 40 },
     set: {
@@ -695,9 +723,10 @@ const styles = {
       gap: 2,
       padding: 4,
       borderRadius: 9,
-      backgroundColor: "rgba(0,0,0,0.18)",
+      backgroundColor: "rgba(0,0,0,0.2)",
       borderWidth: 1,
-      borderColor: "rgba(255,255,255,0.06)",
+      borderColor: "rgba(255,255,255,0.07)",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
     },
     setBad: { borderWidth: 2, borderColor: "#f87171", backgroundColor: "rgba(248,113,113,0.22)", boxShadow: "0 0 10px rgba(248,113,113,0.45)" },
     setTarget: { borderColor: "rgba(246,211,107,0.6)", borderStyle: "dashed" },
@@ -756,8 +785,8 @@ const styles = {
       backgroundColor: "#5b3a1e",
       backgroundImage: "linear-gradient(180deg, #7a5230 0%, #5b3a1e 60%, #43290f 100%)",
       borderWidth: 1,
-      borderColor: "#8a6236",
-      boxShadow: "inset 0 2px 0 rgba(255,255,255,0.12), 0 8px 18px rgba(0,0,0,0.45)",
+      borderColor: "#2a170d",
+      boxShadow: "inset 0 2px 0 rgba(255,222,180,0.22), inset 0 -3px 5px rgba(0,0,0,0.45), 0 8px 18px rgba(0,0,0,0.5)",
     },
     backHint: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, alignSelf: "center" },
     backHintText: { color: "#f6d36b", fontSize: 12, fontWeight: "900" },

@@ -79,6 +79,8 @@ export function TrayDie({
   const shown = tumbleFace ?? face;
   const [spin] = useState(() => new Animated.Value(0));
   const [lift] = useState(() => new Animated.Value(held ? 1 : 0));
+  // A small squash as it lands, toward the felt.
+  const [settle] = useState(() => new Animated.Value(0));
   const seenRoll = useRef(rollKey);
   const landed = useRef(onLanded);
   useEffect(() => {
@@ -99,16 +101,24 @@ export function TrayDie({
     Animated.timing(spin, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => {
       clearInterval(timer);
       setTumbleFace(null);
+      settle.setValue(1);
+      Animated.spring(settle, { toValue: 0, useNativeDriver: true, friction: 4, tension: 200 }).start();
       landed.current?.();
     });
     return () => clearInterval(timer);
-  }, [rollKey, held, spin]);
+  }, [rollKey, held, spin, settle]);
 
   // Neighbouring dice spin opposite ways, and each roll flips the direction.
   const way = (rollKey + index) % 2 === 0 ? 1 : -1;
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", `${720 * way}deg`] });
   const hop = spin.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: [0, -size * 0.55, -size * 0.12, 0] });
   const rise = lift.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+  // The shadow stays on the felt: it shrinks and fades while the die is in the air, and when it is kept.
+  const shadowScale = spin.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: [1, 0.55, 0.9, 1] });
+  const shadowFade = spin.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: [1, 0.4, 0.8, 1] });
+  const shadowHeld = lift.interpolate({ inputRange: [0, 1], outputRange: [1, 0.55] });
+  const squashX = settle.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+  const squashY = settle.interpolate({ inputRange: [0, 1], outputRange: [1, 0.88] });
 
   return (
     <Pressable
@@ -119,11 +129,20 @@ export function TrayDie({
       accessibilityLabel={`${shown}${held ? `, ${t("dcKeep")}` : ""}`}
       style={styles.slot}
     >
-      <Animated.View style={{ transform: [{ translateY: rise }, { translateY: hop }, { rotate }] }}>
-        <View style={[styles.dieShadow, { borderRadius: size * 0.22 }, held ? styles.dieHeld : null, blank ? styles.dieBlank : null]}>
-          <DieFace face={shown} size={size} />
-        </View>
-      </Animated.View>
+      <View style={{ width: size, height: size + 6 }}>
+        <Animated.View style={{ opacity: shadowHeld }} pointerEvents="none">
+          <Animated.View
+            style={[styles.contact, { left: size * 0.1, right: size * 0.1, top: size - 2, opacity: Animated.multiply(shadowFade, 0.55), transform: [{ scaleX: shadowScale }] }]}
+          />
+        </Animated.View>
+        <Animated.View style={{ transform: [{ translateY: rise }, { translateY: hop }, { rotate }] }}>
+          <Animated.View style={{ transformOrigin: "50% 100%", transform: [{ scaleX: squashX }, { scaleY: squashY }] }}>
+            <View style={[styles.dieShadow, { borderRadius: size * 0.22 }, held ? styles.dieHeld : null, blank ? styles.dieBlank : null]}>
+              <DieFace face={shown} size={size} />
+            </View>
+          </Animated.View>
+        </Animated.View>
+      </View>
       <View style={[styles.keepTag, held ? styles.keepTagOn : null]}>
         <Text style={[styles.keepText, held ? styles.keepTextOn : null]}>{held ? t("dcKeep") : " "}</Text>
       </View>
@@ -138,15 +157,23 @@ const styles = StyleSheet.create({
     backgroundImage: "linear-gradient(155deg, #ffffff 0%, #f6efdf 55%, #e5dac2 100%)",
     borderWidth: 1,
     borderColor: "rgba(120, 96, 60, 0.35)",
-    boxShadow: "inset 0 -3px 0 rgba(120, 96, 60, 0.18), inset 0 2px 0 rgba(255,255,255,0.9)",
+    // Edges catch the light on top and left and fall into shade at the bottom and right.
+    boxShadow: "inset 0 -4px 0 rgba(120, 96, 60, 0.24), inset 0 2px 0 rgba(255,255,255,0.95), inset 2px 0 0 rgba(255,255,255,0.45), inset -2px 0 0 rgba(120, 96, 60, 0.12)",
   },
   faceSmall: { boxShadow: "none", borderColor: "rgba(120, 96, 60, 0.5)" },
   faceGhost: { backgroundColor: "rgba(200, 206, 255, 0.10)", backgroundImage: "none", borderColor: "rgba(200, 206, 255, 0.35)", boxShadow: "none" },
   faceGold: { backgroundColor: "#f6d36b", backgroundImage: "none", borderColor: "#b8902d" },
-  pip: { position: "absolute", backgroundColor: "#201a2e", boxShadow: "inset 0 1px 1px rgba(0,0,0,0.6)" },
-  pipGhost: { backgroundColor: "#c8ceff", boxShadow: "none" },
-  pipAce: { backgroundColor: "#c2272d" },
-  dieShadow: { boxShadow: "0 6px 10px rgba(0,0,0,0.45), 0 2px 3px rgba(0,0,0,0.35)" },
+  // Pips are drilled in: dark, lit from the lower rim.
+  pip: {
+    position: "absolute",
+    backgroundColor: "#201a2e",
+    backgroundImage: "radial-gradient(circle at 45% 65%, #5a5470 0%, #201a2e 60%, #0f0b18 100%)",
+    boxShadow: "inset 0 1px 2px rgba(0,0,0,0.75)",
+  },
+  pipGhost: { backgroundColor: "#c8ceff", backgroundImage: "none", boxShadow: "none" },
+  pipAce: { backgroundColor: "#c2272d", backgroundImage: "radial-gradient(circle at 45% 65%, #e8555a 0%, #c2272d 60%, #7d1015 100%)" },
+  dieShadow: { boxShadow: "0 3px 5px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.35)" },
+  contact: { position: "absolute", height: 9, borderRadius: 5, backgroundColor: "#000000", boxShadow: "0 0 7px rgba(0,0,0,0.9)" },
   dieHeld: {
     borderWidth: 3,
     borderColor: "#f6d36b",

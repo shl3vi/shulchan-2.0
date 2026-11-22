@@ -22,7 +22,10 @@ import { CopyField, ErrorBanner, HomeButton, shareTable, TableFooter, tableError
 import { SeatStrip, type StripSeat } from "@/table/SeatStrip";
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
+import { Breathe } from "@/ui/Breathe";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { Confetti } from "@/ui/Confetti";
+import { FELT, Texture, WOOD } from "@/ui/Texture";
 
 type VideoTrackLike = Parameters<typeof SeatVideo>[0]["track"];
 
@@ -142,7 +145,7 @@ function DiceTable({
   onLeave: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height: screenHeight } = useWindowDimensions();
   const showAd = useTableAdAllowed(null);
   const paused = state.paused === true;
   const isAdmin = state.you?.isAdmin === true;
@@ -157,6 +160,8 @@ function DiceTable({
   const [pinned, setPinned] = useState<{ id: string; turn: string } | null>(null);
   const [showing, setShowing] = useState<{ playerId: string; category: Category } | null>(null);
   const [burst, setBurst] = useState(0);
+  // Counts finished games the table has just watched end, so each one gets its confetti.
+  const [celebrate, setCelebrate] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [menuSheet, setMenuSheet] = useState<"info" | "rules" | "log" | null>(null);
   const [seatSheet, setSeatSheet] = useState<PublicPlayer | null>(null);
@@ -178,7 +183,10 @@ function DiceTable({
     setRollSent(false);
     setHeld(next?.held ?? NO_HOLD);
     if (!next) return;
-    if (seenPhase.current === "playing" && next.phase === "over") playSfx("applause");
+    if (seenPhase.current === "playing" && next.phase === "over") {
+      playSfx("applause");
+      setCelebrate((value) => value + 1);
+    }
     seenPhase.current = next.phase;
     const lastKey = next.last ? `${next.last.playerId}:${next.last.category}:${next.rolls}` : "";
     if (lastKey && lastKey !== seenLast.current) {
@@ -225,7 +233,7 @@ function DiceTable({
   const canHold = myTurn && rolled && game!.rollsLeft > 0 && !rollSent;
   const canRoll = myTurn && game!.rollsLeft > 0 && !rollSent && !(rolled && held.every(Boolean));
 
-  const traySize = Math.min(56, Math.floor((Math.min(width, 520) - 32 - 28 - 4 * 12) / 5));
+  const traySize = Math.min(56, Math.floor((Math.min(width, 520) - 32 - 40 - 4 * 12) / 5));
 
   function send(type: string, body: object = {}) {
     if (paused) return;
@@ -301,17 +309,19 @@ function DiceTable({
     );
   } else if (myTurn) {
     action = (
-      <Pressable
-        style={({ pressed }) => [styles.primary, !canRoll ? styles.primaryOff : null, pressed && canRoll ? styles.pressed : null]}
-        disabled={!canRoll}
-        onPress={roll}
-      >
-        <Ionicons name="cube" size={20} color={canRoll ? "#1c1917" : "#5b5d70"} />
-        <Text style={[styles.primaryText, !canRoll ? styles.primaryTextOff : null]}>
-          {game.rollsLeft === 0 ? t("dcPickBox") : t("dcRoll")}
-        </Text>
-        <RollPips left={game.rollsLeft} />
-      </Pressable>
+      <Breathe active={canRoll && !rolled}>
+        <Pressable
+          style={({ pressed }) => [styles.primary, !canRoll ? styles.primaryOff : null, pressed && canRoll ? styles.pressed : null]}
+          disabled={!canRoll}
+          onPress={roll}
+        >
+          <Ionicons name="cube" size={20} color={canRoll ? "#1c1917" : "#5b5d70"} />
+          <Text style={[styles.primaryText, !canRoll ? styles.primaryTextOff : null]}>
+            {game.rollsLeft === 0 ? t("dcPickBox") : t("dcRoll")}
+          </Text>
+          <RollPips left={game.rollsLeft} />
+        </Pressable>
+      </Breathe>
     );
   }
 
@@ -349,7 +359,10 @@ function DiceTable({
 
           {game ? (
             <>
+              <View style={styles.trayFrame}>
+              <Texture source={WOOD} radius={27} />
               <View style={styles.tray}>
+                <Texture source={FELT} radius={18} />
                 <View style={styles.trayRim} pointerEvents="none" />
                 {over ? (
                   <View style={styles.podium}>
@@ -392,6 +405,7 @@ function DiceTable({
                     <Burst text={t("dcFiveCall")} burstKey={burst} />
                   </>
                 )}
+              </View>
               </View>
               {status && action ? <Text style={[styles.status, myTurn ? styles.statusMine : null]}>{status}</Text> : null}
               {viewed ? (
@@ -456,6 +470,9 @@ function DiceTable({
             <Text style={styles.toastText} numberOfLines={1}>{toast}</Text>
           </View>
         ) : null}
+
+        {celebrate > 0 ? <Confetti key={`win${celebrate}`} width={width} height={screenHeight} origin={{ x: 0.5, y: 0.3 }} /> : null}
+        {burst > 0 ? <Confetti key={`five${burst}`} width={width} height={screenHeight} pieces={30} origin={{ x: 0.5, y: 0.3 }} /> : null}
 
         <HomeButton />
         <View style={[styles.menu, { top: insets.top + 8 }]}>
@@ -646,24 +663,34 @@ const styles = {
     chipScoreText: { color: "#c8ceff", fontSize: 12, fontWeight: "900", textAlign: "center", fontVariant: ["tabular-nums"] },
     chipScoreTextOn: { color: "#171b35" },
     watchers: { color: "#73758b", fontSize: 12, textAlign: "center", marginTop: -4 },
+    // A walnut frame lit from above, with the felt sunk into it.
+    trayFrame: {
+      borderRadius: 28,
+      padding: 8,
+      backgroundColor: "#4a2d1c",
+      backgroundImage: "linear-gradient(180deg, #6a4329 0%, #4a2d1c 40%, #2a170d 100%)",
+      borderWidth: 1,
+      borderColor: "rgba(0,0,0,0.6)",
+      boxShadow: "0 3px 4px rgba(0,0,0,0.6), 0 14px 26px rgba(0,0,0,0.55), inset 0 2px 2px rgba(255,222,180,0.25), inset 0 -3px 5px rgba(0,0,0,0.5)",
+    },
     tray: {
-      borderRadius: 24,
-      paddingHorizontal: 14,
+      borderRadius: 20,
+      paddingHorizontal: 12,
       paddingTop: 16,
       paddingBottom: 6,
       backgroundColor: "#0f3a31",
-      backgroundImage: "radial-gradient(ellipse at 50% 30%, #1d6b58 0%, #124638 55%, #0b2c25 100%)",
-      borderWidth: 3,
-      borderColor: "#6b4a26",
-      boxShadow: "inset 0 6px 18px rgba(0,0,0,0.55), 0 10px 24px rgba(0,0,0,0.5)",
+      backgroundImage: "radial-gradient(ellipse at 50% 35%, #208064 0%, #145041 50%, #0a2b24 100%)",
+      borderWidth: 2,
+      borderColor: "rgba(0,0,0,0.5)",
+      boxShadow: "inset 0 6px 16px rgba(0,0,0,0.6), inset 0 0 4px rgba(0,0,0,0.6)",
       justifyContent: "center",
       overflow: "hidden",
     },
     trayRim: {
       position: "absolute", left: 0, right: 0, top: 0, bottom: 0,
-      borderRadius: 23,
+      borderRadius: 18,
       borderWidth: 1,
-      borderColor: "rgba(246,211,107,0.28)",
+      borderColor: "rgba(246,211,107,0.22)",
     },
     diceRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
     burst: { position: "absolute", left: 0, right: 0, top: 34, alignItems: "center" },
