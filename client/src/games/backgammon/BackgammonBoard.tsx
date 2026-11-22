@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View, type LayoutRectangle } from "react-native";
+import { Animated, Easing, Image, Pressable, StyleSheet, Text, View, type LayoutRectangle } from "react-native";
 import Svg, { Defs, LinearGradient, Polygon, Stop } from "react-native-svg";
 import { stepDice } from "@/games/backgammon/diceSound";
 import {
@@ -34,8 +34,27 @@ const BOTTOM = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
 /** Where each die can take the chosen checker: the app's lavender for one die, a soft mint for the other. */
 const OPTION_COLORS = ["#a8b2ff", "#86e3c4"];
 
-/** How long a checker takes to slide to its new point. */
-const SLIDE_MS = 320;
+/** How long a checker takes to fly to its new point. */
+const SLIDE_MS = 420;
+/** Samples along a flight, enough for the arc to read as a curve and not a corner. */
+const ARC_STEPS = [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1];
+
+/** Light-and-shadow overlays drawn by scripts/make-textures.mjs; the colors under them stay in the styles.
+ * The files on disk are @2x: Metro picks the scale from the name, so they are required without it. */
+const FELT = require("../../../assets/images/textures/felt.png");
+const WOOD = require("../../../assets/images/textures/wood.png");
+
+/** A tiled texture laid over its parent's background, under everything else in it. */
+function Texture({ source, radius, opacity = 1 }: { source: number; radius: number; opacity?: number }) {
+  return (
+    <Image
+      source={source}
+      resizeMode="repeat"
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { width: "100%", height: "100%", borderRadius: radius, opacity }]}
+    />
+  );
+}
 /** The board's border width; laid-out positions include it, absolute positions do not. */
 const BOARD_BORDER = 2;
 
@@ -95,10 +114,14 @@ const PIPS: Record<number, [number, number][]> = {
   6: [[0, 0], [1, 0], [2, 0], [0, 2], [1, 2], [2, 2]],
 };
 
-function PipDie({ value, size = 22 }: { value: number; size?: number }) {
+function PipDie({ value, size = 22, lift = 0 }: { value: number; size?: number; lift?: number }) {
   const face = ((value - 1) % 6) + 1;
+  // Off the felt, the shadow falls further away and spreads.
+  const shadow = lift > 0
+    ? { boxShadow: `0 ${1 + lift * 7}px ${3 + lift * 8}px rgba(0,0,0,${0.5 - lift * 0.2}), inset 0 -1px 2px rgba(0,0,0,0.12)` }
+    : null;
   return (
-    <View style={[styles.die, { width: size, height: size, borderRadius: size * 0.18 }]}>
+    <View style={[styles.die, { width: size, height: size, borderRadius: size * 0.18 }, shadow]}>
       {PIPS[face]?.map(([col, row], index) => (
         <View
           key={index}
@@ -124,11 +147,25 @@ function PipDie({ value, size = 22 }: { value: number; size?: number }) {
  * A turned checker seen from above: a domed face lit from the top, a groove ring,
  * and a solid band under it for its edge, so a stack reads as checkers on top of each other.
  */
-function Checker({ color, size, overlap, up }: { color: Color; size: number; overlap: boolean; up?: boolean }) {
+function Checker({
+  color,
+  size,
+  overlap,
+  up,
+  lifted,
+}: {
+  color: Color;
+  size: number;
+  overlap: boolean;
+  up?: boolean;
+  /** Picked up: raised off the stack, with a gold glow and a longer shadow. */
+  lifted?: boolean;
+}) {
   const light = color === "white";
   const edge = Math.max(1, size * 0.08);
   // A rim that stands out from any point: dark walnut on the ivory checkers, brass on the ebony ones.
   const rim = Math.max(1.25, size * 0.07);
+  const base = `0 ${edge}px 0 ${light ? "#5a4528" : "#000000"}`;
   return (
     <View
       style={[
@@ -141,7 +178,11 @@ function Checker({ color, size, overlap, up }: { color: Color; size: number; ove
           marginTop: up ? 0 : overlap ? -size * 0.34 : 0,
           marginBottom: up && overlap ? -size * 0.34 : 0,
           borderWidth: rim,
-          boxShadow: `0 ${edge}px 0 ${light ? "#5a4528" : "#000000"}, 0 ${edge * 1.6}px ${size * 0.18}px rgba(0,0,0,0.55)`,
+          boxShadow: lifted
+            ? `${base}, 0 ${edge * 4}px ${size * 0.4}px rgba(0,0,0,0.6), 0 0 ${size * 0.45}px rgba(246,211,107,0.85)`
+            : `${base}, 0 ${edge * 1.6}px ${size * 0.18}px rgba(0,0,0,0.55)`,
+          transform: lifted ? [{ translateY: -size * 0.12 }, { scale: 1.14 }] : undefined,
+          zIndex: lifted ? 2 : undefined,
         },
       ]}
     >
@@ -194,9 +235,11 @@ export function DiceCup({
   }, [prompt, glow]);
   const [tumbling, setTumbling] = useState(false);
   const [pose, setPose] = useState([
-    { x: -9, y: -2, rot: -8, face: 1 },
-    { x: 9, y: 6, rot: 12, face: 1 },
+    { x: -9, y: -2, rot: -8, face: 1, lift: 0 },
+    { x: 9, y: 6, rot: 12, face: 1, lift: 0 },
   ]);
+  // A little pop when the dice come to rest, so the result lands with a beat.
+  const [pop] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     if (!rolling) return;
@@ -229,24 +272,28 @@ export function DiceCup({
           y: die.y,
           rot: die.rot,
           face: age > 1100 ? faces[index] ?? 1 : 1 + (Math.floor(Math.abs(die.rot) / 50) % 6),
+          // Each die bounces a few times, lower each time, slightly out of step with the other.
+          lift: age > 1100 ? 0 : Math.abs(Math.sin((age / 1100) * Math.PI * 3.5 + index * 0.9)) * Math.pow(1 - age / 1100, 1.5),
         })),
       );
       if (age > 1450) {
         clearInterval(timer);
         setTumbling(false);
         setPose([
-          { x: -9, y: -2, rot: 0, face: faces[0] ?? 1 },
-          { x: 9, y: 6, rot: 0, face: faces[1] ?? 1 },
+          { x: -9, y: -2, rot: 0, face: faces[0] ?? 1, lift: 0 },
+          { x: 9, y: 6, rot: 0, face: faces[1] ?? 1, lift: 0 },
         ]);
+        pop.setValue(1);
+        Animated.spring(pop, { toValue: 0, friction: 4, tension: 160, useNativeDriver: true }).start();
         done();
       }
     }, 16);
     return () => clearInterval(timer);
-  }, [rolling, faces]);
+  }, [rolling, faces, pop]);
 
   const shown = (tumbling || rolling ? pose : [
-    { x: -9, y: -2, rot: 0, face: faces[0] ?? 1 },
-    { x: 9, y: 6, rot: 0, face: faces[1] ?? 1 },
+    { x: -9, y: -2, rot: 0, face: faces[0] ?? 1, lift: 0 },
+    { x: 9, y: 6, rot: 0, face: faces[1] ?? 1, lift: 0 },
   ]).slice(0, faces.length);
 
   const rimColor = glow.interpolate({
@@ -260,29 +307,127 @@ export function DiceCup({
         <View style={styles.cupWell}>
           {prompt && !tumbling ? (
             <Animated.Text style={[styles.rollPrompt, { opacity: glow }]}>{t("tapToRoll")}</Animated.Text>
-          ) : faces.length === 0 ? null : shown.map((die, index) => (
-            <View
-              key={index}
-              style={[
-                styles.cupDie,
-                {
-                  transform: [
-                    { translateX: die.x },
-                    { translateY: die.y },
-                    { rotate: `${die.rot}deg` },
-                    { scaleX: 0.82 + 0.18 * Math.abs(Math.cos((die.rot * Math.PI) / 180)) },
-                  ],
-                },
-              ]}
-            >
-              <PipDie value={die.face} />
-            </View>
-          ))}
+          ) : faces.length === 0 ? null : (
+            <Animated.View style={[styles.cupDice, { transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) }] }]}>
+              {shown.map((die, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.cupDie,
+                    {
+                      transform: [
+                        { translateX: die.x },
+                        // In the air a die is nearer the eye: a touch higher and bigger.
+                        { translateY: die.y - die.lift * 4 },
+                        { rotate: `${die.rot}deg` },
+                        { scale: 1 + die.lift * 0.3 },
+                        { scaleX: 0.82 + 0.18 * Math.abs(Math.cos((die.rot * Math.PI) / 180)) },
+                      ],
+                    },
+                  ]}
+                >
+                  <PipDie value={die.face} lift={die.lift} />
+                </View>
+              ))}
+            </Animated.View>
+          )}
         </View>
       </Animated.View>
     </Pressable>
   );
 }
+
+const CONFETTI_COLORS = ["#f6d36b", "#fff4d6", "#b23a48", "#86e3c4", "#a8b2ff", "#e8c070"];
+const CONFETTI_PIECES = 44;
+
+/** A burst of paper from the middle of the board that tumbles and falls past its edges. */
+function Confetti({ width, height }: { width: number; height: number }) {
+  const [pieces] = useState(() =>
+    Array.from({ length: CONFETTI_PIECES }, (_, index) => {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
+      const speed = 0.55 + Math.random() * 0.6;
+      return {
+        color: CONFETTI_COLORS[index % CONFETTI_COLORS.length],
+        w: 5 + Math.random() * 4,
+        h: 8 + Math.random() * 6,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        spin: (Math.random() < 0.5 ? -1 : 1) * (360 + Math.random() * 720),
+        flips: 2 + Math.floor(Math.random() * 4),
+        delay: Math.random() * 450,
+        duration: 1900 + Math.random() * 1100,
+        progress: new Animated.Value(0),
+      };
+    }),
+  );
+
+  useEffect(() => {
+    const burst = Animated.parallel(
+      pieces.map((piece) =>
+        Animated.timing(piece.progress, { toValue: 1, delay: piece.delay, duration: piece.duration, easing: Easing.linear, useNativeDriver: true })),
+    );
+    burst.start();
+    return () => burst.stop();
+  }, [pieces]);
+
+  const reach = Math.max(width, height);
+  const startX = width / 2;
+  const startY = height * 0.45;
+  const steps = [0, 0.1, 0.2, 0.3, 0.45, 0.6, 0.8, 1];
+  return (
+    <View pointerEvents="none" style={styles.confetti}>
+      {pieces.map((piece, index) => (
+        <Animated.View
+          key={index}
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width: piece.w,
+            height: piece.h,
+            borderRadius: 1.5,
+            backgroundColor: piece.color,
+            opacity: piece.progress.interpolate({ inputRange: [0, 0.02, 0.75, 1], outputRange: [0, 1, 1, 0] }),
+            transform: [
+              { perspective: 400 },
+              // Thrown out fast, slowed by the air, then pulled down: x eases out, y follows a parabola.
+              { translateX: piece.progress.interpolate({ inputRange: steps, outputRange: steps.map((t) => startX + piece.vx * reach * (1 - Math.pow(1 - t, 2)) * 0.6) }) },
+              { translateY: piece.progress.interpolate({ inputRange: steps, outputRange: steps.map((t) => startY + piece.vy * reach * t * 1.2 + reach * 2.4 * t * t) }) },
+              { rotate: piece.progress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", `${piece.spin}deg`] }) },
+              // Turning over and over, so each piece flashes as it catches the light.
+              { rotateX: piece.progress.interpolate({ inputRange: [0, 1], outputRange: ["0deg", `${piece.flips * 360}deg`] }) },
+            ],
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** Where a checker can land: a ring that breathes in the die's color. */
+function TargetRing({ size, color, pulse, up, overlap }: { size: number; color: string; pulse: Animated.Value; up: boolean; overlap: boolean }) {
+  return (
+    <Animated.View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        // A light edge and a glow in the die's color, so it shows on the tinted point under it.
+        borderWidth: Math.max(1.5, size * 0.1),
+        borderColor: "rgba(255,250,235,0.9)",
+        backgroundColor: `${color}66`,
+        boxShadow: `0 0 ${size * 0.45}px ${color}, inset 0 0 ${size * 0.2}px rgba(0,0,0,0.35)`,
+        marginTop: up || !overlap ? 0 : -size * 0.34,
+        marginBottom: up && overlap ? -size * 0.34 : 0,
+        opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }),
+        transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1.04] }) }],
+      }}
+    />
+  );
+}
+
+/** Where a checker came down: a ring that spreads and fades. */
+type Ripple = { id: number; x: number; y: number; progress: Animated.Value };
 
 export function BackgammonBoard({
   game,
@@ -309,6 +454,7 @@ export function BackgammonBoard({
   onLand?: (kind: "place" | "hit") => void;
 }) {
   const [boardW, setBoardW] = useState(360);
+  const [boardH, setBoardH] = useState(320);
   const pointW = Math.max(16, (boardW - 40) / 12);
   const side = pointW / 2 - 1;
   const length = Math.min(150, Math.max(88, side * 6));
@@ -323,7 +469,32 @@ export function BackgammonBoard({
   const shownGame = useRef(game);
   const flightId = useRef(0);
   const [flights, setFlights] = useState<Flight[]>([]);
+  const [ripples, setRipples] = useState<Ripple[]>([]);
   const landed = useEffectEvent((kind: "place" | "hit") => onLand?.(kind));
+
+  // The landing spots breathe while a checker is picked up.
+  const [pulse] = useState(() => new Animated.Value(0));
+  const pulsing = targets.length > 0;
+  useEffect(() => {
+    if (!pulsing) return;
+    pulse.setValue(0);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 560, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 560, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulsing, pulse]);
+
+  function ripple(at: { x: number; y: number }) {
+    const next: Ripple = { id: (flightId.current += 1), x: at.x, y: at.y, progress: new Animated.Value(0) };
+    setRipples((current) => [...current, next]);
+    Animated.timing(next.progress, { toValue: 1, duration: 460, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(() => {
+      setRipples((current) => current.filter((item) => item.id !== next.id));
+    });
+  }
 
   function slot(where: number | "bar", index: number, color: Color) {
     const spot = spots.current.get(where);
@@ -391,8 +562,9 @@ export function BackgammonBoard({
     Animated.parallel(
       next.map((flight) =>
         Animated.timing(flight.progress, { toValue: 1, duration: SLIDE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true })),
-    ).start(() => {
+    ).start(({ finished }) => {
       setFlights((current) => current.filter((flight) => !ids.has(flight.id)));
+      if (finished) next.filter((flight) => !flight.fade).forEach((flight) => ripple(flight.to));
       landed(moved.hit ? "hit" : "place");
     });
     // Positions are read from refs at the moment of the move, so only a new board starts a slide.
@@ -429,10 +601,11 @@ export function BackgammonBoard({
     if (count <= 0) return null;
     const size = Math.min(checker, 14);
     const shown = Math.min(count, 4);
+    const lifted = selected === "bar" && color === game.turn;
     return (
       <View style={styles.barStack}>
         {Array.from({ length: shown }, (_, index) => (
-          <Checker key={index} color={color} size={size} overlap={index > 0} />
+          <Checker key={index} color={color} size={size} overlap={index > 0} lifted={lifted && index === shown - 1} />
         ))}
       </View>
     );
@@ -461,8 +634,9 @@ export function BackgammonBoard({
           {bare
             ? null
             : Array.from({ length: shown }, (_, index) => (
-                <Checker key={index} color={color ?? "white"} size={checker} overlap={index > 0} up={up} />
+                <Checker key={index} color={color ?? "white"} size={checker} overlap={index > 0} up={up} lifted={chosen && index === shown - 1} />
               ))}
+          {landing && shown < 5 ? <TargetRing size={checker} color={optionColor(landing.die)} pulse={pulse} up={up} overlap={!bare && shown > 0} /> : null}
           {bare || count <= 5 ? null : <Text style={styles.count}>{count}</Text>}
           {landing ? <Text style={[styles.optionBadge, { color: optionColor(landing.die) }]}>{landing.die}</Text> : null}
         </View>
@@ -481,7 +655,15 @@ export function BackgammonBoard({
   return (
     <View style={styles.frame}>
     <View style={styles.case}>
-    <View style={styles.board} onLayout={(event) => setBoardW(event.nativeEvent.layout.width)}>
+    <Texture source={WOOD} radius={15} />
+    <View
+      style={styles.board}
+      onLayout={(event) => {
+        setBoardW(event.nativeEvent.layout.width);
+        setBoardH(event.nativeEvent.layout.height);
+      }}
+    >
+      <Texture source={FELT} radius={8} />
       <View style={[styles.half, { minHeight: length + 8 }]} onLayout={(event) => { halves.current.top = event.nativeEvent.layout.y; }}>
         {topPoints.slice(0, 6).map((point) => stack(point, false))}
         <Pressable
@@ -513,26 +695,75 @@ export function BackgammonBoard({
         <View style={styles.bar} />
         {bottomPoints.slice(6).map((point) => stack(point, true))}
       </View>
-      {flights.map((flight) => (
+      {flights.map((flight) => {
+        // Higher arcs for longer trips, so a hop to the next point stays low.
+        const lift = Math.min(38, 10 + Math.hypot(flight.to.x - flight.from.x, flight.to.y - flight.from.y) * 0.22);
+        const high = ARC_STEPS.map((step) => 4 * step * (1 - step));
+        const fade = ARC_STEPS.map((step) => (flight.fade ? Math.min(1, Math.max(0, (1 - step) / 0.4)) : 1));
+        const along = (from: number, to: number, drop = 0) => ARC_STEPS.map((step, index) => from + (to - from) * step - drop * high[index]);
+        return [
+          // Its shadow stays on the felt, falling behind and fading as the checker rises.
+          <Animated.View
+            key={`${flight.id}-shadow`}
+            pointerEvents="none"
+            style={[
+              styles.flight,
+              styles.flightShadow,
+              {
+                width: checker,
+                height: checker,
+                borderRadius: checker / 2,
+                opacity: flight.progress.interpolate({ inputRange: ARC_STEPS, outputRange: high.map((h, index) => (0.5 - h * 0.3) * fade[index]) }),
+                transform: [
+                  { translateX: flight.progress.interpolate({ inputRange: ARC_STEPS, outputRange: along(flight.from.x, flight.to.x).map((x, index) => x + high[index] * lift * 0.25) }) },
+                  { translateY: flight.progress.interpolate({ inputRange: ARC_STEPS, outputRange: along(flight.from.y + checker * 0.12, flight.to.y + checker * 0.12) }) },
+                  { scale: flight.progress.interpolate({ inputRange: ARC_STEPS, outputRange: high.map((h) => 1 - h * 0.2) }) },
+                ],
+              },
+            ]}
+          />,
+          <Animated.View
+            key={flight.id}
+            pointerEvents="none"
+            style={[
+              styles.flight,
+              {
+                opacity: flight.fade ? flight.progress.interpolate({ inputRange: ARC_STEPS, outputRange: fade }) : 1,
+                transform: [
+                  { translateX: flight.progress.interpolate({ inputRange: ARC_STEPS, outputRange: along(flight.from.x, flight.to.x) }) },
+                  // Picked up, carried over the board in an arc, and put down.
+                  { translateY: flight.progress.interpolate({ inputRange: ARC_STEPS, outputRange: along(flight.from.y, flight.to.y, lift) }) },
+                  { scale: flight.progress.interpolate({ inputRange: ARC_STEPS, outputRange: high.map((h) => 1 + h * 0.22) }) },
+                ],
+              },
+            ]}
+          >
+            <Checker color={flight.color} size={checker} overlap={false} up />
+          </Animated.View>,
+        ];
+      })}
+      {ripples.map((item) => (
         <Animated.View
-          key={flight.id}
+          key={item.id}
           pointerEvents="none"
           style={[
             styles.flight,
+            styles.ripple,
             {
-              opacity: flight.fade ? flight.progress.interpolate({ inputRange: [0, 0.6, 1], outputRange: [1, 1, 0] }) : 1,
+              width: checker,
+              height: checker,
+              borderRadius: checker / 2,
+              opacity: item.progress.interpolate({ inputRange: [0, 1], outputRange: [0.75, 0] }),
               transform: [
-                { translateX: flight.progress.interpolate({ inputRange: [0, 1], outputRange: [flight.from.x, flight.to.x] }) },
-                { translateY: flight.progress.interpolate({ inputRange: [0, 1], outputRange: [flight.from.y, flight.to.y] }) },
-                // A slight lift in the middle of the slide, so it reads as picked up and put down.
-                { scale: flight.progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.12, 1] }) },
+                { translateX: item.x },
+                { translateY: item.y },
+                { scale: item.progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] }) },
               ],
             },
           ]}
-        >
-          <Checker color={flight.color} size={checker} overlap={false} up />
-        </Animated.View>
+        />
       ))}
+      {!bare && game.phase === "over" && game.winner != null ? <Confetti key={`${game.winner}-${game.rolls ?? 0}`} width={boardW} height={boardH} /> : null}
       {onAgain ? (
         <Pressable style={styles.again} onPress={onAgain}>
           <Text style={styles.againText}>{t("bgAgain")}</Text>
@@ -553,7 +784,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: "100%",
     borderRadius: 16,
-    padding: 7,
+    padding: 9,
     backgroundColor: "#3a2216",
     backgroundImage: "linear-gradient(180deg, #6a4329 0%, #4a2d1c 38%, #331d12 72%, #22130b 100%)",
     borderWidth: 1,
@@ -719,4 +950,8 @@ const styles = StyleSheet.create({
   againText: { color: "#1c1917", fontWeight: "900" },
   hidden: { height: 0, opacity: 0 },
   flight: { position: "absolute", left: 0, top: 0, zIndex: 10, elevation: 10 },
+  flightShadow: { zIndex: 9, elevation: 9, backgroundColor: "rgba(0,0,0,0.55)", boxShadow: "0 0 6px rgba(0,0,0,0.5)" },
+  ripple: { borderWidth: 2, borderColor: "rgba(255,240,205,0.9)" },
+  confetti: { position: "absolute", left: 0, top: 0, right: 0, bottom: 0, zIndex: 20, elevation: 20 },
+  cupDice: { position: "absolute", width: 52, height: 52, alignItems: "center", justifyContent: "center" },
 });
