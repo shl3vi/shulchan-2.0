@@ -327,7 +327,7 @@ function DiceTable({
         >
           <SeatStrip
             width={Math.min(width, 520) - 32}
-            maxHeight={120}
+            maxHeight={106}
             seats={diceSeats({
               lineup,
               seated: state.players,

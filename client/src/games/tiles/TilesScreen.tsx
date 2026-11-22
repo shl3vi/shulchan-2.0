@@ -30,6 +30,7 @@ const LOBBY_TILES = ["r7a", "b7a", "o7a", "k7a", "j1"];
 const STRIP_MAX = 132;
 const TOOLS_HEIGHT = 30;
 const INFO_HEIGHT = 26;
+const COLUMN_GAP = 10;
 
 /** The video tiles along the top, with how many tiles each player still holds. */
 function tilesSeats({
@@ -107,6 +108,7 @@ function TilesTable({
   const over = play?.phase === "over";
 
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [columnHeight, setColumnHeight] = useState<number | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [sortMode, setSortMode] = useState<"runs" | "groups">("runs");
   const [sent, setSent] = useState(false);
@@ -174,7 +176,8 @@ function TilesTable({
   const selecting = selected.length > 0;
 
   // The rack's inner width: the column less its padding and the rack's own. Ten tiles fit on a row.
-  const rackInner = Math.min(width, 560) - 24 - 20;
+  // Column padding 24, rack padding 20, its border 2, and a little slack for rounding.
+  const rackInner = Math.min(width, 560) - 24 - 20 - 2 - 2;
   const rackTile = Math.min(38, Math.floor((rackInner - 9 * 4) / 10));
   const boardTile = Math.min(30, Math.floor(rackTile * 0.8));
   const perRow = Math.max(1, Math.floor((rackInner + 4) / (rackTile + 4)));
@@ -255,6 +258,11 @@ function TilesTable({
     ? play.players
     : [...state.players].sort((a, b) => a.seat - b.seat).slice(0, 4).map((player) => ({ id: player.id, name: player.name, melded: false, left: false, count: 0 }));
   const strip = stripSize(lineup.length, stripWidth, STRIP_MAX);
+  // The felt takes what the column has left. Measured, because a share of the column's height
+  // went wrong on Android: the felt kept its own height and pushed the rack under the dock.
+  const rackShown = me != null && play != null && !over;
+  const below = play && !over ? INFO_HEIGHT + COLUMN_GAP + (rackShown ? TOOLS_HEIGHT + 6 + rackHeight + COLUMN_GAP : 0) : 0;
+  const feltHeight = columnHeight == null || !play ? null : Math.max(120, columnHeight - insets.top - 54 - strip.height - COLUMN_GAP - below - 8);
   const seated = state.players.some((player) => player.id === youId);
   const ranking = over && play ? [...play.players].sort((a, b) => (play.points[b.id] ?? 0) - (play.points[a.id] ?? 0)) : [];
 
@@ -306,7 +314,7 @@ function TilesTable({
       <StatusBar style="light" />
       <View style={styles.stage}>
         <RoomLight />
-        <View style={[styles.column, { paddingTop: insets.top + 54 }]}>
+        <View style={[styles.column, { paddingTop: insets.top + 54 }]} onLayout={(event) => setColumnHeight(event.nativeEvent.layout.height)}>
           <View style={{ height: strip.height }}>
             <SeatStrip
               width={stripWidth}
@@ -326,7 +334,7 @@ function TilesTable({
 
           {play ? (
             // The felt fills a slot that may shrink: drawn absolutely, its contents never hold the slot open.
-            <View style={styles.feltSlot}>
+            <View style={feltHeight == null ? styles.feltSlot : { height: feltHeight }}>
             <View style={styles.felt}>
               <View style={styles.feltRim} pointerEvents="none" />
               {over ? (
@@ -623,7 +631,7 @@ export function TilesScreen({ credentials }: { credentials: Credentials }) {
 const styles = {
   ...tableStyles,
   ...StyleSheet.create({
-    column: { flex: 1, paddingHorizontal: 12, gap: 10, alignSelf: "center", width: "100%", maxWidth: 560 },
+    column: { flex: 1, paddingHorizontal: 12, gap: COLUMN_GAP, alignSelf: "center", width: "100%", maxWidth: 560 },
     stripScroll: { flexGrow: 0, flexShrink: 0 },
     strip: { gap: 10, paddingHorizontal: 2, paddingVertical: 2, flexGrow: 1, justifyContent: "center" },
     chip: { width: 60, alignItems: "center", gap: 4 },
@@ -691,7 +699,7 @@ const styles = {
       borderWidth: 1,
       borderColor: "rgba(255,255,255,0.06)",
     },
-    setBad: { borderColor: "#f87171", backgroundColor: "rgba(248,113,113,0.16)" },
+    setBad: { borderWidth: 2, borderColor: "#f87171", backgroundColor: "rgba(248,113,113,0.22)", boxShadow: "0 0 10px rgba(248,113,113,0.45)" },
     setTarget: { borderColor: "rgba(246,211,107,0.6)", borderStyle: "dashed" },
     newSet: {
       minWidth: 92,
