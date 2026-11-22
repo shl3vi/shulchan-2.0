@@ -20,13 +20,18 @@ export type StripSeat = {
   onLongPress?: () => void;
 };
 
-/** How big each tile is: one row, as wide as the screen allows, never taller than `maxHeight`. */
+/**
+ * How big each tile is. Up to four players share one row. Five or six take two rows of three,
+ * with wider, shorter tiles, so each video stays big enough to see a face.
+ */
 export function stripSize(count: number, width: number, maxHeight: number) {
-  const gap = count > 4 ? 6 : 8;
-  const each = Math.floor((width - gap * Math.max(0, count - 1)) / Math.max(1, count));
+  const rows = count > 4 ? 2 : 1;
+  const perRow = Math.ceil(Math.max(1, count) / rows);
+  const gap = rows > 1 ? 6 : 8;
+  const each = Math.floor((width - gap * Math.max(0, perRow - 1)) / perRow);
   const tileWidth = Math.min(120, each);
-  const tileHeight = Math.min(maxHeight, Math.round(tileWidth * 1.2));
-  return { tileWidth, tileHeight, gap, height: tileHeight };
+  const tileHeight = rows > 1 ? Math.round(tileWidth * 0.72) : Math.min(maxHeight, Math.round(tileWidth * 1.2));
+  return { tileWidth, tileHeight, gap, rows, height: rows * tileHeight + (rows - 1) * gap };
 }
 
 /**
@@ -34,9 +39,9 @@ export function stripSize(count: number, width: number, maxHeight: number) {
  * and the winner gets a trophy. Used by games whose tables seat more than two.
  */
 export function SeatStrip({ seats, width, maxHeight }: { seats: StripSeat[]; width: number; maxHeight: number }) {
-  const { tileWidth, tileHeight, gap } = stripSize(seats.length, width, maxHeight);
+  const { tileWidth, tileHeight, gap, height } = stripSize(seats.length, width, maxHeight);
   return (
-    <View style={[styles.row, { gap, height: tileHeight }]}>
+    <View style={[styles.row, { gap, height }]}>
       {seats.map((seat) => (
         <Pressable
           key={seat.id}
@@ -52,7 +57,7 @@ export function SeatStrip({ seats, width, maxHeight }: { seats: StripSeat[]; wid
           ]}
         >
           <View style={styles.clip}>
-            {seat.video ?? <Text style={[styles.initial, { fontSize: Math.round(tileWidth * 0.36) }]}>{seat.initialOf.slice(0, 1).toUpperCase() || "+"}</Text>}
+            {seat.video ?? <Text style={[styles.initial, { fontSize: Math.round(Math.min(tileWidth, tileHeight) * 0.42) }]}>{seat.initialOf.slice(0, 1).toUpperCase() || "+"}</Text>}
           </View>
           <View style={styles.nameBand} pointerEvents="none">
             <Text style={[styles.name, tileWidth < 70 ? styles.nameSmall : null]} numberOfLines={1}>
@@ -76,7 +81,7 @@ export function SeatStrip({ seats, width, maxHeight }: { seats: StripSeat[]; wid
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", justifyContent: "center", alignSelf: "stretch" },
+  row: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", alignContent: "center", alignSelf: "stretch" },
   tile: {
     borderRadius: 14,
     borderWidth: 2,
