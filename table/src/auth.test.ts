@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import test from "node:test";
-import { appleSignInOff, assertSafeAuthConfig } from "./auth.js";
+import { appleSignInOff, assertSafeAuthConfig, returnUrl } from "./auth.js";
 
 const pem = (type: "ec" | "rsa") => {
   const { privateKey } = type === "ec"
@@ -57,4 +57,29 @@ test("local dev starts without the Apple key", () => {
 
 test("AUTH_UPSTREAM still blocks production", () => {
   assert.throws(() => assertSafeAuthConfig({ ...production, AUTH_UPSTREAM: "https://example.test" }), /AUTH_UPSTREAM must not be set/);
+});
+
+test("the sign-in code goes only to the app's own link", () => {
+  assert.equal(returnUrl("shulchan://auth"), "shulchan://auth");
+  assert.equal(returnUrl("shulchan://auth/"), "shulchan://auth");
+});
+
+test("no other address can catch the sign-in code", () => {
+  for (const address of [
+    "exp://localhost:8081/--/auth",
+    "exp://127.0.0.1:8081/--/auth",
+    "exp://192.168.1.20:8081/--/auth",
+    "exps://abc.exp.direct/--/auth",
+    "http://localhost:8081/auth",
+    "https://loochka.com/auth",
+    "https://evil.example/auth",
+    "shulchan://other",
+    "shulchan://auth?code=1",
+    "shulchan://user@auth",
+    "shulchan://auth/extra",
+    "not a url",
+    "",
+  ]) {
+    assert.equal(returnUrl(address), "", address);
+  }
 });

@@ -88,9 +88,15 @@ function AppHome() {
 
   async function signIn() {
     setError(null);
+    const back = Linking.createURL("auth");
+    // The server sends the sign-in code only to the app's own link. Expo Go's link is its own (exp://),
+    // so a sign-in there could never come back. Only a developer can be here, so the message is English only.
+    if (!back.startsWith("shulchan://")) {
+      setError("Google sign-in does not work in Expo Go. Use the LOOCHKA app, or join a table.");
+      return;
+    }
     setBusy(true);
     try {
-      const back = Linking.createURL("auth");
       const result = await WebBrowser.openAuthSessionAsync(await signInUrl(back), back);
       if (result.type !== "success") return;
       const url = new URL(result.url);
