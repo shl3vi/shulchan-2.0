@@ -157,7 +157,7 @@ export function PokerScreen({ credentials }: { credentials: Credentials }) {
       isYou,
       inHand: game?.seats[player.id]?.inHand ?? false,
       winner: winnerSeats.has(player.seat),
-      video: track ? <SeatVideo track={track} /> : undefined,
+      video: track ? <SeatVideo track={track} shutter={false} /> : undefined,
       cameraOn: isYou ? video.cameraOn : track != null,
     };
   }

@@ -1,9 +1,35 @@
 import { useEffect, useState, type ComponentType } from "react";
+import { View } from "react-native";
 import type { VideoTrack } from "livekit-client";
+import { SeatShutter } from "@/media/SeatShutter";
 import { videoSupported } from "@/media/videoSupport";
 
-export function SeatVideo({ track }: { track: VideoTrack }) {
-  const [View, setView] = useState<ComponentType<{ track: VideoTrack }> | null>(null);
+type Listenable = { isMuted: boolean; on: (event: string, listener: () => void) => unknown; off: (event: string, listener: () => void) => unknown };
+
+/** A camera that is switched off keeps its track, with the last frame still on it, so follow the track's muted state. */
+function useCameraOff(track: VideoTrack) {
+  const [off, setOff] = useState(track.isMuted);
+  useEffect(() => {
+    const source = track as unknown as Listenable;
+    const update = () => setOff(source.isMuted);
+    update();
+    source.on("muted", update);
+    source.on("unmuted", update);
+    return () => {
+      source.off("muted", update);
+      source.off("unmuted", update);
+    };
+  }, [track]);
+  return off;
+}
+
+/**
+ * `shutter` draws the closing and opening iris when the camera goes off and on.
+ * A table that has its own curtain turns it off.
+ */
+export function SeatVideo({ track, shutter = true }: { track: VideoTrack; shutter?: boolean }) {
+  const [View_, setView] = useState<ComponentType<{ track: VideoTrack }> | null>(null);
+  const off = useCameraOff(track);
 
   useEffect(() => {
     if (!videoSupported) return;
@@ -16,6 +42,12 @@ export function SeatVideo({ track }: { track: VideoTrack }) {
     };
   }, []);
 
-  if (!View) return null;
-  return <View track={track} />;
+  if (!View_) return null;
+  if (!shutter) return <View_ track={track} />;
+  return (
+    <View style={{ width: "100%", height: "100%" }}>
+      <View_ track={track} />
+      <SeatShutter closed={off} />
+    </View>
+  );
 }
