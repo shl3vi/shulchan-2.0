@@ -61,7 +61,8 @@ export function isFiveKind(dice: number[]) {
 export function scoreFor(category: Category, dice: number[], player?: DicePlayer): number {
   const tally = counts(dice);
   const most = Math.max(...tally);
-  const joker = most === 5 && (player?.scores.fiveKind ?? 0) === 50;
+  // A five-of-a-kind is a joker once the five-of-a-kind box is filled, with 50 or with 0.
+  const joker = most === 5 && player?.scores.fiveKind !== undefined;
   const upper = (UPPER as readonly string[]).indexOf(category);
   if (upper >= 0) return tally[upper + 1] * (upper + 1);
   switch (category) {

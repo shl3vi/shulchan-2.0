@@ -87,13 +87,14 @@ function hasRun(dice: number[], length: number) {
 }
 
 /**
- * What these dice score in a box. A second five-of-a-kind, once the five-of-a-kind box holds 50,
- * is a joker: it fills full house and the straights at full value.
+ * What these dice score in a box. A five-of-a-kind, once the five-of-a-kind box is filled (with 50
+ * or with 0), is a joker: it fills full house and the straights at full value. Only a 50 there
+ * earns the extra 100.
  */
 export function scoreFor(category: Category, dice: number[], player?: Player): number {
   const tally = counts(dice);
   const most = Math.max(...tally);
-  const joker = most === 5 && (player?.scores.fiveKind ?? 0) === 50;
+  const joker = most === 5 && player?.scores.fiveKind !== undefined;
   const upper = UPPER.indexOf(category);
   if (upper >= 0) return tally[upper + 1] * (upper + 1);
   switch (category) {
