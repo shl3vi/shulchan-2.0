@@ -179,7 +179,12 @@ function finish(game: Game, winners: string[]): Game {
     points[player.id] = -owed;
     pot += owed;
   }
-  for (const id of winners) points[id] = Math.round(pot / winners.length);
+  // A pot that does not split evenly gives its odd points to the first winners in seat order, so the points still add up to zero.
+  const share = Math.floor(pot / winners.length);
+  const odd = pot - share * winners.length;
+  winners.forEach((id, at) => {
+    points[id] = share + (at < odd ? 1 : 0);
+  });
   return { ...game, phase: "over", winners, points };
 }
 
