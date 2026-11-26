@@ -29,7 +29,6 @@ const LOBBY_TILES = ["r7a", "b7a", "o7a", "k7a", "j1"];
 /** The video tiles never take more than this much height. */
 const STRIP_MAX = 132;
 const TOOLS_HEIGHT = 30;
-const INFO_HEIGHT = 26;
 const COLUMN_GAP = 10;
 
 /** The video tiles along the top, with how many tiles each player still holds. */
@@ -177,15 +176,15 @@ function TilesTable({
   const changed = draft != null && check.placed > 0;
   const selecting = selected.length > 0;
 
-  // The rack's inner width: the column less its padding and the rack's own. Ten tiles fit on a row.
+  // The rack's inner width: the column less its padding and the rack's own.
   // Column padding 24, rack padding 20, its border 2, and a little slack for rounding.
   const rackInner = Math.min(width, 560) - 24 - 20 - 2 - 2;
-  const rackTile = Math.min(38, Math.floor((rackInner - 9 * 4) / 10));
-  const boardTile = Math.min(30, Math.floor(rackTile * 0.8));
-  const perRow = Math.max(1, Math.floor((rackInner + 4) / (rackTile + 4)));
+  // One tile size for the felt and the rack, so the rack stays low and the felt shows more sets.
+  const tileWidth = Math.min(30, Math.floor(((rackInner - 9 * 4) / 10) * 0.8));
+  const perRow = Math.max(1, Math.floor((rackInner + 4) / (tileWidth + 4)));
   const rackRows = Math.max(1, Math.ceil(rack.length / perRow));
   // A wrapping row reports one line when the column shares out its height, so the rack says how tall it is.
-  const rackHeight = rackRows * Math.round(rackTile * 1.36) + (rackRows - 1) * 4 + 24;
+  const rackHeight = rackRows * Math.round(tileWidth * 1.36) + (rackRows - 1) * 4 + 24;
   const stripWidth = Math.min(width, 560) - 24;
 
   function send(type: string, body: object = {}) {
@@ -263,8 +262,8 @@ function TilesTable({
   // The felt takes what the column has left. Measured, because a share of the column's height
   // went wrong on Android: the felt kept its own height and pushed the rack under the dock.
   const rackShown = me != null && play != null && !over;
-  const below = play && !over ? INFO_HEIGHT + COLUMN_GAP + (rackShown ? TOOLS_HEIGHT + 6 + rackHeight + COLUMN_GAP : 0) : 0;
-  const feltHeight = columnHeight == null || !play ? null : Math.max(120, columnHeight - insets.top - 54 - strip.height - COLUMN_GAP - below - 8);
+  const below = rackShown ? TOOLS_HEIGHT + 6 + rackHeight + COLUMN_GAP : 0;
+  const feltHeight = columnHeight == null || !play ? null : Math.max(120, columnHeight - insets.top - 54 - strip.height - COLUMN_GAP - below - 2);
   const seated = state.players.some((player) => player.id === youId);
   const ranking = over && play ? [...play.players].sort((a, b) => (play.points[b.id] ?? 0) - (play.points[a.id] ?? 0)) : [];
 
@@ -272,8 +271,6 @@ function TilesTable({
   if (play && !over) {
     if (!me) status = t("tlWatching");
     else if (!myTurn) status = t("tlTheirTurn", { name: current?.name ?? "" });
-    else if (!me.melded) status = t("tlFirstMeld", { points: check.meldPoints, need: FIRST_MELD });
-    else status = selecting ? t("tlPlaceHint") : t("tlYourTurn");
   }
 
   let action: ReactNode = null;
@@ -376,7 +373,7 @@ function TilesTable({
                           <Tile
                             key={tile}
                             tile={tile}
-                            width={boardTile}
+                            width={tileWidth}
                             lifted={selected.includes(tile)}
                             fresh={draft != null && !onTableBefore.has(tile)}
                             onPress={myTurn ? () => (selecting && !selected.includes(tile) && !selected.some((entry) => set.includes(entry)) ? into(index) : toggle(tile)) : undefined}
@@ -424,21 +421,6 @@ function TilesTable({
             </View>
           )}
 
-          {play && !over ? (
-            <View style={styles.infoRow}>
-              <View style={styles.pool}>
-                <Ionicons name="albums" size={14} color="#c8ceff" />
-                <Text style={styles.poolText}>{play.poolCount}</Text>
-              </View>
-              <Text style={[styles.status, myTurn ? styles.statusMine : null]} numberOfLines={1}>{action ? status : ""}</Text>
-              {myTurn && me && !me.melded ? (
-                <View style={styles.meter}>
-                  <View style={[styles.meterFill, { width: `${Math.min(100, (check.meldPoints / FIRST_MELD) * 100)}%` }, check.meldPoints >= FIRST_MELD ? styles.meterFull : null]} />
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
           {me && play && !over ? (
             <View style={styles.rackWrap}>
               <View style={styles.tools}>
@@ -447,24 +429,39 @@ function TilesTable({
                   <Text style={styles.toolText}>{sortMode === "runs" ? t("tlSortRuns") : t("tlSortGroups")}</Text>
                 </Pressable>
                 {myTurn && draft ? (
-                  <Pressable style={styles.tool} onPress={undo}>
+                  <Pressable style={styles.toolRound} onPress={undo} accessibilityLabel={t("tlUndo")} hitSlop={4}>
                     <Ionicons name="arrow-undo" size={15} color="#c8ceff" />
-                    <Text style={styles.toolText}>{t("tlUndo")}</Text>
                   </Pressable>
                 ) : null}
                 {myTurn && selecting ? (
-                  <Pressable style={styles.tool} onPress={() => setSelected([])}>
-                    <Ionicons name="close" size={15} color="#c8ceff" />
-                    <Text style={styles.toolText}>{t("tlClear")}</Text>
+                  <Pressable style={styles.toolRound} onPress={() => setSelected([])} accessibilityLabel={t("tlClear")} hitSlop={4}>
+                    <Ionicons name="close" size={16} color="#c8ceff" />
                   </Pressable>
                 ) : null}
+                <View style={styles.toolsEnd}>
+                  {myTurn && !me.melded ? (
+                    <View style={styles.meld} accessibilityLabel={t("tlFirstMeld", { points: check.meldPoints, need: FIRST_MELD })}>
+                      <Text style={[styles.meldText, check.meldPoints >= FIRST_MELD ? styles.meldTextFull : null]}>
+                        {check.meldPoints}/{FIRST_MELD}
+                      </Text>
+                      <View style={styles.meter}>
+                        <View style={[styles.meterFill, { width: `${Math.min(100, (check.meldPoints / FIRST_MELD) * 100)}%` }, check.meldPoints >= FIRST_MELD ? styles.meterFull : null]} />
+                      </View>
+                    </View>
+                  ) : null}
+                  <View style={styles.pool}>
+                    <Ionicons name="albums" size={14} color="#c8ceff" />
+                    <Text style={styles.poolText}>{play.poolCount}</Text>
+                  </View>
+                </View>
               </View>
-              <Pressable style={[styles.rack, { height: rackHeight }]} onPress={back} disabled={!myTurn || !selecting}>
+              {/* The rack lights up on this player's turn, in the same green as their seat. */}
+              <Pressable style={[styles.rack, myTurn ? styles.rackMine : null, { height: rackHeight }]} onPress={back} disabled={!myTurn || !selecting}>
                 {rack.map((tile) => (
                   <Tile
                     key={tile}
                     tile={tile}
-                    width={rackTile}
+                    width={tileWidth}
                     lifted={selected.includes(tile)}
                     fresh={fresh === tile}
                     onPress={() => {
@@ -727,13 +724,13 @@ const styles = {
     podiumName: { color: "#f7f7fc", fontWeight: "800", flex: 1 },
     podiumPoints: { color: "#86e3c4", fontWeight: "900", fontVariant: ["tabular-nums"] },
     podiumMinus: { color: "#f19c9c" },
-    infoRow: { height: INFO_HEIGHT, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 4, flexShrink: 0 },
     pool: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: "rgba(200,206,255,0.10)" },
     poolText: { color: "#c8ceff", fontWeight: "900", fontVariant: ["tabular-nums"] },
-    status: { color: "#a6a8c8", fontSize: 13, fontWeight: "700", flex: 1 },
-    statusMine: { color: "#86e3c4" },
-    meter: { width: 64, height: 6, borderRadius: 3, backgroundColor: "rgba(200,206,255,0.14)", overflow: "hidden" },
-    meterFill: { height: 6, borderRadius: 3, backgroundColor: "#f6d36b" },
+    meld: { alignItems: "center", gap: 3 },
+    meldText: { color: "#f6d36b", fontSize: 12, fontWeight: "900", fontVariant: ["tabular-nums"] },
+    meldTextFull: { color: "#86e3c4" },
+    meter: { width: 44, height: 4, borderRadius: 2, backgroundColor: "rgba(200,206,255,0.14)", overflow: "hidden" },
+    meterFill: { height: 4, borderRadius: 2, backgroundColor: "#f6d36b" },
     meterFull: { backgroundColor: "#86e3c4" },
     rackWrap: { gap: 6, flexShrink: 0 },
     tools: { height: TOOLS_HEIGHT, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 2 },
@@ -749,6 +746,17 @@ const styles = {
       borderColor: "rgba(168,178,255,0.22)",
     },
     toolText: { color: "#dfe2ff", fontSize: 12, fontWeight: "800" },
+    toolRound: {
+      width: 30,
+      height: 28,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(168,178,255,0.10)",
+      borderWidth: 1,
+      borderColor: "rgba(168,178,255,0.22)",
+    },
+    toolsEnd: { marginStart: "auto", flexDirection: "row", alignItems: "center", gap: 10 },
     rack: {
       flexDirection: "row",
       flexWrap: "wrap",
@@ -761,6 +769,10 @@ const styles = {
       borderWidth: 1,
       borderColor: "#8a6236",
       boxShadow: "inset 0 2px 0 rgba(255,255,255,0.12), 0 8px 18px rgba(0,0,0,0.45)",
+    },
+    rackMine: {
+      borderColor: "#86e3c4",
+      boxShadow: "inset 0 2px 0 rgba(255,255,255,0.12), 0 0 16px rgba(134,227,196,0.55), 0 8px 18px rgba(0,0,0,0.45)",
     },
     backHint: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, alignSelf: "center" },
     backHintText: { color: "#f6d36b", fontSize: 12, fontWeight: "900" },
@@ -796,7 +808,8 @@ const styles = {
     dockStatus: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 6 },
     dockDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#86e3c4", boxShadow: "0 0 10px rgba(134,227,196,0.8)" },
     dockStatusText: { color: "#dfe2ff", fontSize: 15, fontWeight: "800", flexShrink: 1 },
-    dockBar: { height: 84, paddingLeft: 16, paddingRight: 144, justifyContent: "center" },
+    // The video buttons sit 16 above the bottom; the dock holds the main button on the same line, just under the rack.
+    dockBar: { height: 72, paddingLeft: 16, paddingRight: 144, paddingBottom: 16, justifyContent: "flex-end" },
     primary: {
       height: 52,
       borderRadius: 26,
