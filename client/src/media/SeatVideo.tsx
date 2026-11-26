@@ -24,10 +24,11 @@ function useCameraOff(track: VideoTrack) {
 }
 
 /**
- * `shutter` draws the closing and opening iris when the camera goes off and on.
+ * `shutter` draws the closing and opening iris when the camera goes off and on. `closing` is for a camera
+ * that was just switched off: its track is already gone, and the screen keeps it for a moment so the iris can close.
  * A table that has its own curtain turns it off.
  */
-export function SeatVideo({ track, shutter = true }: { track: VideoTrack; shutter?: boolean }) {
+export function SeatVideo({ track, shutter = true, closing = false }: { track: VideoTrack; shutter?: boolean; closing?: boolean }) {
   const [View_, setView] = useState<ComponentType<{ track: VideoTrack }> | null>(null);
   const off = useCameraOff(track);
 
@@ -47,7 +48,7 @@ export function SeatVideo({ track, shutter = true }: { track: VideoTrack; shutte
   return (
     <View style={{ width: "100%", height: "100%" }}>
       <View_ track={track} />
-      <SeatShutter closed={off} />
+      <SeatShutter closed={off || closing} />
     </View>
   );
 }

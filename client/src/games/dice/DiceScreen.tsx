@@ -51,6 +51,7 @@ function diceSeats({
   seated,
   youId,
   tracks,
+  closing,
   started,
   currentId,
   viewedId,
@@ -62,6 +63,7 @@ function diceSeats({
   seated: PublicPlayer[];
   youId?: string;
   tracks: Map<string, VideoTrackLike>;
+  closing: ReadonlySet<string>;
   started: boolean;
   currentId?: string;
   viewedId?: string;
@@ -76,7 +78,7 @@ function diceSeats({
       id: player.id,
       label: player.id === youId ? t("dcYou") : player.name,
       initialOf: player.name,
-      video: track ? <SeatVideo track={track} /> : undefined,
+      video: track ? <SeatVideo track={track} closing={closing.has(player.id)} /> : undefined,
       badge: started ? String(totalOf(player)) : undefined,
       active: currentId === player.id,
       chosen: viewedId === player.id,
@@ -333,6 +335,7 @@ function DiceTable({
               seated: state.players,
               youId,
               tracks: video.tracks,
+              closing: video.closing,
               started: game != null,
               currentId: current?.id,
               viewedId: game ? viewed?.id : undefined,

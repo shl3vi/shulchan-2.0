@@ -7,6 +7,9 @@ import { allowCapture } from "@/media/capturePermission";
 import { videoSupported } from "@/media/videoSupport";
 import type { MessageKey } from "@/i18n";
 
+/** How long a tile keeps the last picture while the shutter closes. */
+const SHUTTER_MS = 800;
+
 type VideoHandle = {
   disconnect: (failed?: boolean) => void;
   setMic: (enabled: boolean) => Promise<unknown>;
@@ -18,6 +21,9 @@ type VideoHandle = {
 
 export function useTableVideo(credentials: Credentials | null, suspended: boolean, kind: GameKind) {
   const [tracks, setTracks] = useState<Map<string, VideoTrack>>(new Map());
+  /** Tracks whose camera just went off. They stay on the tile while the shutter closes. */
+  const [leaving, setLeaving] = useState<Map<string, VideoTrack>>(new Map());
+  const shown = useRef<Map<string, VideoTrack>>(new Map());
   const [micOn, setMicOn] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
   const [live, setLive] = useState(false);
@@ -116,6 +122,27 @@ export function useTableVideo(credentials: Credentials | null, suspended: boolea
   }
 
   useEffect(() => {
+    const before = shown.current;
+    shown.current = tracks;
+    const gone = [...before].filter(([identity]) => !tracks.has(identity));
+    setLeaving((current) => {
+      const next = new Map(current);
+      for (const identity of tracks.keys()) next.delete(identity);
+      for (const [identity, track] of gone) next.set(identity, track);
+      return next.size === current.size && [...next].every(([identity, track]) => current.get(identity) === track) ? current : next;
+    });
+    if (gone.length === 0) return;
+    const timer = setTimeout(() => {
+      setLeaving((current) => {
+        const next = new Map(current);
+        for (const [identity, track] of gone) if (next.get(identity) === track) next.delete(identity);
+        return next;
+      });
+    }, SHUTTER_MS);
+    return () => clearTimeout(timer);
+  }, [tracks]);
+
+  useEffect(() => {
     for (const id of held.current) {
       handle.current?.mute(id, true);
       handle.current?.hide(id, true);
@@ -123,6 +150,12 @@ export function useTableVideo(credentials: Credentials | null, suspended: boolea
   }, [tracks]);
 
   const visible = new Map(Array.from(tracks).filter(([identity]) => !hidden.has(identity)));
+  const closing = new Set<string>();
+  for (const [identity, track] of leaving) {
+    if (visible.has(identity) || hidden.has(identity)) continue;
+    visible.set(identity, track);
+    closing.add(identity);
+  }
 
   return {
     videoNotice,
@@ -130,6 +163,8 @@ export function useTableVideo(credentials: Credentials | null, suspended: boolea
       setVideoNotice(null);
     },
     tracks: visible,
+    /** Players whose camera just went off: their tile closes the shutter, then shows their initial. */
+    closing,
     micOn,
     cameraOn,
     live,

@@ -38,6 +38,7 @@ function tilesSeats({
   seated,
   youId,
   tracks,
+  closing,
   started,
   currentId,
   winners,
@@ -47,6 +48,7 @@ function tilesSeats({
   seated: PublicPlayer[];
   youId?: string;
   tracks: Map<string, VideoTrackLike>;
+  closing: ReadonlySet<string>;
   started: boolean;
   currentId?: string;
   winners: string[];
@@ -59,7 +61,7 @@ function tilesSeats({
       id: player.id,
       label: player.id === youId ? t("tlYou") : player.name,
       initialOf: player.name,
-      video: track ? <SeatVideo track={track} /> : undefined,
+      video: track ? <SeatVideo track={track} closing={closing.has(player.id)} /> : undefined,
       badge: started ? String(player.count) : undefined,
       active: currentId === player.id,
       winner: winners.includes(player.id),
@@ -324,6 +326,7 @@ function TilesTable({
                 seated: state.players,
                 youId,
                 tracks: video.tracks,
+                closing: video.closing,
                 started: play != null,
                 currentId: current?.id,
                 winners: over && play ? play.winners : [],

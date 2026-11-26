@@ -397,8 +397,8 @@ export function BackgammonScreen({ credentials }: { credentials: Credentials }) 
   const myColor: Color | null = youId == null ? null : colors?.white === youId ? "white" : colors?.black === youId ? "black" : null;
   return (
     <BackgammonTable
-      topVideo={topTrack ? <SeatVideo track={topTrack} /> : undefined}
-      bottomVideo={bottomTrack ? <SeatVideo track={bottomTrack} /> : undefined}
+      topVideo={topTrack ? <SeatVideo track={topTrack} closing={other ? video.closing.has(other.id) : false} /> : undefined}
+      bottomVideo={bottomTrack ? <SeatVideo track={bottomTrack} closing={youId ? video.closing.has(youId) : false} /> : undefined}
       youName={ordered.find((player) => player.id === youId)?.name ?? ""}
       otherName={other?.name ?? ""}
       otherId={other?.id}
