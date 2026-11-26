@@ -17,6 +17,7 @@ import { UpdateNotice, useRemoteConfig } from "@/game/UpdateNotice";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
 import { gameList, games, type GameKind } from "@/games/registry";
 import { isRtl, LOCALES, LOCALE_LABEL, locale, setLocale, subscribeLocale, t } from "@/i18n";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -57,6 +58,7 @@ function AppHome() {
   const [joinBusy, setJoinBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const currentLocale = useSyncExternalStore(subscribeLocale, locale, locale);
   const nameInput = useRef<TextInputInstance>(null);
 
@@ -150,6 +152,14 @@ function AppHome() {
   function openSettingsPage(path: "/profile" | "/support" | "/legal") {
     setSettingsOpen(false);
     router.push(path);
+  }
+
+  function leaveTable() {
+    setConfirmLeave(false);
+    setCreating(false);
+    setJoining(false);
+    setKind(null);
+    void session.leave();
   }
 
   function openCreate() {
@@ -296,7 +306,24 @@ function AppHome() {
           <Ionicons name={isRtl() ? "arrow-back" : "arrow-forward"} size={22} color="#2a130a" />
         </Pressable>
       ) : null}
-      {mode === "force" ? null : (
+      {mode === "force" ? null : seated ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.joinCode,
+            styles.leaveAction,
+            isRtl() && styles.joinCodeRtl,
+            styles.createButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={() => setConfirmLeave(true)}
+          accessibilityRole="button"
+        >
+          <View style={[styles.actionIcon, styles.leaveActionIcon]}>
+            <Ionicons name="exit-outline" size={20} color="#f87171" />
+          </View>
+          <Text style={[styles.joinCodeText, styles.leaveActionText]}>{t("leaveTable")}</Text>
+        </Pressable>
+      ) : (
       <Pressable
         style={({ pressed }) => [
           styles.joinCode,
@@ -304,9 +331,9 @@ function AppHome() {
           isRtl() && styles.joinCodeRtl,
           styles.createButton,
           pressed && styles.buttonPressed,
-          (busy || seated) && styles.actionDisabled,
+          busy && styles.actionDisabled,
         ]}
-        disabled={busy || seated}
+        disabled={busy}
         onPress={openCreate}
         accessibilityRole="button"
       >
@@ -462,6 +489,16 @@ function AppHome() {
         </View>
       ) : null}
       </ScrollView>
+      <ConfirmDialog
+        visible={confirmLeave}
+        title={t("leaveTable")}
+        message={t("leaveTableSure")}
+        dismissLabel={t("cancel")}
+        onDismiss={() => setConfirmLeave(false)}
+        confirmLabel={t("leaveTableYes")}
+        confirmTone="danger"
+        onConfirm={leaveTable}
+      />
       <Modal
         visible={settingsOpen}
         transparent
@@ -888,6 +925,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.24,
   },
   secondaryAction: { backgroundColor: "rgba(20, 23, 42, 0.72)" },
+  leaveAction: { backgroundColor: "rgba(20, 23, 42, 0.72)", borderColor: "rgba(248, 113, 113, 0.34)" },
+  leaveActionIcon: { backgroundColor: "rgba(248, 113, 113, 0.12)" },
+  leaveActionText: { color: "#ffb4ad" },
   buttonPressed: { opacity: 0.84, transform: [{ scale: 0.985 }] },
   actionIcon: {
     width: 32,

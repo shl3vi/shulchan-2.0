@@ -98,11 +98,15 @@ export function startTableVideo(
     }
   };
 
+  /**
+   * Turning a camera off mutes it: the track stays published, but no new frames come.
+   * A muted camera is left out, so its seat goes dark instead of holding the last frame.
+   */
   const sync = () => {
     const videos = new Map<string, VideoTrack>();
-    const add = (identity: string, participantTracks: { getTrackPublication: (source: Track.Source) => { track?: Track } | undefined }) => {
+    const add = (identity: string, participantTracks: { getTrackPublication: (source: Track.Source) => { track?: Track; isMuted: boolean } | undefined }) => {
       const publication = participantTracks.getTrackPublication(Track.Source.Camera);
-      if (publication?.track?.kind === Track.Kind.Video) videos.set(identity, publication.track as VideoTrack);
+      if (publication?.track?.kind === Track.Kind.Video && !publication.isMuted) videos.set(identity, publication.track as VideoTrack);
     };
     add(room.localParticipant.identity, room.localParticipant);
     room.remoteParticipants.forEach((participant) => add(participant.identity, participant));
@@ -143,6 +147,8 @@ export function startTableVideo(
   room.on(RoomEvent.AudioPlaybackStatusChanged, unlockAudio);
   room.on(RoomEvent.LocalTrackPublished, sync);
   room.on(RoomEvent.LocalTrackUnpublished, sync);
+  room.on(RoomEvent.TrackMuted, sync);
+  room.on(RoomEvent.TrackUnmuted, sync);
   room.on(RoomEvent.Disconnected, () => {
     dropVoices();
     onTracks(new Map());
