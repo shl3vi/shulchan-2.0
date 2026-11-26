@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { t } from "@/i18n";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 /** The dim room both games are played in, with warm light from the lamp over the table. Fills its parent. */
 export function RoomLight() {
@@ -100,12 +102,12 @@ function MenuGlyph({ kind }: { kind?: MenuIcon }) {
   return <Ionicons name="stats-chart" size={18} color="#c8ceff" />;
 }
 
-export function TableMenu({
-  items,
-}: {
-  items: { label: string; onPress: () => void; danger?: boolean; icon?: MenuIcon }[];
-}) {
+type MenuItem = { label: string; onPress: () => void; danger?: boolean; icon?: MenuIcon };
+
+/** Every game's menu. Leaving gives up the seat, so it asks first, the same way the home screen does. */
+export function TableMenu({ items }: { items: MenuItem[] }) {
   const [open, setOpen] = useState(false);
+  const [asking, setAsking] = useState<MenuItem | null>(null);
   const insets = useSafeAreaInsets();
   return (
     <View style={menu.wrap}>
@@ -124,7 +126,8 @@ export function TableMenu({
                 style={menu.item}
                 onPress={() => {
                   setOpen(false);
-                  item.onPress();
+                  if (item.icon === "leave") setAsking(item);
+                  else item.onPress();
                 }}
               >
                 <MenuGlyph kind={item.icon} />
@@ -134,6 +137,20 @@ export function TableMenu({
           </View>
         </View>
       </Modal>
+      <ConfirmDialog
+        visible={asking != null}
+        title={t("leaveTable")}
+        message={t("leaveTableSure")}
+        dismissLabel={t("cancel")}
+        onDismiss={() => setAsking(null)}
+        confirmLabel={t("leaveTableYes")}
+        confirmTone="danger"
+        onConfirm={() => {
+          const item = asking;
+          setAsking(null);
+          item?.onPress();
+        }}
+      />
     </View>
   );
 }
