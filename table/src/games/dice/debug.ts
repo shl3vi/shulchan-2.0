@@ -152,10 +152,11 @@ function dicePage() {
     }).catch(() => { error.textContent = "Failed"; });
   }
 
-  function score(category, dice) {
+  function score(category, dice, player) {
     const n = [0, 0, 0, 0, 0, 0, 0];
     dice.forEach((face) => { n[face] += 1; });
     const most = Math.max(...n);
+    const joker = most === 5 && player.scores.fiveKind !== undefined;
     const sum = dice.reduce((a, b) => a + b, 0);
     const run = (length) => {
       const faces = new Set(dice);
@@ -168,8 +169,8 @@ function dicePage() {
     };
     const upper = CATS.indexOf(category);
     if (upper < 6) return n[upper + 1] * (upper + 1);
-    return { threeKind: most >= 3 ? sum : 0, fourKind: most >= 4 ? sum : 0, fullHouse: n.includes(3) && n.includes(2) ? 25 : 0,
-      smallStraight: run(4) ? 30 : 0, largeStraight: run(5) ? 40 : 0, fiveKind: most === 5 ? 50 : 0, chance: sum }[category];
+    return { threeKind: most >= 3 ? sum : 0, fourKind: most >= 4 ? sum : 0, fullHouse: joker || (n.includes(3) && n.includes(2)) ? 25 : 0,
+      smallStraight: joker || run(4) ? 30 : 0, largeStraight: joker || run(5) ? 40 : 0, fiveKind: most === 5 ? 50 : 0, chance: sum }[category];
   }
 
   function draw() {
@@ -235,7 +236,7 @@ function dicePage() {
           if (value !== undefined) cell.textContent = value;
           else if (current && index === play.turn && rolled) {
             cell.className = "pick";
-            cell.textContent = score(category, play.dice);
+            cell.textContent = score(category, play.dice, player);
             cell.onclick = () => send("/play", { type: "score", category });
           } else cell.className = "open";
           row.append(cell);
@@ -261,7 +262,7 @@ function dicePage() {
     if (current && rolled) {
       action("Score best", () => {
         const open = CATS.filter((category) => current.scores[category] === undefined);
-        const best = open.sort((a, b) => score(b, play.dice) - score(a, play.dice))[0];
+        const best = open.sort((a, b) => score(b, play.dice, current) - score(a, play.dice, current))[0];
         send("/play", { type: "score", category: best });
       });
     }
