@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance, type TextInputInstance } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance, type TextInputInstance } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Image } from "expo-image";
@@ -17,6 +17,7 @@ import { UpdateNotice, useRemoteConfig } from "@/game/UpdateNotice";
 import { useKeyboardInset } from "@/game/useKeyboardInset";
 import { gameList, games, type GameKind } from "@/games/registry";
 import { isRtl, LOCALES, LOCALE_LABEL, locale, setLocale, subscribeLocale, t } from "@/i18n";
+import { BottomSheet } from "@/ui/BottomSheet";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -157,8 +158,13 @@ function AppHome() {
     await saveHost(null);
   }
 
-  function openSettingsPage(path: "/profile" | "/support" | "/legal") {
+  const closeSettings = useCallback(() => {
+    setLanguageOpen(false);
     setSettingsOpen(false);
+  }, []);
+
+  /** Settings stays open under the page, so going back lands on it again. */
+  function openSettingsPage(path: "/profile" | "/support" | "/legal") {
     router.push(path);
   }
 
@@ -509,114 +515,96 @@ function AppHome() {
         confirmTone="danger"
         onConfirm={leaveTable}
       />
-      <Modal
+      <BottomSheet
         visible={settingsOpen}
-        transparent
-        animationType="slide"
-        statusBarTranslucent
-        onRequestClose={() => {
-          setLanguageOpen(false);
-          setSettingsOpen(false);
-        }}
+        onClose={closeSettings}
+        style={[styles.settingsSheet, { paddingBottom: Math.max(insets.bottom, 18) }]}
       >
-        <Pressable style={styles.settingsBackdrop} onPress={() => {
-          setLanguageOpen(false);
-          setSettingsOpen(false);
-        }}>
-          <Pressable
-            style={[styles.settingsSheet, { paddingBottom: Math.max(insets.bottom, 18) }]}
-            onPress={() => {}}
-          >
-            <View style={[styles.settingsHeader, isRtl() && styles.settingsHeaderRtl]}>
-              <View style={styles.settingsTitleRow}>
-                {languageOpen ? (
-                  <Pressable
-                    style={({ pressed }) => [styles.settingsClose, pressed && styles.buttonPressed]}
-                    onPress={() => setLanguageOpen(false)}
-                    accessibilityRole="button"
-                    accessibilityLabel={t("cancel")}
-                    hitSlop={8}
-                  >
-                    <Ionicons name={isRtl() ? "chevron-forward" : "chevron-back"} size={22} color="#c7c9d9" />
-                  </Pressable>
-                ) : (
-                  <View style={styles.settingsTitleIcon}>
-                    <Ionicons name="settings-outline" size={20} color="#c8ceff" />
-                  </View>
-                )}
-                <Text style={styles.settingsTitle}>{languageOpen ? t("language") : t("settings")}</Text>
-              </View>
+        <View style={[styles.settingsHeader, isRtl() && styles.settingsHeaderRtl]}>
+          <View style={styles.settingsTitleRow}>
+            {languageOpen ? (
               <Pressable
                 style={({ pressed }) => [styles.settingsClose, pressed && styles.buttonPressed]}
-                onPress={() => {
-                  setLanguageOpen(false);
-                  setSettingsOpen(false);
-                }}
+                onPress={() => setLanguageOpen(false)}
                 accessibilityRole="button"
                 accessibilityLabel={t("cancel")}
                 hitSlop={8}
               >
-                <Ionicons name="close" size={22} color="#c7c9d9" />
+                <Ionicons name={isRtl() ? "chevron-forward" : "chevron-back"} size={22} color="#c7c9d9" />
               </Pressable>
-            </View>
-            <View style={styles.accountCard}>
-              {languageOpen ? LOCALES.map((code, index) => (
-                <View key={code}>
-                  {index > 0 ? <View style={styles.accountDivider} /> : null}
-                  <Pressable
-                    style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
-                    onPress={() => void setLocale(code)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: code === currentLocale }}
-                  >
-                    <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{LOCALE_LABEL[code]}</Text>
-                    {code === currentLocale ? <Ionicons name="checkmark" size={18} color="#a8b2ff" /> : null}
-                  </Pressable>
-                </View>
-              )) : null}
-              {languageOpen ? null : <>
-              <Pressable
-                style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
-                onPress={() => openSettingsPage("/profile")}
-              >
-                <Ionicons name="person-outline" size={20} color="#a8b2ff" />
-                <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>
-                  {host?.email ?? t("account")}
-                </Text>
-                <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
-              </Pressable>
-              <View style={styles.accountDivider} />
-              <Pressable
-                style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
-                onPress={() => openSettingsPage("/support")}
-              >
-                <Ionicons name="chatbubble-ellipses-outline" size={20} color="#a8b2ff" />
-                <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("support")}</Text>
-                <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
-              </Pressable>
-              <View style={styles.accountDivider} />
-              <Pressable
-                style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
-                onPress={() => openSettingsPage("/legal")}
-              >
-                <Ionicons name="document-text-outline" size={20} color="#a8b2ff" />
-                <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("legal")}</Text>
-                <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
-              </Pressable>
-              <View style={styles.accountDivider} />
-              <Pressable
-                style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
-                onPress={() => setLanguageOpen(true)}
-              >
-                <Ionicons name="language-outline" size={20} color="#a8b2ff" />
-                <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("language")}</Text>
-                <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
-              </Pressable>
-              </>}
-            </View>
+            ) : (
+              <View style={styles.settingsTitleIcon}>
+                <Ionicons name="settings-outline" size={20} color="#c8ceff" />
+              </View>
+            )}
+            <Text style={styles.settingsTitle}>{languageOpen ? t("language") : t("settings")}</Text>
+          </View>
+          <Pressable
+            style={({ pressed }) => [styles.settingsClose, pressed && styles.buttonPressed]}
+            onPress={closeSettings}
+            accessibilityRole="button"
+            accessibilityLabel={t("cancel")}
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={22} color="#c7c9d9" />
           </Pressable>
-        </Pressable>
-      </Modal>
+        </View>
+        <View style={styles.accountCard}>
+          {languageOpen ? LOCALES.map((code, index) => (
+            <View key={code}>
+              {index > 0 ? <View style={styles.accountDivider} /> : null}
+              <Pressable
+                style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+                onPress={() => void setLocale(code)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: code === currentLocale }}
+              >
+                <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{LOCALE_LABEL[code]}</Text>
+                {code === currentLocale ? <Ionicons name="checkmark" size={18} color="#a8b2ff" /> : null}
+              </Pressable>
+            </View>
+          )) : null}
+          {languageOpen ? null : <>
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+            onPress={() => openSettingsPage("/profile")}
+          >
+            <Ionicons name="person-outline" size={20} color="#a8b2ff" />
+            <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>
+              {host?.email ?? t("account")}
+            </Text>
+            <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
+          </Pressable>
+          <View style={styles.accountDivider} />
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+            onPress={() => openSettingsPage("/support")}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={20} color="#a8b2ff" />
+            <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("support")}</Text>
+            <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
+          </Pressable>
+          <View style={styles.accountDivider} />
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+            onPress={() => openSettingsPage("/legal")}
+          >
+            <Ionicons name="document-text-outline" size={20} color="#a8b2ff" />
+            <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("legal")}</Text>
+            <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
+          </Pressable>
+          <View style={styles.accountDivider} />
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, isRtl() && styles.settingsRowRtl, pressed && styles.buttonPressed]}
+            onPress={() => setLanguageOpen(true)}
+          >
+            <Ionicons name="language-outline" size={20} color="#a8b2ff" />
+            <Text style={[styles.settingsRowText, { textAlign: align }]} numberOfLines={1}>{t("language")}</Text>
+            <Ionicons name={isRtl() ? "chevron-back" : "chevron-forward"} size={18} color="#8f91a3" />
+          </Pressable>
+          </>}
+        </View>
+      </BottomSheet>
     </View>
   );
 }
@@ -952,11 +940,6 @@ const styles = StyleSheet.create({
   primaryActionText: { color: "#2a130a" },
   actionArrow: { marginStart: "auto" },
   code: { textAlign: "center", letterSpacing: 4, fontSize: 20, fontWeight: "800" },
-  settingsBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(3, 4, 12, 0.68)",
-  },
   settingsSheet: {
     backgroundColor: "#14172a",
     borderTopLeftRadius: 28,
