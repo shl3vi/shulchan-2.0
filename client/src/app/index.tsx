@@ -38,6 +38,7 @@ function AppHome() {
     if (keyboard > 0) scroll.current?.scrollToEnd({ animated: true });
   }, [keyboard]);
   const seated = session.credentials != null;
+
   const align = isRtl() ? "right" : "left";
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +62,13 @@ function AppHome() {
   const [confirmLeave, setConfirmLeave] = useState(false);
   const currentLocale = useSyncExternalStore(subscribeLocale, locale, locale);
   const nameInput = useRef<TextInputInstance>(null);
+
+  // Seated, the home screen is just "back to table" and "leave": snap back to
+  // the top (the create/join forms are hidden while seated).
+  useEffect(() => {
+    if (!seated) return;
+    scroll.current?.scrollTo({ y: 0, animated: false });
+  }, [seated]);
 
   function normalizeCode(code: string) {
     const trimmed = code.trim();
@@ -240,6 +248,8 @@ function AppHome() {
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!seated}
+        alwaysBounceVertical={!seated}
       >
       <StatusBar style="light" />
       <View style={styles.hero}>
@@ -349,7 +359,7 @@ function AppHome() {
         />
       </Pressable>
       )}
-      {mode !== "force" && creating && !host ? (
+      {mode !== "force" && !seated && creating && !host ? (
         <View style={styles.signIn}>
           <Text style={[styles.signInHint, { textAlign: align }]}>{t("signInToCreate")}</Text>
           <View style={styles.signInChoices}>
@@ -377,7 +387,7 @@ function AppHome() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : null}
-      {mode !== "force" && creating && host && kind == null ? (
+      {mode !== "force" && !seated && creating && host && kind == null ? (
         <View style={[styles.kindGrid, isRtl() && styles.kindGridRtl]}>
           {gameList().map(([gameKind, game]) => (
             <Pressable key={gameKind} style={styles.kindCard} onPress={() => setKind(gameKind)}>
@@ -389,7 +399,7 @@ function AppHome() {
           ))}
         </View>
       ) : null}
-      {mode !== "force" && creating && host && kind != null ? (
+      {mode !== "force" && !seated && creating && host && kind != null ? (
         <View style={[styles.felt, seated && styles.feltOff]}>
           <Text style={[styles.label, { textAlign: align }]}>{t("yourName")}</Text>
           <TextInput
@@ -419,7 +429,7 @@ function AppHome() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : null}
-      {mode !== "force" && error && !creating ? <Text style={styles.error}>{error}</Text> : null}
+      {mode !== "force" && !seated && error && !creating ? <Text style={styles.error}>{error}</Text> : null}
       {mode === "force" || seated ? null : (
         <Pressable
           style={({ pressed }) => [
