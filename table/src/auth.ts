@@ -1,6 +1,7 @@
 import { createHash, createPrivateKey, createPublicKey, randomBytes, sign, timingSafeEqual, verify } from "node:crypto";
 import { Router } from "express";
 import { appleBody, readSchema, sessionBody } from "./schema.js";
+import { deleteAppleAccountRecord, readAppleAccount, readHostSession, saveAppleAccount, saveHostSession, type Host } from "./signIns.js";
 import { deleteHostAccount, redis } from "./store.js";
 
 export const APP_SCHEME = "shulchan";
@@ -28,11 +29,6 @@ function verifies(verifier: string, challenge: string) {
   const given = Buffer.from(createHash("sha256").update(verifier).digest("base64url"));
   const expected = Buffer.from(challenge);
   return given.length === expected.length && timingSafeEqual(given, expected);
-}
-
-function hostTokenSeconds() {
-  const days = Number(process.env.HOST_TOKEN_DAYS ?? 7);
-  return Math.max(1, Number.isFinite(days) ? days : 7) * 24 * 60 * 60;
 }
 
 /** The only place the code may be sent is the app's own link, so no other address can catch it. */
@@ -213,21 +209,14 @@ function appleAudiences() {
   return [extra, "com.loochka"].filter(Boolean);
 }
 
-type AppleRecord = { email?: string; name?: string; refreshToken?: string };
-
 /** Apple only sends the email on the first sign-in, so later visits reuse the address saved for this Apple user. */
 async function appleProfile(sub: string, email: string | undefined, name: string | undefined, refreshToken?: string) {
-  const key = `apple:${sub}`;
-  const saved = await redis.get(key);
-  const previous = saved ? JSON.parse(saved) as AppleRecord : {};
-  const nextEmail = email || previous.email;
-  const nextName = name || previous.name;
-  const nextRefresh = refreshToken || previous.refreshToken;
+  const previous = await readAppleAccount(sub);
+  const nextEmail = email || previous?.email;
+  const nextName = name || previous?.name;
+  const nextRefresh = refreshToken || previous?.refreshToken;
   if (!nextEmail) return null;
-  await redis.set(
-    key,
-    JSON.stringify({ email: nextEmail, ...(nextName ? { name: nextName } : {}), ...(nextRefresh ? { refreshToken: nextRefresh } : {}) }),
-  );
+  await saveAppleAccount(sub, { email: nextEmail, ...(nextName ? { name: nextName } : {}), ...(nextRefresh ? { refreshToken: nextRefresh } : {}) });
   return { email: nextEmail, ...(nextName ? { name: nextName } : {}) };
 }
 
@@ -282,10 +271,9 @@ async function appleRefreshToken(code: string) {
 /** Removes everything kept for this Apple user and revokes the sign-in at Apple. */
 export async function deleteAppleAccount(sub: string | undefined) {
   if (!sub?.startsWith("apple:")) return;
-  const key = sub;
-  const saved = await redis.get(key);
-  const record = saved ? JSON.parse(saved) as AppleRecord : {};
-  if (record.refreshToken) {
+  const appleSub = sub.slice("apple:".length);
+  const record = await readAppleAccount(appleSub);
+  if (record?.refreshToken) {
     try {
       const response = await appleForm("revoke", { token: record.refreshToken, token_type_hint: "refresh_token" });
       if (!response) console.error("apple revoke skipped: the Sign in with Apple key is not set");
@@ -294,7 +282,7 @@ export async function deleteAppleAccount(sub: string | undefined) {
       console.error("apple revoke failed", error);
     }
   }
-  await redis.del(key);
+  await deleteAppleAccountRecord(appleSub);
 }
 
 authRouter.post("/auth/apple", async (req, res) => {
@@ -358,11 +346,7 @@ authRouter.post("/auth/apple", async (req, res) => {
     return;
   }
   const hostToken = randomBytes(32).toString("hex");
-  await redis.set(
-    `host:${hostToken}`,
-    JSON.stringify({ sub: `apple:${claims.sub}`, email: profile.email, ...(profile.name ? { name: profile.name } : {}) }),
-    { EX: hostTokenSeconds() },
-  );
+  await saveHostSession(hostToken, { sub: `apple:${claims.sub}`, email: profile.email, ...(profile.name ? { name: profile.name } : {}) });
   res.json({ token: hostToken, email: profile.email, ...(profile.name ? { name: profile.name } : {}) });
 });
 
@@ -385,11 +369,7 @@ authRouter.post("/auth/session", async (req, res) => {
   }
   const name = session.name?.trim() || undefined;
   const hostToken = randomBytes(32).toString("hex");
-  await redis.set(
-    `host:${hostToken}`,
-    JSON.stringify({ sub: session.sub, email: session.email, ...(name ? { name } : {}) }),
-    { EX: hostTokenSeconds() },
-  );
+  await saveHostSession(hostToken, { sub: session.sub, email: session.email, ...(name ? { name } : {}) });
   res.json({ token: hostToken, email: session.email, ...(name ? { name } : {}) });
 });
 
@@ -415,14 +395,11 @@ authRouter.get("/auth/host", async (req, res) => {
   res.json({ email: host.email, ...(host.name ? { name: host.name } : {}) });
 });
 
-export async function readHost(authorization: string | undefined) {
+export async function readHost(authorization: string | undefined): Promise<Host | null> {
   const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
   if (!token) return null;
-  const raw = await redis.get(`host:${token}`);
-  if (raw) {
-    await redis.expire(`host:${token}`, hostTokenSeconds());
-    return JSON.parse(raw) as { sub: string; email: string; name?: string };
-  }
+  const saved = await readHostSession(token);
+  if (saved) return saved;
   // Local dev cannot reach Railway's private Redis. A token that production accepts is remembered here.
   const upstream = process.env.AUTH_UPSTREAM;
   if (!upstream) return null;
@@ -432,7 +409,7 @@ export async function readHost(authorization: string | undefined) {
     body: "{}",
   });
   if (response.status !== 400) return null;
-  const host: { sub: string; email: string; name?: string } = { sub: "upstream", email: "signed-in" };
-  await redis.set(`host:${token}`, JSON.stringify(host), { EX: hostTokenSeconds() });
+  const host: Host = { sub: "upstream", email: "signed-in" };
+  await saveHostSession(token, host);
   return host;
 }

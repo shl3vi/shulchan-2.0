@@ -70,6 +70,13 @@ export async function pokerOnDeadline(tableId: string) {
   await notePlayers(tableId, mark.seated);
 }
 
+/** The server or the engine was down for `ms`. The turn clock and the next deal wait that much longer. */
+export function pokerShift(table: TableRecord, ms: number) {
+  const state = pokerOf(table);
+  if (state.turn) state.turn.deadline += ms;
+  if (state.autoDealAt != null) state.autoDealAt += ms;
+}
+
 /** After a pause the player to act gets a full clock, and a waiting table deals after the usual wait. */
 export function pokerResume(table: TableRecord, now: number) {
   const state = pokerOf(table);

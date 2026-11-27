@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { IDLE_CLOSE_MS, IDLE_WARN_MS, needsIdleWrite, noteActivity, setPaused, sweepIdle, type IdleTable } from "./idle.js";
+import { IDLE_CLOSE_MS, IDLE_WARN_MS, PAUSE_LIMIT_MS, needsIdleWrite, noteActivity, setPaused, sweepIdle, type IdleTable } from "./idle.js";
 
 const MIN = 60 * 1000;
 
@@ -41,16 +41,17 @@ test("active pause freezes the fuse and resuming does not grant a new one", () =
   assert.equal(table.paused, true);
   assert.equal(table.idleCarry, 6 * MIN);
   assert.equal(table.idleCloseAt, undefined);
-  assert.equal(sweepIdle(table, at + 60 * MIN), "hold");
+  assert.equal(sweepIdle(table, at + 59 * MIN), "hold");
   assert.equal(table.closing, undefined);
 
   // Pausing again must not measure the fuse from the pause itself.
   setPaused(table, true, at + 30 * MIN);
   assert.equal(table.idleCarry, 6 * MIN);
 
-  const back = at + 60 * MIN;
+  const back = at + 59 * MIN;
   setPaused(table, false, back);
   assert.equal(table.paused, undefined);
+  assert.equal(table.pausedAt, undefined);
   assert.equal(table.lastActivityAt, back - 6 * MIN);
   assert.equal(table.idleCloseAt, table.lastActivityAt! + IDLE_CLOSE_MS);
   assert.equal(table.idleCloseAt! - back, 4 * MIN);
@@ -99,4 +100,38 @@ test("a stored deadline cannot outlive the last action", () => {
   const table: IdleTable = { lastActivityAt: opened, idleCloseAt: opened + 24 * 60 * MIN };
   assert.equal(sweepIdle(table, opened + 6 * MIN), "warn");
   assert.equal(table.idleCloseAt, opened + IDLE_CLOSE_MS);
+});
+
+test("a paused table closes an hour after the pause began, however often it is paused again", () => {
+  const opened = 7_000_000;
+  const table: IdleTable = { lastActivityAt: opened };
+  const at = opened + MIN;
+  setPaused(table, true, at);
+  assert.equal(table.pausedAt, at);
+  assert.equal(needsIdleWrite(table, at + PAUSE_LIMIT_MS - 1), false);
+  assert.equal(sweepIdle(table, at + PAUSE_LIMIT_MS - 1), "hold");
+  // Pausing again while paused keeps the hour that is already running.
+  setPaused(table, true, at + 30 * MIN);
+  assert.equal(table.pausedAt, at);
+  assert.equal(needsIdleWrite(table, at + PAUSE_LIMIT_MS), true);
+  assert.equal(sweepIdle(table, at + PAUSE_LIMIT_MS), "close");
+  assert.equal(table.closing, true);
+});
+
+test("resuming and pausing again starts a new hour", () => {
+  const table: IdleTable = { lastActivityAt: 0 };
+  setPaused(table, true, MIN);
+  setPaused(table, false, 50 * MIN);
+  setPaused(table, true, 51 * MIN);
+  assert.equal(table.pausedAt, 51 * MIN);
+  assert.equal(sweepIdle(table, 100 * MIN), "hold");
+});
+
+test("a table paused before the hour limit existed gets its hour from the next sweep", () => {
+  const table: IdleTable = { lastActivityAt: 0, paused: true, idleCarry: MIN };
+  assert.equal(needsIdleWrite(table, 10 * MIN), true);
+  assert.equal(sweepIdle(table, 10 * MIN), "seed");
+  assert.equal(table.pausedAt, 10 * MIN);
+  assert.equal(sweepIdle(table, 69 * MIN), "hold");
+  assert.equal(sweepIdle(table, 70 * MIN), "close");
 });

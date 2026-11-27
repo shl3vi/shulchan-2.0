@@ -1,5 +1,6 @@
 import { createClient, type RedisClientType } from "redis";
 import { connectPostgres, pool, TABLE_TTL_MS } from "./db.js";
+import { copyRedisSignIns, deleteHostSessions, purgeExpiredSessions } from "./signIns.js";
 import type { GameKind } from "./games/index.js";
 
 export type SeatPlayer = {
@@ -35,6 +36,8 @@ export type TableRecord = {
   lastActivityAt?: number;
   /** Admin pause. Video is off and the idle fuse is frozen, not reset. */
   paused?: boolean;
+  /** Server time the current pause began. A paused table closes an hour after it. See idle.ts. */
+  pausedAt?: number;
   idleCarry?: number;
   /** Server time at which an idle table closes. Absent unless the warning is showing. */
   idleCloseAt?: number;
@@ -55,7 +58,14 @@ export async function connectRedis() {
   await redis.connect();
   await subscriber.connect();
   await connectPostgres();
-  // Also deletes every record from before RECORD_VERSION, through the same path as an expired table.
+  await copyRedisSignIns();
+}
+
+/**
+ * Starts deleting expired tables and sign-ins, after the outage check is in place (see whenExpiring).
+ * The first pass also deletes every record from before RECORD_VERSION, through the same path as an expired table.
+ */
+export async function startExpiry() {
   await expireTables();
   expiryTimer = setInterval(() => {
     void expireTables().catch((error) => {
@@ -74,13 +84,6 @@ export function stopStore() {
 
 const CURRENT = `record->>'v' = '${RECORD_VERSION}'`;
 
-async function scan(match: string) {
-  const keys: string[] = [];
-  for await (const key of redis.scanIterator({ MATCH: match, COUNT: 100 })) {
-    keys.push(String(key));
-  }
-  return keys;
-}
 
 export async function readTable(id: string) {
   const found = await pool.query<{ record: TableRecord }>(
@@ -184,28 +187,6 @@ export async function insertTable(table: TableRecord) {
   return saved.rowCount === 1;
 }
 
-/** Once a host has no table left, their sign-in email does not stay in Redis. */
-async function releaseHost(email: string | null | undefined) {
-  if (!email || email === "signed-in") return;
-  const still = await pool.query(
-    "SELECT 1 FROM tables WHERE expires_at > now() AND record->>'hostEmail' = $1 LIMIT 1",
-    [email],
-  );
-  if (still.rowCount) return;
-  const keys: string[] = [];
-  for (const key of await scan("host:*")) {
-    const raw = await redis.get(key);
-    if (!raw) continue;
-    try {
-      const host = JSON.parse(raw) as { email?: string };
-      if (host.email === email) keys.push(key);
-    } catch {
-      // not a host session
-    }
-  }
-  if (keys.length > 0) await redis.del(keys);
-}
-
 /** Drops every open table for this sign-in, then every host token that carries the same email. */
 export async function deleteHostAccount(email: string, token: string) {
   const ids: string[] = [];
@@ -218,20 +199,8 @@ export async function deleteHostAccount(email: string, token: string) {
     if (ids.length > 0) {
       await redis.del(ids.map((id) => `ledger:${id}`));
     }
-    const keys: string[] = [];
-    for (const key of await scan("host:*")) {
-      const raw = await redis.get(key);
-      if (!raw) continue;
-      try {
-        const host = JSON.parse(raw) as { email?: string };
-        if (host.email === email) keys.push(key);
-      } catch {
-        // not a host session
-      }
-    }
-    if (keys.length > 0) await redis.del(keys);
   }
-  await redis.del(`host:${token}`);
+  await deleteHostSessions(email, token);
   if (ids.length > 0) await onExpired(ids);
 }
 
@@ -259,28 +228,38 @@ export async function extendKeptTables(keep: string[]) {
 }
 
 export async function removeTable(id: string) {
-  const deleted = await pool.query<{ email: string | null }>(
-    `DELETE FROM tables WHERE id = $1 RETURNING record->>'hostEmail' AS email`,
-    [id],
-  );
+  await pool.query("DELETE FROM tables WHERE id = $1", [id]);
   await redis.del(`ledger:${id}`);
-  await releaseHost(deleted.rows[0]?.email);
 }
 
 let onExpired: (ids: string[]) => Promise<void> = async () => {};
+
+/**
+ * Runs before every expiry pass. Returns null to skip the pass, or the games whose tables must be kept.
+ * The outage check sits here, so time the server or an engine was down is given back to tables
+ * before any of them is deleted for being quiet.
+ */
+let beforeExpiry: () => Promise<string[] | null> = async () => [];
+
+export function whenExpiring(handler: () => Promise<string[] | null>) {
+  beforeExpiry = handler;
+}
 
 export function whenTablesExpire(handler: (ids: string[]) => Promise<void>) {
   onExpired = handler;
 }
 
-async function expireTables() {
-  const expired = await pool.query<{ id: string; email: string | null }>(
-    `DELETE FROM tables WHERE expires_at < now() OR record->>'v' IS DISTINCT FROM '${RECORD_VERSION}'
-     RETURNING id, record->>'hostEmail' AS email`,
+export async function expireTables() {
+  const keep = await beforeExpiry();
+  if (!keep) return;
+  await purgeExpiredSessions();
+  const expired = await pool.query<{ id: string }>(
+    `DELETE FROM tables
+     WHERE (expires_at < now() AND kind <> ALL($1::text[])) OR record->>'v' IS DISTINCT FROM '${RECORD_VERSION}'
+     RETURNING id`,
+    [keep],
   );
   if (expired.rows.length === 0) return;
-  const emails = [...new Set(expired.rows.map((row) => row.email).filter((email): email is string => !!email))];
-  for (const email of emails) await releaseHost(email);
   await onExpired(expired.rows.map((row) => row.id));
 }
 

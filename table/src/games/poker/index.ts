@@ -1,6 +1,6 @@
 import { defineGame, type GameModule } from "../types.js";
 import { readPokerConfig } from "./config.js";
-import { pokerDeadline, pokerOnDeadline, pokerResume } from "./deadline.js";
+import { pokerDeadline, pokerOnDeadline, pokerResume, pokerShift } from "./deadline.js";
 import { pokerDebug } from "./debug.js";
 import { dropRemovedPlayers, foldDeparted } from "./departures.js";
 import { openHand, pokerEngineAnswers, readPoker, seatPoker, unseatPoker } from "./engine.js";
@@ -44,6 +44,7 @@ export const poker: GameModule<PokerSettings> = defineGame<PokerSettings>({
   },
   moves: pokerMoves,
   deadline: pokerDeadline,
+  shift: pokerShift,
   onDeadline: pokerOnDeadline,
   resume: pokerResume,
   config: readPokerConfig,

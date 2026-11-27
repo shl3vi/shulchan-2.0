@@ -1,6 +1,6 @@
 # Shulchan 2.0
 
-Video game tables: poker, backgammon, dice (five dice, a 13-box scorecard) and tiles (tile rummy). The table service owns seats, sockets, admin, pause and idle closing, and keeps each table in Postgres. Each game's rules run in its own engine service, which the table calls over HTTP. Redis carries the lock, sign-ins and "table changed" messages between table processes.
+Video game tables: poker, backgammon, dice (five dice, a 13-box scorecard) and tiles (tile rummy). The table service owns seats, sockets, admin, pause and idle closing, and keeps each table in Postgres. Each game's rules run in its own engine service, which the table calls over HTTP. Redis carries the lock and "table changed" messages between table processes. Host sign-ins (30 days from last use) are in Postgres, so losing Redis signs nobody out.
 
 ```bash
 npm run dev
@@ -44,6 +44,8 @@ CI (`.github/workflows/ci.yml`) runs the typecheck of every engine and the table
 ## Cloud
 
 Railway hosts Redis, Postgres, the table service (`shulchan-server`), and one engine service per game. The engines have no public domain. The table reaches them on Railway's private network and sends `ENGINE_TOKEN`, the same value set on every service. The poker engine checks each betting action, the backgammon engine rolls the dice and checks every move, the dice engine rolls and scores every box, and the tiles engine shuffles, deals and checks every set on the table. `/health` fails only when Redis or Postgres is down; each engine is reported on its own. A phone only sends what the player wants to do. The table stores the result. Set `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the table service from the LiveKit Cloud project. Video cannot run on Railway.
+
+Time the server or an engine was down is given back to tables, so an outage does not close them. `docs/runbook.md` says what happens on its own when something is down, and what to do by hand.
 
 An installable APK, from `client/`:
 

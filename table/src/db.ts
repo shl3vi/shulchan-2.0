@@ -52,4 +52,34 @@ export async function connectPostgres() {
       created_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  // A host's sign-in on one device. Only a hash of the token is kept, so a copy of the database cannot sign anyone in.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS host_sessions (
+      token_hash text PRIMARY KEY,
+      sub text NOT NULL,
+      email text NOT NULL,
+      name text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      expires_at timestamptz NOT NULL
+    )
+  `);
+  await pool.query("CREATE INDEX IF NOT EXISTS host_sessions_email ON host_sessions (email)");
+  await pool.query("CREATE INDEX IF NOT EXISTS host_sessions_expires_at ON host_sessions (expires_at)");
+  // Apple sends the email only on the first sign-in, so it has to outlive any one session.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS apple_accounts (
+      sub text PRIMARY KEY,
+      email text NOT NULL,
+      name text,
+      refresh_token text,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  // The last time each part could take moves: "server", and "engine:<kind>" for each game's engine.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS alive (
+      name text PRIMARY KEY,
+      at bigint NOT NULL
+    )
+  `);
 }

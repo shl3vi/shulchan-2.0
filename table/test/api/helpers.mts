@@ -53,7 +53,10 @@ export async function call(path: string, options: CallOptions = {}) {
 /** A signed-in host, as the server stores one after Google or Apple sign-in. */
 export async function signedInHost(email = `host-${randomUUID()}@example.com`) {
   const token = randomBytes(32).toString("hex");
-  await redis.set(`host:${token}`, JSON.stringify({ sub: `google:${randomUUID()}`, email, name: "Test Host" }), { EX: 3600 });
+  await db.query(
+    "INSERT INTO host_sessions (token_hash, sub, email, name, expires_at) VALUES ($1, $2, $3, $4, now() + interval '1 hour')",
+    [createHash("sha256").update(token).digest("hex"), `google:${randomUUID()}`, email, "Test Host"],
+  );
   return { token, email, auth: { authorization: `Bearer ${token}` } };
 }
 

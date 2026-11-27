@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import test from "node:test";
-import { call, newIp, openTable, pkce, redis, signedInHost } from "./helpers.mts";
+import { call, db, newIp, openTable, pkce, redis, signedInHost } from "./helpers.mts";
 
 /** The code /auth/callback leaves in Redis once Google has confirmed the user. */
 async function googleCode(challenge: string, profile = { sub: "google-sub-1", email: "player@example.com", name: "Pat" }) {
@@ -115,4 +115,22 @@ test("deleting the account signs the host out and closes their tables", async ()
   assert.equal((await call("/auth/host", { headers: table.host.auth })).status, 401);
   assert.equal((await call(`/api/games/${table.gameId}`, { headers: { "x-table-password": table.password } })).status, 404);
   assert.equal((await call("/api/games", { body: { kind: "poker", smallBlind: 5, buyIn: 500 }, headers: table.host.auth })).status, 401);
+});
+
+test("a sign-in is kept in Postgres for 30 days, as a hash of the token, and not in Redis", async () => {
+  const { verifier, challenge } = pkce();
+  const code = await googleCode(challenge, { sub: "google-sub-30", email: "thirty@example.com", name: "Thirty" });
+  const session = await call("/auth/session", { body: { code, verifier } });
+  assert.equal(session.status, 200);
+  const token: string = session.json.token;
+  assert.equal(await redis.get(`host:${token}`), null);
+  const hash = createHash("sha256").update(token).digest("hex");
+  const rows = await db.query<{ email: string; days: number }>(
+    "SELECT email, extract(epoch FROM expires_at - now()) / 86400 AS days FROM host_sessions WHERE token_hash = $1",
+    [hash],
+  );
+  assert.equal(rows.rows[0]?.email, "thirty@example.com");
+  assert.ok(Number(rows.rows[0]?.days) > 29.9 && Number(rows.rows[0]?.days) <= 30);
+  const none = await db.query("SELECT 1 FROM host_sessions WHERE token_hash = $1", [token]);
+  assert.equal(none.rowCount, 0);
 });

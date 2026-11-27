@@ -19,7 +19,8 @@ import { installCrashHandlers } from "./events/crash.js";
 import { installAnalytics, startAnalytics, stopAnalytics } from "./events/install.js";
 import { setNameExtras } from "./name.js";
 import { allNameTerms, publicConfigFor, regionOf } from "./publicConfig.js";
-import { connectRedis, flushTables, redis, stopStore, subscriber } from "./store.js";
+import { catchUpServer, downGames, enginesDown, startAliveNotes } from "./outage.js";
+import { connectRedis, flushTables, redis, startExpiry, stopStore, subscriber, whenExpiring } from "./store.js";
 
 try {
   engineToken();
@@ -35,6 +36,11 @@ setNameExtras(nameTerms.embedded, nameTerms.words);
 installAnalytics();
 installCrashHandlers();
 await connectRedis();
+// Before the first expiry pass: time the server or an engine was down is given back to tables first.
+await startAliveNotes();
+whenExpiring(async () => ((await catchUpServer()) ? downGames() : null));
+if (await catchUpServer()) await enginesDown();
+await startExpiry();
 
 const app = express();
 app.set("trust proxy", 1);

@@ -6,6 +6,7 @@ import { needsIdleWrite, sweepIdle } from "./idle.js";
 import { stopMedia } from "./livekit.js";
 import { deadlineOverdue, fireDeadline } from "./deadlines.js";
 import { kindOf } from "./games/index.js";
+import { catchUpServer, enginesDown } from "./outage.js";
 import { extendKeptTables, listOpenTables, publishTable, removeTable, TABLE_UNCHANGED, TableNotFound, withTable, type TableRecord } from "./store.js";
 import { settleAdmin } from "./admin.js";
 
@@ -14,13 +15,14 @@ const SWEEP_MS = 10_000;
 let timer: NodeJS.Timeout | undefined;
 let running = false;
 
-async function closeIdle(io: Server, tableId: string, epoch: number | undefined) {
+/** "paused" when the hour a pause may last ran out, "idle" when nobody played. The app words each one. */
+async function closeIdle(io: Server, tableId: string, epoch: number | undefined, reason: "idle" | "paused") {
   await summarizeIdle(tableId).catch((error) => {
     reportCaught(tableId, error, "idle");
   });
   await removeTable(tableId);
   const room = io.of("/table");
-  room.to(tableId).emit("closed", { reason: "idle" });
+  room.to(tableId).emit("closed", { reason });
   const drop = setTimeout(() => room.in(tableId).disconnectSockets(true), 400);
   drop.unref();
   await stopMedia(tableId, epoch, true);
@@ -43,10 +45,16 @@ async function handOffAdmin(io: Server, tableId: string, record: TableRecord, no
 }
 
 async function watch(io: Server) {
+  // Time the server was down is given back first, so no table is closed for it.
+  if (!(await catchUpServer())) return;
+  // A game whose engine is down cannot take moves, so its tables wait rather than burn down.
+  const down = await enginesDown();
   const open = await listOpenTables();
   for (const row of open) {
     const now = Date.now();
+    const waiting = down.has(kindOf(row.record));
     if (isDebugTable(row.id)) {
+      if (waiting) continue;
       // A debug table never closes or changes admin, but its game's deadline still fires.
       if (deadlineOverdue(row.record, now)) await fireDeadline(row.id);
       continue;
@@ -54,21 +62,20 @@ async function watch(io: Server) {
     try {
       // Before the pause check: a paused table whose admin left can only be resumed by a new admin.
       await handOffAdmin(io, row.id, row.record, now);
+      if (row.record.paused) await stopMedia(row.id, row.record.mediaEpoch, false);
+      if (waiting) continue;
       if (deadlineOverdue(row.record, now)) await fireDeadline(row.id);
-      if (row.record.paused) {
-        await stopMedia(row.id, row.record.mediaEpoch, false);
-        continue;
-      }
       if (!needsIdleWrite(row.record, now)) continue;
       const decision = await withTable(row.id, async (table) => {
+        const paused = table.paused === true;
         const next = sweepIdle(table, Date.now());
         if (next === "hold") return TABLE_UNCHANGED;
-        if (next === "close") return { close: true as const, epoch: table.mediaEpoch };
+        if (next === "close") return { close: true as const, epoch: table.mediaEpoch, reason: paused ? "paused" as const : "idle" as const };
         return next;
       });
       if (decision === TABLE_UNCHANGED) continue;
       if (typeof decision === "object" && decision.close) {
-        await closeIdle(io, row.id, decision.epoch);
+        await closeIdle(io, row.id, decision.epoch, decision.reason);
         continue;
       }
       await publishTable(row.id);

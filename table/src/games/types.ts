@@ -89,6 +89,11 @@ export type GameModule<Settings extends OpenSettings = OpenSettings> = {
   deadline?(table: TableRecord): number | null;
   /** The deadline has passed. Takes the table lock itself and checks again, since several processes may call it. */
   onDeadline?(tableId: string): Promise<void>;
+  /**
+   * Nothing could take moves for `ms` (the server or this game's engine was down). Moves every time the game
+   * stored forward by that much, so a turn clock or a deal does not run out over time nobody could play.
+   */
+  shift?(table: TableRecord, ms: number): void;
   /** The admin resumed a paused table. */
   resume?(table: TableRecord, now: number): void;
   /** Reads the game's own part of the app config, `games.<kind>`, minus `video`. Missing or wrong values get defaults. */
