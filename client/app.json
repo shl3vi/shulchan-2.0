@@ -3,6 +3,12 @@
     "name": "LOOCHKA",
     "slug": "shulchan",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2c95d2f5-91a6-4eca-bc2c-c72806b29e79"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "shulchan",
