@@ -1,0 +1,88 @@
+# Checks the server side on every push and pull request. Railway waits for this run before it deploys
+# (each service's "Wait for CI" setting), so a red run never reaches players.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  engines:
+    name: Engine (${{ matrix.engine }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [poker-engine, backgammon-engine, dice-engine, tiles-engine]
+    defaults:
+      run:
+        working-directory: ${{ matrix.engine }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ matrix.engine }}/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+
+  table:
+    name: Table service
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: shulchan
+          POSTGRES_PASSWORD: shulchan
+          POSTGRES_DB: shulchan
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U shulchan"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://shulchan:shulchan@127.0.0.1:5432/shulchan
+      REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            table/package-lock.json
+            poker-engine/package-lock.json
+            backgammon-engine/package-lock.json
+            dice-engine/package-lock.json
+            tiles-engine/package-lock.json
+      - name: Install the table service and the engines it calls
+        run: |
+          for dir in table poker-engine backgammon-engine dice-engine tiles-engine; do
+            npm ci --no-audit --no-fund --prefix "$dir"
+          done
+      - name: Typecheck
+        working-directory: table
+        run: npm run typecheck
+      - name: Unit tests
+        working-directory: table
+        run: npm test
+      - name: API tests (sign-in, routes, sockets)
+        working-directory: table
+        run: npm run test:api

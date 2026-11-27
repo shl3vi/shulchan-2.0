@@ -35,7 +35,11 @@ To remove a game, delete its two folders and its engine, and its line in each li
 
 Every game has a permanent debug table, switched on by `DEBUG_<PREFIX>_TABLE_ID` and `DEBUG_<PREFIX>_DASHBOARD_ID` (at least 16 characters), with an optional six-digit `DEBUG_<PREFIX>_TABLE_PASSWORD`. Its page at `/dev/<kind>/<dashboard id>` adds players and plays for whoever is to act. The prefixes are `DEBUG` (poker), `DEBUG_BG`, `DEBUG_DICE` and `DEBUG_TILES`.
 
-Tests: `npm test --prefix table` and `npm test --prefix client`. Typecheck: `npm run typecheck` in either.
+Tests: `npm test --prefix table` and `npm test --prefix client`. Typecheck: `npm run typecheck` in either, and in each engine.
+
+API tests: `npm run test:api --prefix table` starts the four engines and the real table service against Postgres and Redis (`docker compose up -d redis postgres`) and checks sign-in, the HTTP routes and the socket events from outside, as the app does. They use their own `shulchan_test` database and Redis database 15, wiped at the start of each run, so dev data is never touched. Run one file with `npm run test:api --prefix table -- test/api/sockets.test.mts`.
+
+CI (`.github/workflows/ci.yml`) runs the typecheck of every engine and the table, the unit tests and the API tests on every push. Railway waits for it before deploying, so a red run does not reach production.
 
 ## Cloud
 
