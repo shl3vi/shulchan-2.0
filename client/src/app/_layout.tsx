@@ -7,6 +7,7 @@ import { loadRemoteConfig } from "@/game/remoteConfig";
 import { acceptTerms, hasAcceptedTerms } from "@/game/terms";
 import { isRtl, loadLocale, subscribeLocale, locale } from "@/i18n";
 import { CrashScreen } from "@/ui/CrashScreen";
+import { ServerDownNotice } from "@/ui/ServerDownNotice";
 import { TermsGate } from "@/ui/TermsGate";
 
 const navigationTheme = {
@@ -58,7 +59,12 @@ function Shell() {
       />
     );
   }
-  return <AppStack key={currentLocale} />;
+  return (
+    <>
+      <AppStack key={currentLocale} />
+      <ServerDownNotice key={`down-${currentLocale}`} />
+    </>
+  );
 }
 
 function AppStack() {

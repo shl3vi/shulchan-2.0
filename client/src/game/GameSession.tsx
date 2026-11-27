@@ -13,6 +13,11 @@ type GameSessionValue = {
   /** The server's code for the error, when it sent one. Screens translate by code. */
   errorCode: string | null;
   dismissError: () => void;
+  /**
+   * Seated, and the table connection has been down for a moment. The app shows that the server is down
+   * and takes no action until it is back. A blip shorter than SERVER_DOWN_AFTER_MS shows nothing.
+   */
+  serverDown: boolean;
   /** Opens a table of this game with the settings its opening form chose, and sits down as admin. */
   createAndSit: (name: string, hostToken: string, kind: GameKind, settings: object) => Promise<void>;
   join: (name: string, gameId: string, password: string) => Promise<void>;
@@ -28,6 +33,9 @@ type GameSessionValue = {
 
 const GameSessionContext = createContext<GameSessionValue | null>(null);
 
+/** A deploy drops the connection for a second or two. Only a longer gap is shown as the server being down. */
+const SERVER_DOWN_AFTER_MS = 2000;
+
 export function GameSessionProvider({ children }: { children: ReactNode }) {
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [state, setState] = useState<TableSnapshot | null>(null);
@@ -39,6 +47,19 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
   }
   const [socket, setSocket] = useState<Socket | null>(null);
   const [ready, setReady] = useState(false);
+  const [online, setOnline] = useState(true);
+  const [serverDown, setServerDown] = useState(false);
+
+  useEffect(() => {
+    if (online || !socket) {
+      // The notice goes away the moment the connection is back.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setServerDown(false);
+      return;
+    }
+    const timer = setTimeout(() => setServerDown(true), SERVER_DOWN_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [online, socket]);
 
   useEffect(() => {
     let live = true;
@@ -78,6 +99,13 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       auth: { gameId, playerId, playerSecret },
       transports: ["websocket"],
     });
+    next.on("connect", () => setOnline(true));
+    next.on("disconnect", () => {
+      setOnline(false);
+      // Nothing tapped while the connection was down may reach the table late.
+      next.sendBuffer = [];
+    });
+    next.on("connect_error", () => setOnline(false));
     next.on("state", (snapshot: TableSnapshot) => {
       setState(snapshot);
       setError(null);
@@ -90,7 +118,9 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     next.on("closed", (payload: { reason?: string }) => {
       remember(null);
       setState(null);
-      setError(payload?.reason === "idle" ? t("tableClosedIdle") : t("leftTable"));
+      setError(
+        payload?.reason === "idle" ? t("tableClosedIdle") : payload?.reason === "paused" ? t("tableClosedPaused") : t("leftTable"),
+      );
     });
     next.on("error", (payload: { message?: string; code?: string }) => {
       if (payload.message === "Invalid connection") {
@@ -107,6 +137,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
     return () => {
       next.close();
       setSocket(null);
+      setOnline(true);
     };
   }, [gameId, playerId, playerSecret]);
 
@@ -119,6 +150,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       dismissError() {
         setError(null);
       },
+      serverDown,
       ready,
       async createAndSit(name, hostToken, kind, settings) {
         if (credentials) throw new Error(t("alreadyAtTable"));
@@ -140,26 +172,30 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         });
       },
       async leave() {
-        socket?.emit("leave");
+        // Leaving needs the table to hear it, or the seat would stay taken there.
+        if (!socket?.connected) return;
+        socket.emit("leave");
         remember(null);
         setState(null);
         setError(null);
       },
       removePlayer(playerId) {
-        if (!state?.you?.isAdmin) return;
-        socket?.emit("remove-player", { playerId });
+        if (!state?.you?.isAdmin || !socket?.connected) return;
+        socket.emit("remove-player", { playerId });
       },
       transferAdmin(playerId) {
-        if (!state?.you?.isAdmin) return;
-        socket?.emit("transfer-admin", { playerId });
+        if (!state?.you?.isAdmin || !socket?.connected) return;
+        socket.emit("transfer-admin", { playerId });
       },
       setPaused(paused) {
-        if (!state?.you?.isAdmin) return;
-        socket?.emit("pause", { paused });
+        if (!state?.you?.isAdmin || !socket?.connected) return;
+        socket.emit("pause", { paused });
       },
+      // Dropped while the connection is down, so a tap can never arrive after the table moved on.
       emit(event, body) {
-        if (body === undefined) socket?.emit(event);
-        else socket?.emit(event, body);
+        if (!socket?.connected) return;
+        if (body === undefined) socket.emit(event);
+        else socket.emit(event, body);
       },
       subscribe(event, handler) {
         if (!socket) return () => {};
@@ -169,7 +205,7 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
         };
       },
     }),
-    [credentials, error, errorCode, ready, socket, state],
+    [credentials, error, errorCode, ready, serverDown, socket, state],
   );
 
   return <GameSessionContext.Provider value={value}>{children}</GameSessionContext.Provider>;
