@@ -1,3 +1,4 @@
+import { REFUSAL } from "./errors.js";
 import type { NextFunction, Request, Response } from "express";
 import { redis } from "./store.js";
 
@@ -32,7 +33,7 @@ export function rateLimit(req: Request, res: Response, next: NextFunction) {
   void redis.incr(key).then(async (count) => {
     if (count === 1) await redis.expire(key, 60);
     if (count > limit) {
-      res.status(429).json({ error: "Too many requests" });
+      res.status(429).json({ error: "Too many requests", code: REFUSAL.tooMany });
       return;
     }
     next();

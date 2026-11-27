@@ -6,6 +6,7 @@ import { backgammonMoves } from "./moves.js";
 import { openBody, type BackgammonSettings } from "./schema.js";
 import { chooseSeat, SEATS } from "./seats.js";
 import { backgammonOf, settledColors, type BackgammonState } from "./state.js";
+import { backgammonEngineCode } from "./refusals.js";
 
 export const backgammon: GameModule<BackgammonSettings> = defineGame<BackgammonSettings>({
   seats: { max: SEATS },
@@ -48,6 +49,7 @@ export const backgammon: GameModule<BackgammonSettings> = defineGame<BackgammonS
     };
   },
   moves: backgammonMoves,
+  engineCode: backgammonEngineCode,
   health: backgammonEngineAnswers,
   debug: backgammonDebug,
 });

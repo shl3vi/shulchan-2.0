@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
+import { ServerError } from "@/game/errors";
 import { loadPersonKey } from "@/game/personKey";
 import type { GameKind } from "@/games/registry";
 
@@ -20,9 +21,9 @@ async function post<T>(path: string, body: unknown, headers?: Record<string, str
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
-  const payload = (await response.json()) as T & { error?: string };
+  const payload = (await response.json()) as T & { error?: string; code?: string };
   if (!response.ok) {
-    throw new Error(payload.error ?? "Request failed");
+    throw new ServerError(payload.code ?? "failed", payload.error ?? "Request failed");
   }
   return payload;
 }
@@ -55,7 +56,7 @@ export function redeemHostCode(code: string) {
   const existing = pendingCodes.get(code);
   if (existing) return existing;
   const verifier = signInVerifier;
-  if (!verifier) return Promise.reject(new Error("Sign-in expired. Try again."));
+  if (!verifier) return Promise.reject(new ServerError("sign-in-expired", "Sign-in expired. Try again."));
   const pending = post<{ token: string; email: string; name?: string }>("/auth/session", { code, verifier }).finally(() => {
     pendingCodes.delete(code);
   });
@@ -96,8 +97,8 @@ export async function deleteHostAccount(token: string) {
   });
   if (response.status === 401) return;
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(payload?.error ?? "Request failed");
+    const payload = (await response.json().catch(() => null)) as { error?: string; code?: string } | null;
+    throw new ServerError(payload?.code ?? "failed", payload?.error ?? "Request failed");
   }
 }
 

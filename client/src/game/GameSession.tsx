@@ -10,7 +10,7 @@ type GameSessionValue = {
   credentials: Credentials | null;
   state: TableSnapshot | null;
   error: string | null;
-  /** The server's code for the error, when it sent one. Screens translate by code. */
+  /** The server's code for the error. Null for a message the app wrote itself, already translated. */
   errorCode: string | null;
   dismissError: () => void;
   /**
@@ -123,13 +123,15 @@ export function GameSessionProvider({ children }: { children: ReactNode }) {
       );
     });
     next.on("error", (payload: { message?: string; code?: string }) => {
-      if (payload.message === "Invalid connection") {
+      // The seat is gone: the table closed or the player was removed while away.
+      if (payload.code === "not-seated") {
         remember(null);
         setState(null);
         setError(null);
         return;
       }
-      setError(payload.message ?? "Table error", payload.code ?? null);
+      // Screens show the translation of the code. The English text is kept only for debugging.
+      setError(payload.message ?? "Table error", payload.code ?? "failed");
     });
     // The socket is an outside connection made here, and the session hands it out once it exists.
     // eslint-disable-next-line react-hooks/set-state-in-effect

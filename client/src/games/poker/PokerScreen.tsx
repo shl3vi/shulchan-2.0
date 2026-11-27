@@ -20,12 +20,12 @@ import { CameraButton, TableMenu, TalkButton } from "@/table/TableControls";
 import { CopyField, ErrorBanner, HomeButton, shareTable, TableFooter, tableError, VideoNotice } from "@/table/TableParts";
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
+import { POKER_ERRORS } from "./errors";
 
 /** Poker's own refusals, by the server's code, then the ones every table shares. */
 function pokerError(message: string, code: string | null, range?: { min: number; max: number } | null) {
   if (code === "poker.bet-range" && range) return t("betOutOfRange", { min: range.min, max: range.max });
-  if (code === "poker.need-two-with-chips") return t("needTwoWithMoney");
-  return tableError(message, code);
+  return tableError(message, code, POKER_ERRORS);
 }
 
 /** The turn lengths the admin steps through, one tap at a time. */

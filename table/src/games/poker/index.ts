@@ -9,6 +9,7 @@ import { readOpenSettings, type PokerSettings } from "./schema.js";
 import { chooseSeat, SEATS } from "./seats.js";
 import { pokerOf, type PokerState } from "./state.js";
 import { pokerView } from "./view.js";
+import { pokerEngineCode } from "./refusals.js";
 
 export const poker: GameModule<PokerSettings> = defineGame<PokerSettings>({
   seats: { max: SEATS },
@@ -48,6 +49,7 @@ export const poker: GameModule<PokerSettings> = defineGame<PokerSettings>({
   onDeadline: pokerOnDeadline,
   resume: pokerResume,
   config: readPokerConfig,
+  engineCode: pokerEngineCode,
   health: pokerEngineAnswers,
   debug: pokerDebug,
 });

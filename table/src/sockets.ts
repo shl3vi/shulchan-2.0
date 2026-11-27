@@ -1,6 +1,6 @@
 import type { Server, Socket } from "socket.io";
 import { armDeadline } from "./deadlines.js";
-import { REFUSAL, TableRefused } from "./errors.js";
+import { codeOf, messageOf, REFUSAL, TableRefused } from "./errors.js";
 import { notePlayers } from "./events/ledger.js";
 import { reportCaught, reportError } from "./events/report.js";
 import { gameFor, gameOf, kindOf } from "./games/index.js";
@@ -64,7 +64,7 @@ export function attachSockets(io: Server) {
         route: "socket",
         ...(table ? { tableId, kind: kindOf(table) } : {}),
       });
-      socket.emit("error", { message: "Invalid connection" });
+      socket.emit("error", { message: "Invalid connection", code: REFUSAL.notSeated });
       socket.disconnect(true);
       return;
     }
@@ -92,10 +92,7 @@ export function attachSockets(io: Server) {
           return undefined;
         }
         reportCaught(tableId, error, route, kind);
-        socket.emit("error", {
-          message: error instanceof Error ? error.message : fallback,
-          ...(error instanceof TableRefused && error.code ? { code: error.code } : {}),
-        });
+        socket.emit("error", { message: messageOf(error, fallback), code: codeOf(error, game.engineCode) });
         return undefined;
       }
     }
@@ -171,8 +168,8 @@ export function attachSockets(io: Server) {
       return change("Cannot transfer admin", "transfer-admin", async (current) => {
         requireAdmin(current);
         const next = current.players.find((seat) => seat.id === parsed.playerId && !seat.pendingRemoval);
-        if (!next || next.id === connected.id) throw new Error("Player not found");
-        if (next.web) throw new Error("A player in the browser cannot be admin");
+        if (!next || next.id === connected.id) throw new TableRefused("invalid", "Player not found", REFUSAL.playerGone);
+        if (next.web) throw new TableRefused("invalid", "A player in the browser cannot be admin", REFUSAL.browserAdmin);
         assignAdmin(current, next.id);
       });
     });

@@ -47,7 +47,7 @@ function play<Type extends DiceAction["type"]>(type: Type): GameMove<object, Mov
     async run({ table, seat }, input) {
       assertPlaying(table);
       const state = diceOf(table);
-      if (!state.play) throw new TableRefused("invalid", "Start a game first", "dice.not-started");
+      if (!state.play) throw new TableRefused("invalid", "Start a game first", REFUSAL.notStarted);
       const previous = state.play;
       const next = await playDice(previous, seat.id, { type, ...input } as DiceAction);
       noteDiceWin(state, previous, next);

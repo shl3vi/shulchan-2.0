@@ -21,6 +21,7 @@ import { CopyField, ErrorBanner, HomeButton, PlayerCircle, shareTable, TableFoot
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { BACKGAMMON_ERRORS } from "./errors";
 
 function BackgammonTable({
   topVideo,
@@ -369,7 +370,7 @@ function BackgammonTable({
           }}
         />
         <TableHold top={insets.top + 56} paused={paused} idleCloseAt={idleCloseAt} serverNow={serverNow} isAdmin={isAdmin} onPause={onPause} />
-        {error ? <ErrorBanner message={tableError(error, errorCode)} onClose={onDismissError} /> : null}
+        {error ? <ErrorBanner message={tableError(error, errorCode, BACKGAMMON_ERRORS)} onClose={onDismissError} /> : null}
         {videoNotice ? <VideoNotice message={videoNotice} onClose={onDismissVideo} /> : null}
         <CameraButton on={cameraOn} held={paused} onToggle={setCamera} />
         <TalkButton on={micOn} onTalk={setMic} />

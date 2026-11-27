@@ -1,4 +1,4 @@
-import { TableRefused } from "../../errors.js";
+import { REFUSAL, TableRefused } from "../../errors.js";
 import { assertPlaying, noteActivity } from "../../idle.js";
 import { seatedCount } from "../../players.js";
 import type { GameMove } from "../types.js";
@@ -19,7 +19,7 @@ function play<Type extends BackgammonAction["type"]>(type: Type): GameMove<objec
       const action = { type, ...input } as BackgammonAction;
       assertPlaying(table);
       if (seatedCount(table) < 2) {
-        throw new TableRefused("invalid", "Waiting for a second player");
+        throw new TableRefused("invalid", "Waiting for a second player", REFUSAL.needsTwo);
       }
       const state = backgammonOf(table);
       const previous = state.board as Turn | undefined;

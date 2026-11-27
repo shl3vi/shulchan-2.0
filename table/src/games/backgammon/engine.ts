@@ -1,5 +1,5 @@
 import { engineAnswers, enginePost } from "../../engines.js";
-import { TableRefused } from "../../errors.js";
+import { REFUSAL, TableRefused } from "../../errors.js";
 import type { TableRecord } from "../../store.js";
 import type { BackgammonAction } from "./schema.js";
 import { backgammonOf, colorOf, settledColors, type BackgammonState } from "./state.js";
@@ -34,7 +34,7 @@ export async function playBackgammon(table: TableRecord, playerId: string, actio
   const color = colorOf(state.colors, playerId);
   if (action.type === "restart") {
     if (playerId !== table.adminId && !(color && current?.phase === "over")) {
-      throw new TableRefused("forbidden", "Only the table admin can restart a game in progress");
+      throw new TableRefused("forbidden", "Only the table admin can restart a game in progress", REFUSAL.notAdmin);
     }
     const board = await openingBackgammon();
     noteBackgammonWin(table, board as Finished);
@@ -44,7 +44,7 @@ export async function playBackgammon(table: TableRecord, playerId: string, actio
     state.colors = settledColors(table);
     return board;
   }
-  if (!color) throw new TableRefused("invalid", "You are watching this game");
+  if (!color) throw new TableRefused("invalid", "You are watching this game", REFUSAL.watching);
   const game = current ?? (await openingBackgammon());
   const board = await enginePost<unknown>(backgammonUrl, "/apply", { game, color, action });
   noteBackgammonWin(table, board as Finished);

@@ -22,6 +22,7 @@ import { SeatStrip, stripSize, type StripSeat } from "@/table/SeatStrip";
 import { tableStyles } from "@/table/tableStyles";
 import { useBlockedVideo } from "@/table/useBlockedVideo";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { TILES_ERRORS } from "./errors";
 
 type VideoTrackLike = Parameters<typeof SeatVideo>[0]["track"];
 
@@ -596,7 +597,7 @@ function TilesTable({
           }}
         />
         <TableHold top={insets.top + 56} paused={paused} idleCloseAt={state.idleCloseAt} serverNow={state.serverNow} isAdmin={isAdmin} onPause={onPause} />
-        {error ? <ErrorBanner message={tableError(error, errorCode)} onClose={onDismissError} /> : null}
+        {error ? <ErrorBanner message={tableError(error, errorCode, TILES_ERRORS)} onClose={onDismissError} /> : null}
         {video.videoNotice ? <VideoNotice message={video.videoNotice} onClose={video.dismissVideoNotice} /> : null}
         <CameraButton on={video.cameraOn} held={paused} onToggle={video.setCamera} />
         <TalkButton on={video.micOn} onTalk={video.setMic} />

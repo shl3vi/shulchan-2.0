@@ -28,7 +28,7 @@ const start: GameMove<object, MoveMark> = {
       throw new TableRefused("forbidden", "Only the table admin can restart a game in progress", REFUSAL.notAdmin);
     }
     const lineup = tilesLineup(table);
-    if (lineup.length < MIN_PLAYERS) throw new TableRefused("invalid", "Waiting for a second player", "tiles.needs-two");
+    if (lineup.length < MIN_PLAYERS) throw new TableRefused("invalid", "Waiting for a second player", REFUSAL.needsTwo);
     const previous = state.play;
     const next = await openingTiles(lineup);
     state.play = next;
@@ -47,7 +47,7 @@ function play<Type extends TilesAction["type"]>(type: Type): GameMove<object, Mo
     async run({ table, seat }, input) {
       assertPlaying(table);
       const state = tilesOf(table);
-      if (!state.play) throw new TableRefused("invalid", "Start a game first", "tiles.not-started");
+      if (!state.play) throw new TableRefused("invalid", "Start a game first", REFUSAL.notStarted);
       const previous = state.play;
       const next = await playTiles(previous, seat.id, { type, ...input } as TilesAction);
       noteTilesWin(state, previous, next);

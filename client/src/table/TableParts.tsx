@@ -8,6 +8,7 @@ import { API_URL } from "@/game/api";
 import { GetTheApp } from "@/game/GetTheApp";
 import { t, type MessageKey } from "@/i18n";
 import { tableStyles } from "@/table/tableStyles";
+import { codeText } from "@/game/errors";
 
 function WinnerSparkles() {
   const [spin] = useState(() => new Animated.Value(0));
@@ -126,10 +127,12 @@ export function shareTable(gameId: string, password?: string) {
 }
 
 /** Refusals every table can show, in the player's language, by the server's code. Anything else is shown as sent. */
-export function tableError(message: string, code: string | null) {
-  if (code === "paused") return t("tablePaused");
-  if (code === "closing") return t("tableClosing");
-  return message;
+/**
+ * What the error banner says. A server error is translated by its code, the game's own codes first;
+ * one without a code is a message the app wrote itself, already in the player's language.
+ */
+export function tableError(message: string, code: string | null, game?: Record<string, MessageKey>) {
+  return code ? codeText(code, game) : message;
 }
 
 export function ErrorBanner({ message, onClose }: { message: string; onClose: () => void }) {

@@ -8,6 +8,7 @@ import { deleteHostAccount } from "@/game/api";
 import { loadHost, saveHost, type Host } from "@/game/hostStore";
 import { isRtl, t } from "@/i18n";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { errorText } from "@/game/errors";
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function ProfileScreen() {
       await saveHost(null);
       router.back();
     } catch (cause) {
-      setNotice(cause instanceof Error ? cause.message : t("deleteAccountFailed"));
+      setNotice(errorText(cause, "deleteAccountFailed"));
     } finally {
       setBusy(false);
     }

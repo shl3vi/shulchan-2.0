@@ -5,6 +5,7 @@ import type { Credentials } from "@/game/types";
 import { supportMail } from "@/game/support";
 import { t } from "@/i18n";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { errorText } from "@/game/errors";
 
 type Reason = "name" | "camera" | "microphone";
 
@@ -35,7 +36,7 @@ export function SeatSafety({
       setSent(true);
       void Linking.openURL(supportMail(credentials.gameId, targetName, reason));
     } catch (cause) {
-      setFailed(cause instanceof Error ? cause.message : t("reportFailed"));
+      setFailed(errorText(cause));
     } finally {
       setBusy(false);
     }
@@ -48,7 +49,7 @@ export function SeatSafety({
       await blockPlayer(credentials.gameId, credentials.playerId, credentials.playerSecret, targetId, !blocked);
       onClose();
     } catch (cause) {
-      setFailed(cause instanceof Error ? cause.message : t("blockFailed"));
+      setFailed(errorText(cause));
     } finally {
       setBusy(false);
     }

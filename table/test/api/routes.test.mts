@@ -38,6 +38,7 @@ test("a host can have two tables open, not three", async () => {
   const third = await call("/api/games", { body: poker, headers: host.auth });
   assert.equal(third.status, 429);
   assert.equal(third.json.error, "You already have two tables open");
+  assert.equal(third.json.code, "table-limit");
 });
 
 test("join checks the body, the name, the table and the password", async () => {
@@ -53,6 +54,7 @@ test("join checks the body, the name, the table and the password", async () => {
   const refused = await call(path, { body: { name: "Ann", password: wrong, personKey } });
   assert.equal(refused.status, 403);
   assert.equal(refused.json.error, "Wrong password");
+  assert.equal(refused.json.code, "wrong-password");
 });
 
 test("the player holding the admin secret becomes admin, and a browser guest never does", async () => {
@@ -87,6 +89,7 @@ test("a table seats nine and refuses the tenth", async () => {
   const tenth = await call(`/api/games/${table.gameId}/join`, { body: { name: "P10", password: table.password, personKey: randomUUID() } });
   assert.equal(tenth.status, 400);
   assert.equal(tenth.json.error, "Table is full");
+  assert.equal(tenth.json.code, "table-full");
 });
 
 test("too many wrong passwords from one address lock that address out, and only it", async () => {
@@ -162,6 +165,7 @@ test("a video token needs a seated player, and says so when video is off", async
   const off = await call(path, { body: { playerId: admin.id, secret: admin.secret } });
   assert.equal(off.status, 503);
   assert.equal(off.json.error, "Video is not available");
+  assert.equal(off.json.code, "video-off");
 });
 
 test("public pages, config and the join page answer", async () => {

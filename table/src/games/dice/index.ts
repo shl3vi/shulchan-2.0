@@ -6,6 +6,7 @@ import { diceMoves } from "./moves.js";
 import { openBody, type DiceSettings } from "./schema.js";
 import { chooseSeat, SEATS } from "./seats.js";
 import { diceActor, diceOf, noteDiceWin, type DiceState } from "./state.js";
+import { diceEngineCode } from "./refusals.js";
 
 export const dice: GameModule<DiceSettings> = defineGame<DiceSettings>({
   seats: { max: SEATS },
@@ -40,6 +41,7 @@ export const dice: GameModule<DiceSettings> = defineGame<DiceSettings>({
     return { status, game: { kind: "dice" as const, play: state.play, log: state.log } };
   },
   moves: diceMoves,
+  engineCode: diceEngineCode,
   health: diceEngineAnswers,
   debug: diceDebug,
 });

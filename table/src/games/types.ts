@@ -98,6 +98,11 @@ export type GameModule<Settings extends OpenSettings = OpenSettings> = {
   resume?(table: TableRecord, now: number): void;
   /** Reads the game's own part of the app config, `games.<kind>`, minus `video`. Missing or wrong values get defaults. */
   config?(raw: Record<string, unknown> | null): object;
+  /**
+   * The code for one of this engine's refusals, from its English text ("Not your turn" → "not-your-turn").
+   * A refusal it does not list reaches the player as "something went wrong".
+   */
+  engineCode?(message: string): string | undefined;
   /** True when this game's engine service answers. */
   health(): Promise<boolean>;
   debug?: GameDebug<Settings>;

@@ -6,6 +6,7 @@ import { tilesMoves } from "./moves.js";
 import { openBody, type TilesSettings } from "./schema.js";
 import { chooseSeat, SEATS } from "./seats.js";
 import { noteTilesWin, tilesActor, tilesFor, tilesOf, type TilesState } from "./state.js";
+import { tilesEngineCode } from "./refusals.js";
 
 export const tiles: GameModule<TilesSettings> = defineGame<TilesSettings>({
   seats: { max: SEATS },
@@ -40,6 +41,7 @@ export const tiles: GameModule<TilesSettings> = defineGame<TilesSettings>({
     return { status, game: { kind: "tiles" as const, play: tilesFor(state.play, viewerId), log: state.log } };
   },
   moves: tilesMoves,
+  engineCode: tilesEngineCode,
   health: tilesEngineAnswers,
   debug: tilesDebug,
 });

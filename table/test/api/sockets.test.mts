@@ -14,6 +14,7 @@ test("a socket with a wrong secret or table is refused", async () => {
     const socket = rawSocket(auth);
     const [error] = await Promise.all([waitFor(socket, "error"), waitFor(socket, "disconnect")]);
     assert.equal(error.message, "Invalid connection");
+    assert.equal(error.code, "not-seated");
   }
 });
 
@@ -54,6 +55,7 @@ test("poker: only the admin deals, then only the player to act can act", async (
   waiting.socket.emit("move", { type: "act", action: "fold" });
   const notYours = await waiting.next("error");
   assert.ok(notYours.message, "acting out of turn is refused with a message");
+  assert.equal(notYours.code, "not-your-turn", "the engine's refusal reaches the phone as a code");
 
   const moved = actor.next("state", (state) => state.status.toAct[0] !== toAct || state.status.phase !== "playing");
   actor.socket.emit("move", { type: "act", action: "fold" });
@@ -138,7 +140,9 @@ test("the admin can hand admin to an app player, not to a browser guest", async 
   const bobPhone = await phone(table, bob);
 
   adminPhone.socket.emit("transfer-admin", { playerId: guest.id });
-  assert.equal((await adminPhone.next("error")).message, "A player in the browser cannot be admin");
+  const browserAdmin = await adminPhone.next("error");
+  assert.equal(browserAdmin.message, "A player in the browser cannot be admin");
+  assert.equal(browserAdmin.code, "browser-admin");
   bobPhone.socket.emit("transfer-admin", { playerId: bob.id });
   assert.equal((await bobPhone.next("error")).code, "not-admin");
 

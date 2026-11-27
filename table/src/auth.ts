@@ -1,5 +1,6 @@
+import { REFUSAL } from "./errors.js";
 import { createHash, createPrivateKey, createPublicKey, randomBytes, sign, timingSafeEqual, verify } from "node:crypto";
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { appleBody, readSchema, sessionBody } from "./schema.js";
 import { deleteAppleAccountRecord, readAppleAccount, readHostSession, saveAppleAccount, saveHostSession, type Host } from "./signIns.js";
 import { deleteHostAccount, redis } from "./store.js";
@@ -115,25 +116,88 @@ export function assertSafeAuthConfig(env: NodeJS.ProcessEnv = process.env) {
   assertAppleKey(env);
 }
 
+/** The Google sign-in steps run in the phone's browser, so their errors are short pages in the browser's language. */
+const SIGN_IN_PAGE = {
+  en: {
+    notConfigured: "Google sign-in is not available right now.",
+    badReturn: "This sign-in link is not valid. Start again from the app.",
+    updateApp: "Update the app to sign in.",
+    tooMany: "Too many sign-in attempts. Try again in a few minutes.",
+    expired: "Sign-in expired. Try again.",
+    refused: "Google did not confirm this sign-in.",
+  },
+  he: {
+    notConfigured: "ההתחברות עם Google לא זמינה כרגע.",
+    badReturn: "קישור ההתחברות לא תקין. התחילו שוב מהאפליקציה.",
+    updateApp: "עדכנו את האפליקציה כדי להתחבר.",
+    tooMany: "יותר מדי ניסיונות התחברות. נסו שוב בעוד כמה דקות.",
+    expired: "פג תוקף ההתחברות. נסו שוב.",
+    refused: "Google לא אישרה את ההתחברות.",
+  },
+  es: {
+    notConfigured: "El inicio de sesión con Google no está disponible ahora.",
+    badReturn: "Este enlace de inicio de sesión no es válido. Empieza de nuevo desde la app.",
+    updateApp: "Actualiza la app para iniciar sesión.",
+    tooMany: "Demasiados intentos de inicio de sesión. Vuelve a intentarlo en unos minutos.",
+    expired: "El inicio de sesión caducó. Vuelve a intentarlo.",
+    refused: "Google no confirmó este inicio de sesión.",
+  },
+  ru: {
+    notConfigured: "Вход через Google сейчас недоступен.",
+    badReturn: "Эта ссылка для входа недействительна. Начните заново в приложении.",
+    updateApp: "Обновите приложение, чтобы войти.",
+    tooMany: "Слишком много попыток входа. Попробуйте снова через несколько минут.",
+    expired: "Время входа истекло. Попробуйте снова.",
+    refused: "Google не подтвердил этот вход.",
+  },
+  ar: {
+    notConfigured: "تسجيل الدخول عبر Google غير متاح الآن.",
+    badReturn: "رابط تسجيل الدخول هذا غير صالح. ابدأ من جديد من التطبيق.",
+    updateApp: "حدّث التطبيق لتسجيل الدخول.",
+    tooMany: "محاولات تسجيل دخول كثيرة جدًا. حاول مرة أخرى بعد بضع دقائق.",
+    expired: "انتهت صلاحية تسجيل الدخول. حاول مرة أخرى.",
+    refused: "لم تؤكد Google تسجيل الدخول هذا.",
+  },
+} as const;
+
+type SignInProblem = keyof (typeof SIGN_IN_PAGE)["en"];
+
+function signInLocale(req: Request) {
+  for (const part of (req.get("accept-language") ?? "").split(",")) {
+    const code = part.split(";")[0]?.trim().toLowerCase().split("-")[0];
+    if (code && Object.hasOwn(SIGN_IN_PAGE, code)) return code as keyof typeof SIGN_IN_PAGE;
+  }
+  return "en" as const;
+}
+
+function signInProblem(req: Request, res: Response, status: number, problem: SignInProblem) {
+  const locale = signInLocale(req);
+  const dir = locale === "he" || locale === "ar" ? "rtl" : "ltr";
+  res.status(status).type("html").send(`<!doctype html>
+<html lang="${locale}" dir="${dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>LOOCHKA</title>
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#090b16;color:#f7f7fc;font:17px/1.5 system-ui,sans-serif;padding:24px;box-sizing:border-box;text-align:center}</style>
+</head><body><p>${SIGN_IN_PAGE[locale][problem]}</p></body></html>`);
+}
+
 export const authRouter = Router();
 
 authRouter.get("/auth/google", async (req, res) => {
   if (!clientId() || !clientSecret() || !redirectUri()) {
-    res.status(503).type("text").send("Google sign-in is not configured");
+    signInProblem(req, res, 503, "notConfigured");
     return;
   }
   const back = returnUrl(String(req.query.return ?? `${APP_SCHEME}://auth`));
   if (!back) {
-    res.status(400).type("text").send("Bad return");
+    signInProblem(req, res, 400, "badReturn");
     return;
   }
   const challenge = String(req.query.challenge ?? "");
   if (!CHALLENGE.test(challenge)) {
-    res.status(400).type("text").send("Update the app to sign in");
+    signInProblem(req, res, 400, "updateApp");
     return;
   }
   if (!(await allowSignIn(req.ip ?? "unknown"))) {
-    res.status(429).type("text").send("Too many sign-in attempts. Try again in a few minutes.");
+    signInProblem(req, res, 429, "tooMany");
     return;
   }
   const state = randomBytes(16).toString("hex");
@@ -154,7 +218,7 @@ authRouter.get("/auth/callback", async (req, res) => {
   const state = String(req.query.state ?? "");
   const pending = readPending(await redis.getDel(`oauth:${state}`));
   if (!googleCode || !pending) {
-    res.status(400).type("text").send("Sign-in expired. Try again.");
+    signInProblem(req, res, 400, "expired");
     return;
   }
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -170,13 +234,13 @@ authRouter.get("/auth/callback", async (req, res) => {
   });
   const token = (await tokenResponse.json()) as { id_token?: string };
   if (!tokenResponse.ok || !token.id_token) {
-    res.status(401).type("text").send("Google did not confirm this sign-in");
+    signInProblem(req, res, 401, "refused");
     return;
   }
   const infoResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token.id_token)}`);
   const info = (await infoResponse.json()) as { aud?: string; sub?: string; email?: string; email_verified?: string; name?: string };
   if (!infoResponse.ok || info.aud !== clientId() || info.email_verified !== "true" || !info.sub || !info.email) {
-    res.status(401).type("text").send("Google did not confirm this sign-in");
+    signInProblem(req, res, 401, "refused");
     return;
   }
   const name = info.name?.trim() || undefined;
@@ -287,21 +351,21 @@ export async function deleteAppleAccount(sub: string | undefined) {
 
 authRouter.post("/auth/apple", async (req, res) => {
   if (appleSignInOff()) {
-    res.status(503).json({ error: "Apple sign-in is not available yet. Sign in with Google." });
+    res.status(503).json({ error: "Apple sign-in is not available yet. Sign in with Google.", code: REFUSAL.appleOff });
     return;
   }
   const body = readSchema(appleBody, req.body);
   if (!body) {
-    res.status(400).json({ error: "Sign-in expired. Try again." });
+    res.status(400).json({ error: "Sign-in expired. Try again.", code: REFUSAL.signInExpired });
     return;
   }
   if (!(await allowSignIn(req.ip ?? "unknown"))) {
-    res.status(429).json({ error: "Too many sign-in attempts. Try again in a few minutes." });
+    res.status(429).json({ error: "Too many sign-in attempts. Try again in a few minutes.", code: REFUSAL.signInAttempts });
     return;
   }
   const parts = body.identityToken.split(".");
   if (parts.length !== 3) {
-    res.status(401).json({ error: "Apple did not confirm this sign-in" });
+    res.status(401).json({ error: "Apple did not confirm this sign-in", code: REFUSAL.appleRefused });
     return;
   }
   let header: { kid?: string; alg?: string };
@@ -310,39 +374,39 @@ authRouter.post("/auth/apple", async (req, res) => {
     header = JSON.parse(Buffer.from(parts[0], "base64url").toString()) as typeof header;
     claims = JSON.parse(Buffer.from(parts[1], "base64url").toString()) as typeof claims;
   } catch {
-    res.status(401).json({ error: "Apple did not confirm this sign-in" });
+    res.status(401).json({ error: "Apple did not confirm this sign-in", code: REFUSAL.appleRefused });
     return;
   }
   const audiences = new Set(appleAudiences());
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud ?? ""];
   if (header.alg !== "RS256" || claims.iss !== "https://appleid.apple.com" || !claims.sub || !aud.some((value) => audiences.has(value)) || (claims.exp ?? 0) * 1000 < Date.now()) {
-    res.status(401).json({ error: "Apple did not confirm this sign-in" });
+    res.status(401).json({ error: "Apple did not confirm this sign-in", code: REFUSAL.appleRefused });
     return;
   }
   const verified = claims.email_verified === true || claims.email_verified === "true" || !claims.email;
   if (!verified) {
-    res.status(401).json({ error: "Apple did not confirm this sign-in" });
+    res.status(401).json({ error: "Apple did not confirm this sign-in", code: REFUSAL.appleRefused });
     return;
   }
   try {
     const jwk = (await applePublicKeys()).find((key) => key.kid === header.kid);
     if (!jwk) {
-      res.status(401).json({ error: "Apple did not confirm this sign-in" });
+      res.status(401).json({ error: "Apple did not confirm this sign-in", code: REFUSAL.appleRefused });
       return;
     }
     const key = createPublicKey({ key: jwk, format: "jwk" });
     const signatureOk = verify("RSA-SHA256", Buffer.from(`${parts[0]}.${parts[1]}`), key, Buffer.from(parts[2], "base64url"));
     if (!signatureOk) {
-      res.status(401).json({ error: "Apple did not confirm this sign-in" });
+      res.status(401).json({ error: "Apple did not confirm this sign-in", code: REFUSAL.appleRefused });
       return;
     }
   } catch {
-    res.status(503).json({ error: "Apple sign-in is unavailable" });
+    res.status(503).json({ error: "Apple sign-in is unavailable", code: REFUSAL.appleUnavailable });
     return;
   }
   const profile = await appleProfile(claims.sub, claims.email, body.name, body.authorizationCode ? await appleRefreshToken(body.authorizationCode) : undefined);
   if (!profile) {
-    res.status(401).json({ error: "Apple did not share an email. Try again and allow email." });
+    res.status(401).json({ error: "Apple did not share an email. Try again and allow email.", code: REFUSAL.appleNoEmail });
     return;
   }
   const hostToken = randomBytes(32).toString("hex");
@@ -353,18 +417,18 @@ authRouter.post("/auth/apple", async (req, res) => {
 authRouter.post("/auth/session", async (req, res) => {
   const body = readSchema(sessionBody, req.body);
   if (!body) {
-    res.status(400).json({ error: "Sign-in expired. Try again." });
+    res.status(400).json({ error: "Sign-in expired. Try again.", code: REFUSAL.signInExpired });
     return;
   }
   const code = body.code;
   const raw = await redis.getDel(`oauth-code:${code}`);
   if (!raw) {
-    res.status(401).json({ error: "Sign-in expired. Try again." });
+    res.status(401).json({ error: "Sign-in expired. Try again.", code: REFUSAL.signInExpired });
     return;
   }
   const session = JSON.parse(raw) as { sub?: string; email?: string; name?: string; challenge?: string };
   if (!session.sub || !session.email || !session.challenge || !verifies(body.verifier, session.challenge)) {
-    res.status(401).json({ error: "Sign-in expired. Try again." });
+    res.status(401).json({ error: "Sign-in expired. Try again.", code: REFUSAL.signInExpired });
     return;
   }
   const name = session.name?.trim() || undefined;
@@ -377,7 +441,7 @@ authRouter.delete("/auth/account", async (req, res) => {
   const header = req.get("authorization");
   const host = await readHost(header);
   if (!host) {
-    res.status(401).json({ error: "Sign in to open a table" });
+    res.status(401).json({ error: "Sign in to open a table", code: REFUSAL.signInNeeded });
     return;
   }
   const token = header?.startsWith("Bearer ") ? header.slice(7) : "";
@@ -389,7 +453,7 @@ authRouter.delete("/auth/account", async (req, res) => {
 authRouter.get("/auth/host", async (req, res) => {
   const host = await readHost(req.get("authorization"));
   if (!host) {
-    res.status(401).json({ error: "Sign in to open a table" });
+    res.status(401).json({ error: "Sign in to open a table", code: REFUSAL.signInNeeded });
     return;
   }
   res.json({ email: host.email, ...(host.name ? { name: host.name } : {}) });

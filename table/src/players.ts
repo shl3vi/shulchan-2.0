@@ -1,3 +1,4 @@
+import { REFUSAL, TableRefused } from "./errors.js";
 import { timingSafeEqual } from "node:crypto";
 import { gameOf } from "./games/index.js";
 import type { TableRecord } from "./store.js";
@@ -24,7 +25,7 @@ export function assignAdmin(table: TableRecord, playerId: string | null) {
 
 export async function releaseSeat(table: TableRecord, playerId: string) {
   const player = table.players.find((seat) => seat.id === playerId);
-  if (!player) throw new Error("Player not found");
+  if (!player) throw new TableRefused("invalid", "Player not found", REFUSAL.playerGone);
   if (table.adminId === player.id) {
     // A browser player is a guest. With only guests left, the table has no admin until someone joins from the app.
     const staying = table.players.filter((seat) => seat.id !== player.id && !seat.pendingRemoval && !seat.web);

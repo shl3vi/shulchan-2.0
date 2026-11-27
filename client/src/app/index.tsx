@@ -19,6 +19,7 @@ import { gameList, games, type GameKind } from "@/games/registry";
 import { isRtl, LOCALES, LOCALE_LABEL, locale, setLocale, subscribeLocale, t } from "@/i18n";
 import { BottomSheet } from "@/ui/BottomSheet";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { errorCode, errorText } from "@/game/errors";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -130,7 +131,7 @@ function AppHome() {
       setHost(next);
       await saveHost(next);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("serverUnreachable"));
+      setError(errorText(cause));
     } finally {
       setBusy(false);
     }
@@ -153,7 +154,7 @@ function AppHome() {
       await saveHost(next);
     } catch (cause) {
       if (cause && typeof cause === "object" && "code" in cause && cause.code === "ERR_REQUEST_CANCELED") return;
-      setError(cause instanceof Error ? cause.message : t("serverUnreachable"));
+      setError(errorText(cause));
     } finally {
       setBusy(false);
     }
@@ -206,8 +207,7 @@ function AppHome() {
       await session.join(seatedName, normalizeCode(joinGame), joinPassword.trim());
       router.push("/table");
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : t("couldNotJoin");
-      setJoinError(message === "Choose another name" ? t("nameRejected") : message);
+      setJoinError(errorText(cause));
     } finally {
       setJoinBusy(false);
     }
@@ -231,15 +231,14 @@ function AppHome() {
       await session.createAndSit(seatedName, host.token, nextKind, settings);
       router.push({ pathname: "/table", params: { kind: nextKind } });
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : t("serverUnreachable");
-      if (message === "Sign in to open a table" || message === "Sign in with Google to open a table") {
+      if (errorCode(cause) === "sign-in-needed") {
         setHost(null);
         setKind(null);
         setError(null);
         await saveHost(null);
         return;
       }
-      setError(message === "Choose another name" ? t("nameRejected") : message);
+      setError(errorText(cause));
     } finally {
       setBusy(false);
     }

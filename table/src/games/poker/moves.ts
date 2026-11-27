@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { EngineRefused } from "../../engines.js";
-import { TableRefused } from "../../errors.js";
+import { REFUSAL, TableRefused } from "../../errors.js";
 import { notePlayers } from "../../events/ledger.js";
 import { assertPlaying, noteActivity } from "../../idle.js";
 import { seatedCount } from "../../players.js";
@@ -56,7 +56,7 @@ const tableSettings: GameMove<z.infer<typeof tableSettingsBody>> = {
     const blinds = input.smallBlind ?? view.nextSmallBlind ?? state.smallBlind;
     const buyIn = input.buyIn ?? state.buyIn;
     // Same rule as opening a table, checked against the blinds the next hand will use.
-    if (buyIn < blinds * 2) throw new TableRefused("invalid", "Buy-in must be at least one big blind");
+    if (buyIn < blinds * 2) throw new TableRefused("invalid", "Buy-in must be at least one big blind", "poker.buy-in-low");
     if (input.smallBlind != null && input.smallBlind !== (view.nextSmallBlind ?? state.smallBlind)) {
       await setPokerBlinds(table, input.smallBlind);
     }
@@ -92,13 +92,13 @@ const rebuy: GameMove<z.infer<typeof rebuyBody>> = {
     const state = pokerOf(table);
     const amount = input.amount;
     if (!Number.isInteger(amount) || amount < 1 || amount > state.buyIn) {
-      throw new TableRefused("invalid", "Buy-in must be a whole number up to the table buy-in");
+      throw new TableRefused("invalid", "Buy-in must be a whole number up to the table buy-in", "poker.rebuy-amount");
     }
     const rule = state.rebuy ?? "any";
-    if (rule === "off") throw new TableRefused("invalid", "Rebuys are off at this table");
+    if (rule === "off") throw new TableRefused("invalid", "Rebuys are off at this table", "poker.rebuys-off");
     if (rule === "busted") {
       const entry = (await readPoker(table)).seats.find((item) => item.seat === seat.seat);
-      if ((entry?.stack ?? 0) > 0 || entry?.inHand) throw new TableRefused("invalid", "You can buy more chips once you have none left");
+      if ((entry?.stack ?? 0) > 0 || entry?.inHand) throw new TableRefused("invalid", "You can buy more chips once you have none left", "poker.rebuy-not-yet");
     }
     await addChips(table, seat.seat, amount);
     state.bought[seat.id] = (state.bought[seat.id] ?? state.buyIn) + amount;

@@ -11,6 +11,7 @@ import { nameProblem, playerName } from "@/game/name";
 import { updateMode } from "@/game/remoteConfig";
 import { UpdateNotice, useRemoteConfig } from "@/game/UpdateNotice";
 import { isRtl, t } from "@/i18n";
+import { errorText } from "@/game/errors";
 
 // Short codes are uppercase; older tables still use lowercase UUIDs.
 function normalizeCode(code: string) {
@@ -56,8 +57,7 @@ export default function JoinScreen() {
       await session.join(seatedName, normalizeCode(game), password.trim());
       router.replace("/table");
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : t("couldNotJoin");
-      setError(message === "Choose another name" ? t("nameRejected") : message);
+      setError(errorText(cause));
     } finally {
       setBusy(false);
     }
