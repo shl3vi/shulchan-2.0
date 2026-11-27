@@ -6,7 +6,7 @@ import { Image } from "expo-image";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
 import { StatusBar } from "expo-status-bar";
-import { Redirect, useFocusEffect, useRouter } from "expo-router";
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { hostSession, isWeb, redeemHostCode, signInUrl, signInWithApple } from "@/game/api";
 import { useGameSession } from "@/game/GameSession";
@@ -76,7 +76,12 @@ function AppHome() {
     return trimmed.includes("-") ? trimmed : trimmed.toUpperCase();
   }
 
+  // Sign-in only starts from "create table", so coming back from it (see auth.tsx) opens that
+  // form again once the signed-in host has loaded.
+  const { create: createParam } = useLocalSearchParams<{ create?: string }>();
   const refreshHost = useCallback(() => {
+    const reopenCreate = createParam === "1";
+    if (reopenCreate) router.setParams({ create: undefined });
     void (async () => {
       const saved = await loadHost();
       if (!saved) {
@@ -93,8 +98,12 @@ function AppHome() {
       const next = alive?.name && alive.name !== saved.name ? { ...saved, name: alive.name } : saved;
       if (next !== saved) await saveHost(next);
       setHost(next);
+      if (reopenCreate) {
+        setJoining(false);
+        setCreating(true);
+      }
     })();
-  }, []);
+  }, [createParam, router]);
   useFocusEffect(refreshHost);
 
   async function signIn() {

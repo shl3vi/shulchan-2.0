@@ -18,7 +18,8 @@ export default function AuthReturn() {
       .catch(async () => {
         if (await loadHost()) return;
       })
-      .finally(() => router.replace("/"));
+      // Sign-in started from "create table": land back on it already open.
+      .finally(() => router.replace({ pathname: "/", params: { create: "1" } }));
   }, [code, router]);
 
   return null;
