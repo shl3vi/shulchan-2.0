@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { networkInterfaces } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -114,7 +114,21 @@ const url = await new Promise((resolve, reject) => {
   tunnel.stderr.on("data", onData);
 });
 
-await writeFile(new URL("../client/.env", import.meta.url), `EXPO_PUBLIC_API_URL=${url}\n`);
+// Expo reads .env.development.local only in development (`expo start`). A release bundle (`eas update`,
+// `expo export`) runs in production mode and never sees it, so the tunnel can't end up on players' phones.
+await writeFile(new URL("../client/.env.development.local", import.meta.url), `EXPO_PUBLIC_API_URL=${url}\n`);
+// Earlier versions wrote the tunnel to client/.env, which release bundles do read. Drop that line, keep the rest.
+const oldEnv = new URL("../client/.env", import.meta.url);
+try {
+  const lines = (await readFile(oldEnv, "utf8")).split("\n");
+  const kept = lines.filter((line) => !/^EXPO_PUBLIC_API_URL=https:\/\/[a-z0-9-]+\.trycloudflare\.com\s*$/.test(line));
+  if (kept.length !== lines.length) {
+    if (kept.join("").trim() === "") await rm(oldEnv);
+    else await writeFile(oldEnv, kept.join("\n"));
+  }
+} catch {
+  // No client/.env: nothing to clean.
+}
 for (const stream of [tunnel.stdout, tunnel.stderr]) {
   stream.removeAllListeners("data");
   stream.on("data", () => {});
